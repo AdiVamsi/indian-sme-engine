@@ -8,6 +8,7 @@ const morgan = require('morgan');
 const authRoutes = require('./routes/auth.routes');
 const leadsRoutes = require('./routes/leads.routes');
 const servicesRoutes = require('./routes/services.routes');
+const testimonialsRoutes = require('./routes/testimonials.routes');
 const { authenticate } = require('./middleware/auth.middleware');
 
 const app = express();
@@ -30,5 +31,6 @@ app.get('/api/me', authenticate, (req, res) => {
 });
 
 app.use('/api/services', authenticate, servicesRoutes);
+app.use('/api/testimonials', authenticate, testimonialsRoutes);
 
 module.exports = app;

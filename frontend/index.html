@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" id="meta-description" content="" />
+  <title id="page-title">Loading…</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Navigation ──────────────────────────────────────────── -->
+  <header class="nav" id="nav">
+    <div class="container nav__inner">
+      <a href="#" class="nav__logo" id="nav-logo"></a>
+      <button class="nav__toggle" id="nav-toggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="nav__links" id="nav-links"></nav>
+    </div>
+  </header>
+
+  <!-- ── Hero ────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero__orb hero__orb--1" aria-hidden="true"></div>
+    <div class="hero__orb hero__orb--2" aria-hidden="true"></div>
+    <div class="hero__orb hero__orb--3" aria-hidden="true"></div>
+    <div class="hero__grid"            aria-hidden="true"></div>
+    <div class="container hero__inner" id="hero-content"></div>
+  </section>
+
+  <!-- ── Stats ───────────────────────────────────────────────── -->
+  <section class="stats-bar">
+    <div class="container stats-bar__grid" id="stats-grid"></div>
+  </section>
+
+  <!-- ── About ───────────────────────────────────────────────── -->
+  <section id="about" class="about">
+    <div class="container about__inner" id="about-content"></div>
+  </section>
+
+  <!-- ── Services ─────────────────────────────────────────────── -->
+  <section id="services" class="services">
+    <div class="container">
+      <div class="section__header animate-fade-up" id="services-header"></div>
+      <div class="cards" id="cards-grid"></div>
+    </div>
+  </section>
+
+  <!-- ── Testimonials ──────────────────────────────────────────── -->
+  <section id="testimonials" class="testimonials">
+    <div class="container">
+      <div class="section__header animate-fade-up" id="testimonials-header"></div>
+      <div class="testimonial-grid" id="testimonials-grid"></div>
+    </div>
+  </section>
+
+  <!-- ── Contact ───────────────────────────────────────────────── -->
+  <section id="contact" class="contact">
+    <div class="contact__bg" aria-hidden="true">
+      <div class="contact__bg-orb contact__bg-orb--1"></div>
+      <div class="contact__bg-orb contact__bg-orb--2"></div>
+    </div>
+    <div class="container contact__inner">
+
+      <div class="contact__info animate-fade-right" id="contact-info"></div>
+
+      <div class="contact__form-wrap animate-fade-left">
+        <div class="contact__form-header" id="form-header"></div>
+        <form id="lead-form" class="form" novalidate>
+
+          <!-- Honeypot: hidden from real users, bots fill it in -->
+          <input type="text" id="hp" name="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
+
+          <div class="form__group">
+            <label for="f-name">Full Name <span class="required" aria-hidden="true">*</span></label>
+            <input type="text" id="f-name" name="name" placeholder="e.g. Rahul Verma" autocomplete="name" required />
+          </div>
+
+          <div class="form__group">
+            <label for="f-phone">Phone Number <span class="required" aria-hidden="true">*</span></label>
+            <input type="tel" id="f-phone" name="phone" placeholder="+91 98765 43210" autocomplete="tel" required />
+          </div>
+
+          <div class="form__group">
+            <label for="f-email">Email Address <span class="optional">(optional)</span></label>
+            <input type="email" id="f-email" name="email" placeholder="you@example.com" autocomplete="email" />
+          </div>
+
+          <div class="form__group">
+            <label for="f-message">Message <span class="optional">(optional)</span></label>
+            <textarea id="f-message" name="message" rows="3" placeholder="Which programme are you interested in?"></textarea>
+          </div>
+
+          <button type="submit" class="btn btn--accent btn--full" id="submit-btn">
+            Send Enquiry →
+          </button>
+
+          <p id="form-status" class="form__status" role="alert" aria-live="polite"></p>
+
+        </form>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Footer ───────────────────────────────────────────────── -->
+  <footer class="footer">
+    <div class="container footer__inner" id="footer-content"></div>
+  </footer>
+
+  <!-- config.js must load before script.js -->
+  <script src="config.js"></script>
+  <script src="script.js"></script>
+
+</body>
+</html>

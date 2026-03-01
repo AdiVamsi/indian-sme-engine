@@ -9,6 +9,7 @@ const authRoutes = require('./routes/auth.routes');
 const leadsRoutes = require('./routes/leads.routes');
 const servicesRoutes = require('./routes/services.routes');
 const testimonialsRoutes = require('./routes/testimonials.routes');
+const appointmentsRoutes = require('./routes/appointments.routes');
 const { authenticate } = require('./middleware/auth.middleware');
 
 const app = express();
@@ -32,5 +33,6 @@ app.get('/api/me', authenticate, (req, res) => {
 
 app.use('/api/services', authenticate, servicesRoutes);
 app.use('/api/testimonials', authenticate, testimonialsRoutes);
+app.use('/api/appointments', authenticate, appointmentsRoutes);
 
 module.exports = app;

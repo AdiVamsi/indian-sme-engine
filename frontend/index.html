@@ -112,8 +112,9 @@
     <div class="container footer__inner" id="footer-content"></div>
   </footer>
 
-  <!-- config.js must load before script.js -->
+  <!-- load order: config → api → script -->
   <script src="config.js"></script>
+  <script src="js/api.js"></script>
   <script src="script.js"></script>
 
 </body>

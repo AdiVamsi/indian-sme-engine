@@ -438,8 +438,6 @@ const form      = $('lead-form');
 const submitBtn = $('submit-btn');
 const statusEl  = $('form-status');
 
-const API_URL = `${SITE.api.baseUrl}/api/public/${SITE.api.slug}/leads`;
-
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   setStatus('', '');
@@ -451,9 +449,9 @@ form.addEventListener('submit', async (e) => {
   const message = $('f-message').value.trim();
   const hp      = $('hp').value;
 
-  if (!name)             { markInvalid('f-name',  'Full name is required.');                              return; }
+  if (!name)             { markInvalid('f-name',  'Full name is required.');                               return; }
   if (!isValidName(name)){ markInvalid('f-name',  'Please enter a valid name (letters and spaces only).'); return; }
-  if (!phone)            { markInvalid('f-phone', 'Phone number is required.');                            return; }
+  if (!phone)            { markInvalid('f-phone', 'Phone number is required.');                             return; }
   if (!isValidPhone(phone)) {
     markInvalid('f-phone', 'Enter a valid 10-digit Indian mobile number (e.g. 98765 43210).');
     return;
@@ -463,38 +461,29 @@ form.addEventListener('submit', async (e) => {
     return;
   }
 
-  const payload = { name, phone, hp };
-  if (email)   payload.email   = email;
-  if (message) payload.message = message;
-
   submitBtn.disabled    = true;
   submitBtn.textContent = 'Sending…';
 
   try {
-    const res = await fetch(API_URL, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    });
+    await API.createLead({ name, phone, email, message, hp });
 
-    if (res.ok) {
-      setStatus('Thank you. We will contact you shortly.', 'success');
-      form.reset();
-      clearAllInvalid();
-      // Clear card selection on success
-      document.querySelectorAll('.card.is-selectable').forEach((c) => {
-        c.classList.remove('is-selected', 'is-dimmed');
-      });
-    } else if (res.status === 429) {
+    setStatus('Thank you! We will call you within 24 hours.', 'success');
+    form.reset();
+    clearAllInvalid();
+    document.querySelectorAll('.card.is-selectable').forEach((c) => {
+      c.classList.remove('is-selected', 'is-dimmed');
+    });
+  } catch (err) {
+    if (err.name === 'TypeError') {
+      // Network unreachable (no internet / server down)
+      setStatus('Could not reach the server. Please check your connection or call us directly.', 'error');
+    } else if (err.status === 429) {
       setStatus('Too many requests. Please try again after a few minutes.', 'error');
-    } else if (res.status === 404) {
+    } else if (err.status === 404) {
       setStatus('Enquiry could not be submitted right now. Please call us on +91 98000 00000.', 'error');
     } else {
-      const data = await res.json().catch(() => ({}));
-      setStatus(data.error || 'Something went wrong. Please try again.', 'error');
+      setStatus((err.body && err.body.error) || 'Something went wrong. Please try again.', 'error');
     }
-  } catch {
-    setStatus('Could not reach the server. Please check your connection or call us directly.', 'error');
   } finally {
     submitBtn.disabled    = false;
     submitBtn.textContent = 'Send Enquiry →';

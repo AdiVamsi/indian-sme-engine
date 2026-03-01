@@ -8,7 +8,9 @@ const SITE = {
 
   /* ── API ───────────────────────────────────────────────────── */
   api: {
-    baseUrl: 'http://localhost:4000',
+    // ✏️  Replace with your Render URL once the backend is deployed.
+    // Example: 'https://indian-sme-engine.onrender.com'
+    baseUrl: 'https://YOUR-BACKEND-URL.onrender.com',
     slug:    'sharma-jee-academy-delhi',
   },
 

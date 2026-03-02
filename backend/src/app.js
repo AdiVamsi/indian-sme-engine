@@ -27,6 +27,7 @@ app.use(cors({
     'http://localhost:5500',   /* VS Code Live Server */
     'http://127.0.0.1:5500',
     'https://lovely-sawine-2b80f3.netlify.app',
+    'https://sme-engine-dashboard.netlify.app'  /* deployed dashboard */
   ],
   methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   credentials: true,
@@ -41,9 +42,9 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/health/full', (_req, res) => {
   res.json({
-    status:      'ok',
-    uptime:      process.uptime(),
-    timestamp:   new Date().toISOString(),
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
     environment: NODE_ENV,
   });
 });
@@ -57,11 +58,11 @@ app.get('/api/me', authenticate, (req, res) => {
   res.json({ userId, businessId, role });
 });
 
-app.use('/api/services',      authenticate, servicesRoutes);
-app.use('/api/testimonials',  authenticate, testimonialsRoutes);
-app.use('/api/appointments',  authenticate, appointmentsRoutes);
+app.use('/api/services', authenticate, servicesRoutes);
+app.use('/api/testimonials', authenticate, testimonialsRoutes);
+app.use('/api/appointments', authenticate, appointmentsRoutes);
 app.use('/api/public', publicRoutes);
-app.use('/api/admin',  adminRoutes);
+app.use('/api/admin', adminRoutes);
 
 /* ── Global error handler (must be last) ── */
 app.use(errorHandler);

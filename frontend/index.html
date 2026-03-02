@@ -112,10 +112,9 @@
     <div class="container footer__inner" id="footer-content"></div>
   </footer>
 
-  <!-- load order: config → api → script -->
+  <!-- config must load before the module so SITE is available as a global -->
   <script src="config.js"></script>
-  <script src="js/api.js"></script>
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 
 </body>
 </html>

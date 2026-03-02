@@ -29,36 +29,35 @@ const bodySchema = z.object({
 const router = Router();
 
 router.post('/:businessSlug/leads', limiter, async (req, res) => {
-  const result = bodySchema.safeParse(req.body);
-  if (!result.success) {
-    /* Pick the first field-level message so the frontend always gets a plain string. */
-    const fieldErrors = result.error.flatten().fieldErrors;
-    const firstField  = Object.keys(fieldErrors)[0];
-    const message     = firstField
-      ? `${firstField}: ${fieldErrors[firstField][0]}`
-      : 'Invalid request';
-    return res.status(400).json({ error: message });
-  }
-
-  const { name, phone, email, message, hp } = result.data;
-
-  if (hp) {
-    return res.status(200).json({ ok: true });
-  }
-
   try {
+    const data = bodySchema.parse(req.body);
+
+    if (data.hp) {
+      return res.status(200).json({ ok: true });
+    }
+
     const business = await findBusinessBySlug(req.params.businessSlug);
     if (!business) {
       return res.status(404).json({ error: 'Business not found' });
     }
 
-    const lead = await createLead(business.id, { name, phone, email, message });
+    const lead = await createLead(business.id, {
+      name:    data.name,
+      phone:   data.phone,
+      email:   data.email,
+      message: data.message,
+    });
     broadcast(business.id, 'lead:new', lead);
 
     return res.status(201).json({ ok: true });
   } catch (err) {
+    if (err.name === 'ZodError') {
+      const firstError = err.errors?.[0]?.message || 'Invalid form data';
+      return res.status(400).json({ error: firstError });
+    }
+
     console.error(err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 

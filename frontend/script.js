@@ -1,5 +1,7 @@
 'use strict';
 
+import { createLead } from './js/api.js';
+
 /* ─────────────────────────────────────────────────────────────
    Helpers
 ───────────────────────────────────────────────────────────── */
@@ -465,7 +467,7 @@ form.addEventListener('submit', async (e) => {
   submitBtn.textContent = 'Sending…';
 
   try {
-    await API.createLead({ name, phone, email, message, hp });
+    await createLead(SITE.api.slug, { name, phone, email, message, hp });
 
     setStatus('Thank you! We will call you within 24 hours.', 'success');
     form.reset();
@@ -474,16 +476,7 @@ form.addEventListener('submit', async (e) => {
       c.classList.remove('is-selected', 'is-dimmed');
     });
   } catch (err) {
-    if (err.name === 'TypeError') {
-      // Network unreachable (no internet / server down)
-      setStatus('Could not reach the server. Please check your connection or call us directly.', 'error');
-    } else if (err.status === 429) {
-      setStatus('Too many requests. Please try again after a few minutes.', 'error');
-    } else if (err.status === 404) {
-      setStatus('Enquiry could not be submitted right now. Please call us on +91 98000 00000.', 'error');
-    } else {
-      setStatus(err.message || 'Something went wrong. Please try again.', 'error');
-    }
+    setStatus(err.message, 'error');
   } finally {
     submitBtn.disabled    = false;
     submitBtn.textContent = 'Send Enquiry →';

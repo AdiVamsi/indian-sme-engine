@@ -1,14 +1,13 @@
 /**
- * ui.js — All DOM rendering for the admin dashboard.
+ * ui.js — All DOM rendering and animation for the admin dashboard.
  *
  * Exports DashUI(config) where config = response from GET /api/admin/config.
- * Zero API calls here — purely presentation.
- * Zero hardcoded URLs — config carries timezone, currency, mood from the DB.
+ * Zero API calls — purely presentation and motion.
  */
 
 export function DashUI(config) {
-  /* ── Formatting helpers (context-aware) ── */
 
+  /* ── Formatting helpers ── */
   const tz  = config.business?.timezone ?? 'Asia/Kolkata';
   const cur = config.business?.currency ?? 'INR';
 
@@ -59,7 +58,7 @@ export function DashUI(config) {
 
   /* ── Business header ── */
   function renderBizHeader() {
-    const biz  = config.business;
+    const biz = config.business;
     if (!biz) return;
 
     const nameEl = $('biz-name');
@@ -71,8 +70,8 @@ export function DashUI(config) {
     const logoEl = $('biz-logo');
     if (logoEl) {
       if (biz.logoUrl) {
-        logoEl.src     = biz.logoUrl;
-        logoEl.alt     = biz.name ?? 'Logo';
+        logoEl.src           = biz.logoUrl;
+        logoEl.alt           = biz.name ?? 'Logo';
         logoEl.style.display = 'inline-block';
       } else {
         logoEl.style.display = 'none';
@@ -100,7 +99,7 @@ export function DashUI(config) {
   function countUp(el, target) {
     if (!el) return;
     const from  = parseInt(el.textContent, 10) || 0;
-    const dur   = 600;
+    const dur   = 700;
     const start = Date.now();
     const tick  = () => {
       const p    = Math.min((Date.now() - start) / dur, 1);
@@ -111,13 +110,41 @@ export function DashUI(config) {
     requestAnimationFrame(tick);
   }
 
+  /* ─────────────────────────────────────────────
+     3D CARD TILT — mouse-tracked perspective tilt
+  ───────────────────────────────────────────── */
+  function initCardTilt(card) {
+    /* Skip on touch devices — CSS media query handles the static case */
+    if (!window.matchMedia('(hover: hover)').matches) return;
+
+    card.addEventListener('mousemove', (e) => {
+      const r  = card.getBoundingClientRect();
+      const dx = ((e.clientX - r.left)  / r.width  - 0.5) * 2;
+      const dy = ((e.clientY - r.top)   / r.height - 0.5) * 2;
+      const rx = dy * -7;
+      const ry = dx *  7;
+      /* Dynamic shadow follows inverse of tilt direction */
+      const sx = dx * -10;
+      const sy = dy *  10;
+      card.style.transform = `perspective(600px) rotateX(${rx}deg) rotateY(${ry}deg) translateZ(6px)`;
+      card.style.boxShadow = `${sx}px ${sy}px 28px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.07)`;
+    });
+
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = '';
+      card.style.boxShadow = '';
+    });
+  }
+
   /* ── Stats ── */
   function renderStats(summary) {
     const grid = $('stats-grid');
     grid.innerHTML = '';
-    config.statCards.forEach(({ key, label }) => {
+    config.statCards.forEach(({ key, label }, index) => {
       const card = document.createElement('div');
       card.className = 'stat-card';
+      /* Stagger entrance animation */
+      card.style.setProperty('--card-index', String(index));
 
       const lbl = document.createElement('span');
       lbl.className   = 'stat-card__label';
@@ -131,6 +158,9 @@ export function DashUI(config) {
       card.append(lbl, val);
       grid.appendChild(card);
       countUp(val, summary[key] ?? 0);
+
+      /* Wire 3D tilt after card is in DOM */
+      initCardTilt(card);
     });
   }
 
@@ -231,7 +261,15 @@ export function DashUI(config) {
     return tr;
   }
 
-  /* ── SVG bar chart — leads by day ── */
+  /* ─────────────────────────────────────────────
+     SVG BAR CHART — leads by day with animated entry
+  ───────────────────────────────────────────── */
+  function animateChartBars() {
+    document.querySelectorAll('.chart-bar rect').forEach((rect, i) => {
+      setTimeout(() => rect.classList.add('bar--visible'), i * 90);
+    });
+  }
+
   function renderChart(data) {
     const container = $('chart-container');
     if (!container) return;
@@ -241,32 +279,34 @@ export function DashUI(config) {
       return;
     }
 
-    const max    = Math.max(...data.map((d) => d.count), 1);
-    const W      = 280;
-    const H      = 80;
-    const gap    = 4;
-    const bw     = Math.floor((W - gap * (data.length - 1)) / data.length);
+    const max = Math.max(...data.map((d) => d.count), 1);
+    const W   = 300;
+    const H   = 90;
+    const gap = 5;
+    const bw  = Math.floor((W - gap * (data.length - 1)) / data.length);
 
     const bars = data.map((d, i) => {
       const bh    = Math.max(Math.round((d.count / max) * H), d.count > 0 ? 4 : 1);
       const x     = i * (bw + gap);
       const y     = H - bh;
-      /* Short date label: "Mon", "Tue" etc. in business timezone */
       const label = new Date(d.date + 'T12:00:00').toLocaleDateString('en-IN', {
         timeZone: tz, weekday: 'short',
       });
       return `
         <g class="chart-bar" title="${label}: ${d.count}">
-          <rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="2" ry="2" />
+          <rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="3" ry="3" />
           <text x="${x + bw / 2}" y="${H + 14}" class="chart-label" text-anchor="middle">${esc(label)}</text>
-          ${d.count > 0 ? `<text x="${x + bw / 2}" y="${y - 3}" class="chart-val" text-anchor="middle">${d.count}</text>` : ''}
+          ${d.count > 0 ? `<text x="${x + bw / 2}" y="${y - 4}" class="chart-val" text-anchor="middle">${d.count}</text>` : ''}
         </g>`;
     }).join('');
 
     container.innerHTML = `
-      <svg viewBox="0 0 ${W} ${H + 20}" class="leads-chart" role="img" aria-label="Leads per day">
+      <svg viewBox="0 0 ${W} ${H + 22}" class="leads-chart" role="img" aria-label="Leads per day">
         ${bars}
       </svg>`;
+
+    /* Stagger bar entrance after next paint */
+    requestAnimationFrame(animateChartBars);
   }
 
   /* ── Row animation helpers ── */
@@ -280,7 +320,7 @@ export function DashUI(config) {
     row.style.overflow   = 'hidden';
     row.style.transition = 'max-height 0.22s ease, opacity 0.22s ease';
     requestAnimationFrame(() => { row.style.maxHeight = '0'; row.style.opacity = '0'; });
-    await wait(230);
+    await wait(240);
   }
 
   function applyStatusPulse(select) {
@@ -422,4 +462,26 @@ export function DashUI(config) {
   };
 }
 
-/* DashUI is exported as a named ES module export above. */
+/* ─────────────────────────────────────────────────────────
+   LOGIN CARD 3D TILT
+   Runs once at module load (ES modules defer, so DOM is ready).
+   Gives the login card a subtle perspective tilt tracking the cursor.
+───────────────────────────────────────────────────────── */
+(function initLoginCardTilt() {
+  const card = document.getElementById('login-card');
+  if (!card || !window.matchMedia('(hover: hover)').matches) return;
+
+  card.addEventListener('mousemove', (e) => {
+    const r  = card.getBoundingClientRect();
+    const dx = ((e.clientX - r.left)  / r.width  - 0.5) * 2;
+    const dy = ((e.clientY - r.top)   / r.height - 0.5) * 2;
+    card.style.transform = `perspective(900px) rotateX(${dy * -6}deg) rotateY(${dx * 6}deg)`;
+  });
+
+  card.addEventListener('mouseleave', () => {
+    /* Smooth spring-back */
+    card.style.transition = 'transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)';
+    card.style.transform  = '';
+    setTimeout(() => { card.style.transition = ''; }, 620);
+  });
+}());

@@ -31,8 +31,13 @@
     });
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      const err  = new Error(body.error || 'Request failed');
+      const body    = await res.json().catch(() => ({}));
+      /* body.error may be a string or an object (e.g. Zod flatten()).
+         Always coerce to a plain string so callers can safely use err.message. */
+      const message = typeof body.error === 'string'
+        ? body.error
+        : 'Request failed';
+      const err  = new Error(message);
       err.status = res.status;
       err.body   = body;
       throw err;

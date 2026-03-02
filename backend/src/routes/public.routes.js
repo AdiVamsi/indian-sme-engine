@@ -31,7 +31,13 @@ const router = Router();
 router.post('/:businessSlug/leads', limiter, async (req, res) => {
   const result = bodySchema.safeParse(req.body);
   if (!result.success) {
-    return res.status(400).json({ error: result.error.flatten() });
+    /* Pick the first field-level message so the frontend always gets a plain string. */
+    const fieldErrors = result.error.flatten().fieldErrors;
+    const firstField  = Object.keys(fieldErrors)[0];
+    const message     = firstField
+      ? `${firstField}: ${fieldErrors[firstField][0]}`
+      : 'Invalid request';
+    return res.status(400).json({ error: message });
   }
 
   const { name, phone, email, message, hp } = result.data;

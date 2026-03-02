@@ -482,7 +482,7 @@ form.addEventListener('submit', async (e) => {
     } else if (err.status === 404) {
       setStatus('Enquiry could not be submitted right now. Please call us on +91 98000 00000.', 'error');
     } else {
-      setStatus((err.body && err.body.error) || 'Something went wrong. Please try again.', 'error');
+      setStatus(err.message || 'Something went wrong. Please try again.', 'error');
     }
   } finally {
     submitBtn.disabled    = false;

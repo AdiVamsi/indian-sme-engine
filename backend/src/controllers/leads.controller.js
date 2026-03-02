@@ -3,6 +3,7 @@
 const { z } = require('zod');
 
 const { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead } = require('../services/leads.service');
+const { broadcast } = require('../realtime/socket');
 
 const leadStatusEnum = z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'WON', 'LOST']);
 
@@ -62,6 +63,7 @@ const updateStatus = async (req, res) => {
     if (count === 0) {
       return res.status(404).json({ error: 'Lead not found' });
     }
+    broadcast(req.user.businessId, 'lead:status_changed', { id: req.params.id, status: result.data.status });
     return res.json({ updated: true });
   } catch (err) {
     console.error(err);
@@ -75,6 +77,7 @@ const remove = async (req, res) => {
     if (count === 0) {
       return res.status(404).json({ error: 'Lead not found' });
     }
+    broadcast(req.user.businessId, 'lead:deleted', { id: req.params.id });
     return res.status(204).send();
   } catch (err) {
     console.error(err);

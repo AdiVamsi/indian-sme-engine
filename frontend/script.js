@@ -467,7 +467,13 @@ form.addEventListener('submit', async (e) => {
   submitBtn.textContent = 'Sending…';
 
   try {
-    await createLead(SITE.api.slug, { name, phone, email, message, hp });
+    await createLead(SITE.api.slug, {
+      name,
+      phone,
+      email:   email   || undefined,
+      message: message || undefined,
+      hp:      '',
+    });
 
     setStatus('Thank you! We will call you within 24 hours.', 'success');
     form.reset();
@@ -476,7 +482,7 @@ form.addEventListener('submit', async (e) => {
       c.classList.remove('is-selected', 'is-dimmed');
     });
   } catch (err) {
-    setStatus(err.message, 'error');
+    setStatus(err.message || 'Request failed', 'error');
   } finally {
     submitBtn.disabled    = false;
     submitBtn.textContent = 'Send Enquiry →';

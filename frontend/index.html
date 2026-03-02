@@ -73,7 +73,8 @@
         <form id="lead-form" class="form" novalidate>
 
           <!-- Honeypot: hidden from real users, bots fill it in -->
-          <input type="text" id="hp" name="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
+          <input type="text" id="hp" name="hp" autocomplete="off" tabindex="-1"
+            style="position:absolute;left:-9999px;opacity:0;pointer-events:none;" />
 
           <div class="form__group">
             <label for="f-name">Full Name <span class="required" aria-hidden="true">*</span></label>

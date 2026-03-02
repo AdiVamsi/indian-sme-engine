@@ -12,6 +12,7 @@ const servicesRoutes = require('./routes/services.routes');
 const testimonialsRoutes = require('./routes/testimonials.routes');
 const appointmentsRoutes = require('./routes/appointments.routes');
 const publicRoutes = require('./routes/public.routes');
+const adminRoutes = require('./routes/admin.routes');
 const { authenticate } = require('./middleware/auth.middleware');
 const { errorHandler } = require('./middleware/error.middleware');
 
@@ -58,6 +59,7 @@ app.use('/api/services',      authenticate, servicesRoutes);
 app.use('/api/testimonials',  authenticate, testimonialsRoutes);
 app.use('/api/appointments',  authenticate, appointmentsRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/admin',  adminRoutes);
 
 /* ── Global error handler (must be last) ── */
 app.use(errorHandler);

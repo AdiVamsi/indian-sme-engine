@@ -6,13 +6,24 @@ const prisma = new PrismaClient();
 async function main() {
   const business = await prisma.business.upsert({
     where: { slug: "sharma-jee-academy-delhi" },
-    update: {},
+    update: {
+      industry: "academy",
+      city:     "Delhi",
+      country:  "India",
+      timezone: "Asia/Kolkata",
+      currency: "INR",
+    },
     create: {
-      name: "Sharma JEE Academy",
-      slug: "sharma-jee-academy-delhi",
-      phone: "+91 98765 43210",
-      email: "admin@sharmajeeacademy.in",
-      address: "Delhi, India",
+      name:     "Sharma JEE Academy",
+      slug:     "sharma-jee-academy-delhi",
+      phone:    "+91 98765 43210",
+      email:    "admin@sharmajeeacademy.in",
+      address:  "Connaught Place, New Delhi",
+      industry: "academy",
+      city:     "Delhi",
+      country:  "India",
+      timezone: "Asia/Kolkata",
+      currency: "INR",
     },
   });
 

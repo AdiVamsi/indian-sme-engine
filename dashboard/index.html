@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SME Engine — Admin Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ────────────────────────────────── LOGIN ── -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <h1>SME Engine</h1>
+    <p>Sign in to manage your business.</p>
+    <form id="login-form" novalidate>
+      <div class="form-group">
+        <label for="slug">Business Slug</label>
+        <input id="slug" type="text" placeholder="sharma-jee-academy-delhi" autocomplete="off" required />
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="owner@example.com" autocomplete="email" required />
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="btn-login">Sign In →</button>
+      <p id="login-error" class="login-error"></p>
+    </form>
+  </div>
+</div>
+
+<!-- ─────────────────────────────── DASHBOARD ── -->
+<div id="dashboard-screen" class="hidden">
+
+  <header class="topbar">
+    <div class="topbar__left">
+      <img id="biz-logo" class="biz-logo" src="" alt="" style="display:none" />
+      <div class="topbar__brand">
+        <span id="biz-name" class="topbar__title"></span>
+        <span id="ws-status" class="ws-status ws-status--off">○ Connecting…</span>
+      </div>
+    </div>
+    <div class="topbar__right">
+      <button id="logout-btn" class="btn-logout">Sign out</button>
+    </div>
+  </header>
+
+  <div id="notif" class="notif"></div>
+
+  <main class="main">
+
+    <!-- Greeting — timezone-aware, rendered by JS -->
+    <p id="greeting" class="greeting"></p>
+
+    <!-- Stats grid — rendered by JS from /api/admin/config + /api/admin/dashboard -->
+    <div id="stats-grid" class="stats"></div>
+
+    <!-- Leads-by-day SVG chart — rendered by JS from /api/admin/leads/by-day -->
+    <div class="chart-wrap">
+      <h3 class="chart-title">Leads — last 7 days</h3>
+      <div id="chart-container" class="chart-container"></div>
+    </div>
+
+    <!-- Tab navigation — labels are static UI chrome, not business data -->
+    <nav class="tabs" role="tablist">
+      <button class="tab tab--active" data-tab="leads"        role="tab">Leads</button>
+      <button class="tab"             data-tab="appointments"  role="tab">Appointments</button>
+      <button class="tab"             data-tab="services"      role="tab">Services</button>
+      <button class="tab"             data-tab="testimonials"  role="tab">Testimonials</button>
+    </nav>
+
+    <!-- ── Leads ── -->
+    <section id="section-leads" class="section">
+      <div class="section-header">
+        <h2 class="section-title">Leads</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="leads-thead"></tr></thead>
+          <tbody id="leads-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Appointments ── -->
+    <section id="section-appointments" class="section hidden">
+      <div class="section-header">
+        <h2 class="section-title">Appointments</h2>
+        <button class="btn-create" id="btn-new-appointment">+ New</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="appt-thead"></tr></thead>
+          <tbody id="appt-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Services ── -->
+    <section id="section-services" class="section hidden">
+      <div class="section-header">
+        <h2 class="section-title">Services</h2>
+        <button class="btn-create" id="btn-new-service">+ New</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="services-thead"></tr></thead>
+          <tbody id="services-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Testimonials ── -->
+    <section id="section-testimonials" class="section hidden">
+      <div class="section-header">
+        <h2 class="section-title">Testimonials</h2>
+        <button class="btn-create" id="btn-new-testimonial">+ New</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr id="testimonials-thead"></tr></thead>
+          <tbody id="testimonials-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ── Delete confirmation modal ── -->
+<div id="delete-modal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3>Confirm Delete</h3>
+    <p id="delete-modal-msg">This action cannot be undone.</p>
+    <div class="modal-actions">
+      <button id="modal-cancel"  class="btn-cancel">Cancel</button>
+      <button id="modal-confirm" class="btn-danger">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Create / Edit form modal ── -->
+<div id="form-modal" class="modal-overlay hidden">
+  <div class="modal-card modal-card--wide">
+    <h3 id="form-modal-title">New Item</h3>
+    <form id="form-modal-form" novalidate>
+      <div id="form-modal-fields"></div>
+      <div class="modal-actions">
+        <button type="button" id="form-modal-cancel" class="btn-cancel">Cancel</button>
+        <button type="submit"  id="form-modal-submit" class="btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ES module entry point — browser resolves the full import graph automatically -->
+<script type="module" src="js/dashboard.js"></script>
+
+</body>
+</html>

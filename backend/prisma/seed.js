@@ -41,7 +41,45 @@ async function main() {
     },
   });
 
-  console.log("Seed complete");
+  /* ── Demo business (for public landing page / demos) ── */
+  const demoBusiness = await prisma.business.upsert({
+    where: { slug: 'demo-academy' },
+    update: {
+      industry: 'academy',
+      city:     'Mumbai',
+      country:  'India',
+      timezone: 'Asia/Kolkata',
+      currency: 'INR',
+    },
+    create: {
+      name:     'Demo Academy',
+      slug:     'demo-academy',
+      phone:    '+91 98765 00000',
+      email:    'demo@smeengine.com',
+      address:  'Bandra West, Mumbai',
+      industry: 'academy',
+      city:     'Mumbai',
+      country:  'India',
+      timezone: 'Asia/Kolkata',
+      currency: 'INR',
+    },
+  });
+
+  const demoPasswordHash = await bcrypt.hash('Demo@123', 12);
+
+  await prisma.user.upsert({
+    where: { businessId_email: { businessId: demoBusiness.id, email: 'demo@smeengine.com' } },
+    update: {},
+    create: {
+      businessId: demoBusiness.id,
+      name:       'Demo Owner',
+      email:      'demo@smeengine.com',
+      passwordHash: demoPasswordHash,
+      role:       'OWNER',
+    },
+  });
+
+  console.log('Seed complete');
 }
 
 main()

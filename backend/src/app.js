@@ -20,15 +20,22 @@ const app = express();
 
 /* ── Security & parsing ── */
 app.use(helmet());
+const allowedOrigins = [
+  /* ── Production ── */
+  'https://sme-engine-dashboard.netlify.app',  /* deployed dashboard */
+  'https://sme-engine.netlify.app',            /* deployed landing page */
+  /* ── Legacy Netlify preview URL ── */
+  'https://lovely-sawine-2b80f3.netlify.app',
+  /* ── Local dev ── */
+  'http://localhost:3000',
+  'http://localhost:3001',   /* npx serve (dashboard dev) */
+  'http://127.0.0.1:3001',
+  'http://localhost:5500',   /* VS Code Live Server */
+  'http://127.0.0.1:5500',
+];
+
 app.use(cors({
-  origin: [
-    'http://localhost:3001',   /* npx serve (dashboard dev) */
-    'http://127.0.0.1:3001',
-    'http://localhost:5500',   /* VS Code Live Server */
-    'http://127.0.0.1:5500',
-    'https://lovely-sawine-2b80f3.netlify.app',
-    'https://sme-engine-dashboard.netlify.app'  /* deployed dashboard */
-  ],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   credentials: true,
 }));

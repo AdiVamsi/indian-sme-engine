@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 
 const { findBusinessBySlug } = require('../services/auth.service');
 const { createLead } = require('../services/leads.service');
+const { broadcast } = require('../realtime/socket');
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -45,7 +46,8 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
       return res.status(404).json({ error: 'Business not found' });
     }
 
-    await createLead(business.id, { name, phone, email, message });
+    const lead = await createLead(business.id, { name, phone, email, message });
+    broadcast(business.id, 'lead:new', lead);
 
     return res.status(201).json({ ok: true });
   } catch (err) {

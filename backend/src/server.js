@@ -3,6 +3,7 @@
 const { PORT, NODE_ENV } = require('./config/env');
 const { PrismaClient } = require('@prisma/client');
 const app = require('./app');
+const { initRealtime } = require('./realtime/socket');
 
 const prisma = new PrismaClient();
 
@@ -11,6 +12,8 @@ const server = app.listen(PORT, () => {
   console.log(`  Environment : ${NODE_ENV}`);
   console.log(`  Port        : ${PORT}`);
 });
+
+initRealtime(server);
 
 /* ── Graceful shutdown ── */
 const shutdown = (signal) => {

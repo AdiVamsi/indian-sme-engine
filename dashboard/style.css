@@ -751,6 +751,78 @@ tbody td:first-child   { color: var(--text); font-weight: 500; }
   font-size: 0.875rem;
 }
 
+/* ── Empty state ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+
+.empty-state__icon {
+  font-size: 2.5rem;
+  line-height: 1;
+  margin: 0 0 0.25rem;
+}
+
+.empty-state__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.empty-state__sub {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+  max-width: 38ch;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.empty-state__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.empty-state__url {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  color: var(--primary);
+  word-break: break-all;
+  max-width: 42ch;
+}
+
+.btn-copy {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgba(129,140,248,0.12);
+  color: var(--primary);
+  border: 1px solid rgba(129,140,248,0.3);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.btn-copy:hover {
+  background: rgba(129,140,248,0.22);
+  border-color: rgba(129,140,248,0.55);
+}
+
+.btn-copy:active { transform: scale(0.95); }
+
 /* ── Status select ── */
 .status-select {
   border: none;

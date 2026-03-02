@@ -18,7 +18,11 @@
 
 import { API_BASE_URL, BUSINESS_SLUG } from './config.js';
 
-export function DashAPI(token) {
+/**
+ * @param {string|null}  token
+ * @param {{ onUnauthorized?: () => void }} [opts]
+ */
+export function DashAPI(token, { onUnauthorized } = {}) {
   /* Headers helpers */
   const jsonHeaders = () => ({
     'Content-Type': 'application/json',
@@ -31,9 +35,8 @@ export function DashAPI(token) {
 
   /**
    * Core request helper.
-   * @param {string} method
-   * @param {string} path   — relative to API_BASE_URL
-   * @param {*}     [body]  — JSON-serialisable body (optional)
+   * Detects 401 → calls onUnauthorized() then throws.
+   * Logs all non-2xx responses to console.error for debugging.
    */
   async function req(method, path, body) {
     const opts = {
@@ -46,7 +49,18 @@ export function DashAPI(token) {
     if (res.status === 204) return null;
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+    if (res.status === 401) {
+      console.error(`[API] 401 Unauthorized — ${method} ${path}`);
+      onUnauthorized?.();
+      throw new Error('Session expired. Please log in again.');
+    }
+
+    if (!res.ok) {
+      console.error(`[API] ${res.status} — ${method} ${path}:`, data.error ?? 'Unknown error');
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+
     return data;
   }
 

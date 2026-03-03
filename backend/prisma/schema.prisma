@@ -12,6 +12,13 @@ enum UserRole {
   STAFF
 }
 
+enum ActivityType {
+  AGENT_CLASSIFIED
+  AGENT_PRIORITIZED
+  FOLLOW_UP_SCHEDULED
+  SLA_ALERT
+}
+
 enum LeadStatus {
   NEW
   CONTACTED
@@ -50,6 +57,7 @@ model Business {
   services      Service[]
   testimonials  Testimonial[]
   appointments  Appointment[]
+  agentConfig   AgentConfig?
 }
 
 model User {
@@ -83,6 +91,8 @@ model Lead {
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  activities LeadActivity[]
 }
 
 model Service {
@@ -127,4 +137,32 @@ model Appointment {
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model AgentConfig {
+  id                  String   @id @default(cuid())
+
+  businessId          String   @unique
+  business            Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  toneStyle           String   @default("professional")
+  priorityRules       Json
+  classificationRules Json
+  followUpMinutes     Int      @default(30)
+  autoReplyEnabled    Boolean  @default(false)
+
+  createdAt           DateTime @default(now())
+}
+
+model LeadActivity {
+  id        String       @id @default(cuid())
+
+  leadId    String
+  lead      Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  type      ActivityType
+  message   String
+  metadata  Json?
+
+  createdAt DateTime     @default(now())
 }

@@ -1,11 +1,22 @@
 'use strict';
 
 const { PrismaClient } = require('@prisma/client');
+const { AgentEngine } = require('../agents');
 
 const prisma = new PrismaClient();
 
-const createLead = (businessId, data) =>
-  prisma.lead.create({ data: { businessId, ...data } });
+const createLead = async (businessId, data) => {
+  const lead = await prisma.lead.create({ data: { businessId, ...data } });
+
+  /* Run agent pipeline; log errors but never fail the caller. */
+  try {
+    await AgentEngine.run({ type: 'LEAD_CREATED', leadId: lead.id, businessId: lead.businessId });
+  } catch (err) {
+    console.error('[LeadsService] AgentEngine failed for lead', lead.id, '—', err.message);
+  }
+
+  return lead;
+};
 
 const findLeadsByBusiness = (businessId, status) =>
   prisma.lead.findMany({

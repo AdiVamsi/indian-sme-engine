@@ -8,7 +8,7 @@ const SITE = {
 
   /* ── API ───────────────────────────────────────────────────── */
   api: {
-    baseUrl: 'https://indian-sme-engine.onrender.com',
+    baseUrl: window.location.origin,
     slug:    'sharma-jee-academy-delhi',
   },
 

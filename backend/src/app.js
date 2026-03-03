@@ -1,9 +1,10 @@
 'use strict';
 
+const path    = require('path');
 const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
+const cors    = require('cors');
+const helmet  = require('helmet');
+const morgan  = require('morgan');
 
 const { NODE_ENV } = require('./config/env');
 const authRoutes = require('./routes/auth.routes');
@@ -20,25 +21,7 @@ const app = express();
 
 /* ── Security & parsing ── */
 app.use(helmet());
-const allowedOrigins = [
-  /* ── Production ── */
-  'https://sme-engine-dashboard.netlify.app',  /* deployed dashboard */
-  'https://sme-engine.netlify.app',            /* deployed landing page */
-  /* ── Legacy Netlify preview URL ── */
-  'https://lovely-sawine-2b80f3.netlify.app',
-  /* ── Local dev ── */
-  'http://localhost:3000',
-  'http://localhost:3001',   /* npx serve (dashboard dev) */
-  'http://127.0.0.1:3001',
-  'http://localhost:5500',   /* VS Code Live Server */
-  'http://127.0.0.1:5500',
-];
-
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-  credentials: true,
-}));
+app.use(cors()); /* same-origin: all static + API served from one host */
 app.use(morgan(NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10kb' }));
 
@@ -70,6 +53,11 @@ app.use('/api/testimonials', authenticate, testimonialsRoutes);
 app.use('/api/appointments', authenticate, appointmentsRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/admin', adminRoutes);
+
+/* ── Static sites (mounted after /api so routes are never shadowed) ── */
+app.use('/dashboard', express.static(path.join(__dirname, '../../dashboard')));
+app.use('/form',      express.static(path.join(__dirname, '../../frontend')));
+app.use('/',          express.static(path.join(__dirname, '../../landing')));
 
 /* ── Global error handler (must be last) ── */
 app.use(errorHandler);

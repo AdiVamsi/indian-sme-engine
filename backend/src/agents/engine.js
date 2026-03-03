@@ -1,17 +1,30 @@
 'use strict';
 
 const { PrismaClient } = require('@prisma/client');
-const { applyBasicPolicy } = require('./policies/basicPolicy');
+const { applyPolicy }  = require('./policies/basicPolicy');
 
 const prisma = new PrismaClient();
 
-/* Default AgentConfig values used when no config exists for the business yet. */
+/*
+ * DEFAULT_CONFIG — used when no AgentConfig row exists for a business yet.
+ * JSONB fields match the exact shapes expected by applyPolicy.
+ */
 const DEFAULT_CONFIG = {
-  toneStyle:           'professional',
-  priorityRules:       [],
-  classificationRules: [],
-  followUpMinutes:     30,
-  autoReplyEnabled:    false,
+  toneStyle:    'professional',
+  priorityRules: {
+    weights: {
+      urgent: 30,
+      price:  10,
+    },
+  },
+  classificationRules: {
+    keywords: {
+      DEMO_REQUEST: ['demo'],
+      ADMISSION:    ['admission'],
+    },
+  },
+  followUpMinutes:  30,
+  autoReplyEnabled: false,
 };
 
 /**
@@ -45,45 +58,46 @@ async function run({ type, leadId, businessId }) {
     });
   }
 
-  /* 3. Deterministic classification via policy — no mutation, no LLM. */
-  const { priorityScore, tags } = applyBasicPolicy(lead);
+  /* 3. Config-driven classification and priority scoring.
+   *    config.classificationRules and config.priorityRules are passed in
+   *    so the policy reads from DB, not from hardcoded values. */
+  const { priorityScore, tags } = applyPolicy(lead, config);
 
-  /* 4. Schedule follow-up timestamp. */
+  /* 4. Schedule follow-up using config.followUpMinutes. */
   const followUpAt = new Date(Date.now() + config.followUpMinutes * 60 * 1000);
 
-  /* 5. Write LeadActivity rows atomically.
-   *    Three entries per LEAD_CREATED event — all scoped to this leadId. */
+  /* 5. Write LeadActivity rows atomically — all scoped to this leadId. */
   await prisma.$transaction([
     prisma.leadActivity.create({
       data: {
-        leadId: lead.id,
-        type:    'AGENT_CLASSIFIED',
-        message: `Lead classified with tags: ${tags.length ? tags.join(', ') : 'none'}`,
+        leadId:   lead.id,
+        type:     'AGENT_CLASSIFIED',
+        message:  `Lead classified with tags: ${tags.length ? tags.join(', ') : 'none'}`,
         metadata: { tags },
       },
     }),
     prisma.leadActivity.create({
       data: {
-        leadId: lead.id,
-        type:    'AGENT_PRIORITIZED',
-        message: `Priority score assigned: ${priorityScore}`,
+        leadId:   lead.id,
+        type:     'AGENT_PRIORITIZED',
+        message:  `Priority score assigned: ${priorityScore}`,
         metadata: { priorityScore },
       },
     }),
     prisma.leadActivity.create({
       data: {
-        leadId: lead.id,
-        type:    'FOLLOW_UP_SCHEDULED',
-        message: `Follow-up scheduled in ${config.followUpMinutes} minutes`,
+        leadId:   lead.id,
+        type:     'FOLLOW_UP_SCHEDULED',
+        message:  `Follow-up scheduled in ${config.followUpMinutes} minutes`,
         metadata: {
-          followUpAt:     followUpAt.toISOString(),
+          followUpAt:      followUpAt.toISOString(),
           followUpMinutes: config.followUpMinutes,
         },
       },
     }),
   ]);
 
-  /* 6. Return structured result — lead table is NOT mutated. */
+  /* 6. Return structured result — Lead table is NOT mutated. */
   return {
     leadId:            lead.id,
     businessId,

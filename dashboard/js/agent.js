@@ -2,8 +2,8 @@
  * agent.js — AgentConfig editor page.
  *
  * Reads token from sessionStorage (written by dashboard.js on login).
- * Calls GET /api/agent/config to populate the form.
- * Calls PUT /api/agent/config on save.
+ * Calls GET /api/agent to populate the form.
+ * Calls PUT /api/agent on save.
  *
  * No global state. No framework. ES module.
  */
@@ -14,6 +14,7 @@ import { API_BASE_URL } from './config.js';
 const token = sessionStorage.getItem('dash_token');
 if (!token) {
   window.location.href = '/dashboard/';
+  throw new Error('Not authenticated');
 }
 
 /* ── API helpers ─────────────────────────────────────────────────────────── */

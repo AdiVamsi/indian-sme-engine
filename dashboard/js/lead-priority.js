@@ -19,6 +19,7 @@ import { API_BASE_URL } from './config.js';
 const token = sessionStorage.getItem('dash_token');
 if (!token) {
   window.location.href = '/dashboard/';
+  throw new Error('Not authenticated');
 }
 
 /* ── API helpers ─────────────────────────────────────────────────────────── */

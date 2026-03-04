@@ -30,4 +30,15 @@ const updateLeadStatus = (id, businessId, status) =>
 const deleteLead = (id, businessId) =>
   prisma.lead.deleteMany({ where: { id, businessId } });
 
-module.exports = { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead };
+const getLeadActivity = async (id, businessId) => {
+  /* Multi-tenant guard: verify lead belongs to this business */
+  const lead = await prisma.lead.findFirst({ where: { id, businessId } });
+  if (!lead) return null;
+  const activities = await prisma.leadActivity.findMany({
+    where: { leadId: id },
+    orderBy: { createdAt: 'asc' },
+  });
+  return { lead, activities };
+};
+
+module.exports = { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead, getLeadActivity };

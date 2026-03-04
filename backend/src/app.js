@@ -14,6 +14,7 @@ const testimonialsRoutes = require('./routes/testimonials.routes');
 const appointmentsRoutes = require('./routes/appointments.routes');
 const publicRoutes = require('./routes/public.routes');
 const adminRoutes = require('./routes/admin.routes');
+const agentRoutes = require('./routes/agentConfig.routes');
 const { authenticate } = require('./middleware/auth.middleware');
 const { errorHandler } = require('./middleware/error.middleware');
 
@@ -53,6 +54,7 @@ app.use('/api/testimonials', authenticate, testimonialsRoutes);
 app.use('/api/appointments', authenticate, appointmentsRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/agent', agentRoutes);
 
 /* ── Static sites (mounted after /api so routes are never shadowed) ── */
 app.use('/dashboard', express.static(path.join(__dirname, '../../dashboard')));

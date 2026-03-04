@@ -2,7 +2,7 @@
 
 const { z } = require('zod');
 
-const { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead } = require('../services/leads.service');
+const { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead, getLeadActivity } = require('../services/leads.service');
 const { broadcast } = require('../realtime/socket');
 
 const leadStatusEnum = z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'WON', 'LOST']);
@@ -85,4 +85,15 @@ const remove = async (req, res) => {
   }
 };
 
-module.exports = { create, list, updateStatus, remove };
+const activity = async (req, res) => {
+  try {
+    const result = await getLeadActivity(req.params.id, req.user.businessId);
+    if (!result) return res.status(404).json({ error: 'Lead not found' });
+    return res.json(result);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+module.exports = { create, list, updateStatus, remove, activity };

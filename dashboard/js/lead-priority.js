@@ -16,7 +16,7 @@
 import { API_BASE_URL } from './config.js';
 
 /* ── Auth guard ──────────────────────────────────────────────────────────── */
-const token = sessionStorage.getItem('dash_token');
+const token = localStorage.getItem('dash_token');
 if (!token) {
   window.location.href = '/dashboard/';
   throw new Error('Not authenticated');
@@ -31,7 +31,7 @@ const authHeaders = () => ({
 async function apiFetch(path) {
   const res = await fetch(`${API_BASE_URL}${path}`, { headers: authHeaders() });
   if (res.status === 401) {
-    sessionStorage.removeItem('dash_token');
+    localStorage.removeItem('dash_token');
     window.location.href = '/dashboard/';
   }
   if (!res.ok) {

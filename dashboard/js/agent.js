@@ -1,7 +1,7 @@
 /**
  * agent.js — AgentConfig editor page.
  *
- * Reads token from sessionStorage (written by dashboard.js on login).
+ * Reads token from localStorage (written by dashboard.js on login).
  * Calls GET /api/agent to populate the form.
  * Calls PUT /api/agent on save.
  *
@@ -11,7 +11,7 @@
 import { API_BASE_URL } from './config.js';
 
 /* ── Auth guard ─────────────────────────────────────────────────────────── */
-const token = sessionStorage.getItem('dash_token');
+const token = localStorage.getItem('dash_token');
 if (!token) {
   window.location.href = '/dashboard/';
   throw new Error('Not authenticated');
@@ -29,7 +29,7 @@ async function fetchConfig() {
     headers: headers(),
   });
   if (res.status === 401) {
-    sessionStorage.removeItem('dash_token');
+    localStorage.removeItem('dash_token');
     window.location.href = '/dashboard/';
   }
   if (!res.ok) throw new Error(`GET /api/agent → ${res.status}`);
@@ -43,7 +43,7 @@ async function saveConfig(body) {
     body: JSON.stringify(body),
   });
   if (res.status === 401) {
-    sessionStorage.removeItem('dash_token');
+    localStorage.removeItem('dash_token');
     window.location.href = '/dashboard/';
   }
   const data = await res.json();

@@ -191,17 +191,32 @@ export function DashUI(config) {
     return `<select class="status-select ${sc}" data-id="${esc(id)}">${opts}</select>`;
   }
 
+  /* ── Priority badge ── */
+  function buildPriorityBadge(priority) {
+    const cls = priority === 'HIGH'   ? 'badge--hot'
+              : priority === 'NORMAL' ? 'badge--warm'
+              :                         'badge--normal';
+    return `<span class="priority-badge ${cls}">${esc(priority || 'LOW')}</span>`;
+  }
+
   /* ── Row builders ── */
   function buildLeadRow(lead, isNew = false) {
     const tr = document.createElement('tr');
     tr.dataset.leadId = lead.id;
     if (isNew) tr.classList.add('row-enter');
 
+    const tags    = Array.isArray(lead.tags) ? lead.tags : [];
+    const tagHtml = tags.length
+      ? `<div class="tag-chips">${tags.map((t) => `<span class="tag-chip">${esc(t)}</span>`).join('')}</div>`
+      : '';
+
     tr.innerHTML = `
       <td>${esc(lead.name)}</td>
       <td>${esc(lead.phone)}</td>
       <td>${esc(lead.email || '—')}</td>
       <td>${buildStatusSelect(lead.id, lead.status, config.leadStatuses)}</td>
+      <td>${buildPriorityBadge(lead.priority)}</td>
+      <td><span class="score-val">${esc(String(lead.priorityScore ?? 0))}</span>${tagHtml}</td>
       <td>${fmtDate(lead.createdAt)}</td>
       <td style="white-space:nowrap">
         <a class="btn-timeline" href="/dashboard/lead-activity.html?leadId=${esc(lead.id)}" title="View timeline">⏱</a>

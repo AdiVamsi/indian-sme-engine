@@ -2,7 +2,7 @@
  * lead-activity.js — Lead Activity Timeline page.
  *
  * Reads leadId from URL: /dashboard/lead-activity.html?leadId=abc123
- * Reads auth token from sessionStorage (written by dashboard.js on login).
+ * Reads auth token from localStorage (written by dashboard.js on login).
  * Fetches GET /api/leads/:id/activity
  * Renders a vertical timeline of agent + system events.
  */
@@ -10,7 +10,7 @@
 import { API_BASE_URL } from './config.js';
 
 /* ── Auth guard ─────────────────────────────────────────────────────────── */
-const token = sessionStorage.getItem('dash_token');
+const token = localStorage.getItem('dash_token');
 if (!token) {
   window.location.href = '/dashboard/';
 }
@@ -31,7 +31,7 @@ async function fetchActivity(id) {
     headers: authHeaders(),
   });
   if (res.status === 401) {
-    sessionStorage.removeItem('dash_token');
+    localStorage.removeItem('dash_token');
     window.location.href = '/dashboard/';
   }
   const data = await res.json();

@@ -37,11 +37,31 @@ const getDashboardSummary = async (businessId) => {
   };
 };
 
-const getLeads = (businessId) =>
-  prisma.lead.findMany({
+const getLeads = async (businessId) => {
+  const leads = await prisma.lead.findMany({
     where:   { businessId },
     orderBy: { createdAt: 'desc' },
+    include: {
+      activities: {
+        where:  { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
+        select: { type: true, metadata: true },
+      },
+    },
   });
+
+  return leads.map(({ activities, ...lead }) => {
+    const classAct = activities.find((a) => a.type === 'AGENT_CLASSIFIED');
+    const prioAct  = activities.find((a) => a.type === 'AGENT_PRIORITIZED');
+
+    const tags          = classAct?.metadata?.tags         ?? [];
+    const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
+    const priority      = priorityScore >= 30 ? 'HIGH'
+                        : priorityScore >= 10 ? 'NORMAL'
+                        :                       'LOW';
+
+    return { ...lead, priorityScore, tags, priority };
+  });
+};
 
 const getAppointments = (businessId) =>
   prisma.appointment.findMany({

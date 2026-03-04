@@ -203,7 +203,10 @@ export function DashUI(config) {
       <td>${esc(lead.email || '—')}</td>
       <td>${buildStatusSelect(lead.id, lead.status, config.leadStatuses)}</td>
       <td>${fmtDate(lead.createdAt)}</td>
-      <td><button class="btn-delete" data-id="${esc(lead.id)}" title="Delete">🗑</button></td>
+      <td style="white-space:nowrap">
+        <a class="btn-timeline" href="/dashboard/lead-activity.html?leadId=${esc(lead.id)}" title="View timeline">⏱</a>
+        <button class="btn-delete" data-id="${esc(lead.id)}" title="Delete">🗑</button>
+      </td>
     `;
     return tr;
   }

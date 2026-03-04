@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SME Engine — Lead Activity Timeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" />
+  <link rel="stylesheet" href="/dashboard/style.css" />
+  <style>
+    /* ── Page layout ── */
+    .activity-wrap {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .activity-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      height: 56px;
+      background: rgba(15, 15, 32, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .activity-topbar__title {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .activity-topbar__badge {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: rgba(129, 140, 248, 0.15);
+      color: var(--primary);
+      border: 1px solid rgba(129, 140, 248, 0.25);
+      border-radius: 999px;
+      padding: 0.15rem 0.55rem;
+    }
+
+    .activity-topbar__back {
+      font-size: 0.8125rem;
+      color: var(--muted);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: color 0.15s;
+    }
+
+    .activity-topbar__back:hover { color: var(--text); }
+
+    .activity-main {
+      flex: 1;
+      max-width: 680px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+
+    /* ── Lead meta header ── */
+    .lead-meta {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      animation: fadeSlideUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    .lead-meta__name {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .lead-meta__sub {
+      font-size: 0.8125rem;
+      color: var(--muted);
+    }
+
+    /* ── Page heading ── */
+    .activity-heading {
+      font-size: 0.695rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+    }
+
+    /* ── Timeline ── */
+    .timeline {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* Vertical connecting line */
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: linear-gradient(
+        180deg,
+        var(--primary) 0%,
+        rgba(129, 140, 248, 0.15) 100%
+      );
+      border-radius: 2px;
+    }
+
+    .timeline:empty::before { display: none; }
+
+    /* ── Single timeline item ── */
+    .tl-item {
+      display: flex;
+      gap: 1rem;
+      padding-bottom: 1.25rem;
+      animation: fadeSlideUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    .tl-item:last-child { padding-bottom: 0; }
+
+    /* Dot */
+    .tl-dot {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.875rem;
+      position: relative;
+      z-index: 1;
+      background: var(--elevated);
+      border: 2px solid var(--border-md);
+      transition: border-color 0.2s;
+    }
+
+    .tl-dot--created        { border-color: rgba(100, 116, 139, 0.5);  background: rgba(100, 116, 139, 0.1); }
+    .tl-dot--classified     { border-color: rgba(129, 140, 248, 0.6);  background: rgba(129, 140, 248, 0.1); }
+    .tl-dot--prioritized    { border-color: rgba(251, 191, 36,  0.6);  background: rgba(251, 191, 36,  0.1); }
+    .tl-dot--followup       { border-color: rgba(52,  211, 153, 0.6);  background: rgba(52,  211, 153, 0.1); }
+    .tl-dot--default        { border-color: rgba(148, 163, 184, 0.4);  background: rgba(148, 163, 184, 0.06); }
+
+    /* Card */
+    .tl-card {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      transition: border-color 0.2s;
+    }
+
+    .tl-card:hover { border-color: var(--border-md); }
+
+    .tl-card__head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .tl-card__event {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .tl-card__time {
+      font-size: 0.75rem;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Metadata pills / key-value */
+    .tl-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.5rem;
+    }
+
+    .tl-meta__pill {
+      font-size: 0.71875rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(129, 140, 248, 0.1);
+      color: var(--primary);
+      border: 1px solid rgba(129, 140, 248, 0.2);
+      letter-spacing: 0.02em;
+    }
+
+    .tl-meta__kv {
+      font-size: 0.8125rem;
+      color: var(--text-2);
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .tl-meta__kv-label {
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .tl-meta__kv-value {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* ── States ── */
+    .activity-loading,
+    .activity-error,
+    .activity-empty {
+      text-align: center;
+      padding: 3.5rem 1rem;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+
+    .activity-loading__spinner {
+      width: 28px;
+      height: 28px;
+      border: 3px solid rgba(129, 140, 248, 0.15);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .activity-error { color: var(--error); }
+
+    .activity-empty__icon {
+      font-size: 2.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    @media (max-width: 480px) {
+      .activity-main { padding: 1.25rem 1rem 4rem; }
+      .tl-card__head { flex-direction: column; gap: 0.2rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="activity-wrap">
+
+  <header class="activity-topbar">
+    <div class="activity-topbar__title">
+      ⚡ Lead Activity
+      <span class="activity-topbar__badge">Timeline</span>
+    </div>
+    <a class="activity-topbar__back" href="/dashboard/">← Dashboard</a>
+  </header>
+
+  <main class="activity-main" id="activity-main">
+
+    <!-- Lead meta (name / phone) — populated by JS -->
+    <div class="lead-meta hidden" id="lead-meta">
+      <p class="lead-meta__name" id="lead-name"></p>
+      <p class="lead-meta__sub"  id="lead-sub"></p>
+    </div>
+
+    <p class="activity-heading">Activity Timeline</p>
+
+    <!-- Dynamic content: loading / error / timeline -->
+    <div id="timeline-root"></div>
+
+  </main>
+</div>
+
+<script type="module" src="/dashboard/js/lead-activity.js"></script>
+</body>
+</html>

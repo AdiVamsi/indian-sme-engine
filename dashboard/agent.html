@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SME Engine — Agent Config</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" />
+  <link rel="stylesheet" href="/dashboard/style.css" />
+  <style>
+    /* ── Agent config page overrides ── */
+    .agent-wrap {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .agent-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      height: 56px;
+      background: rgba(15,15,32,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border, rgba(255,255,255,0.07));
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .agent-topbar__title {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--text, #e2e8f0);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .agent-topbar__badge {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: rgba(129,140,248,0.15);
+      color: #818cf8;
+      border: 1px solid rgba(129,140,248,0.25);
+      border-radius: 999px;
+      padding: 0.15rem 0.55rem;
+    }
+
+    .agent-topbar__back {
+      font-size: 0.8125rem;
+      color: var(--muted, #64748b);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: color 0.15s;
+    }
+
+    .agent-topbar__back:hover { color: var(--text, #e2e8f0); }
+
+    .agent-main {
+      flex: 1;
+      max-width: 720px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* ── Cards ── */
+    .config-card {
+      background: var(--card, #0f0f20);
+      border: 1px solid var(--border, rgba(255,255,255,0.07));
+      border-radius: 0.875rem;
+      padding: 1.5rem;
+    }
+
+    .config-card__heading {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--text, #e2e8f0);
+      margin: 0 0 0.25rem;
+    }
+
+    .config-card__sub {
+      font-size: 0.78125rem;
+      color: var(--muted, #64748b);
+      margin: 0 0 1.25rem;
+      line-height: 1.5;
+    }
+
+    /* ── Follow-up row ── */
+    .followup-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .followup-row label {
+      font-size: 0.8125rem;
+      color: var(--muted, #64748b);
+      white-space: nowrap;
+    }
+
+    .followup-row input[type="number"] {
+      width: 100px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border, rgba(255,255,255,0.07));
+      border-radius: 0.4rem;
+      color: var(--text, #e2e8f0);
+      font-size: 0.9375rem;
+      font-weight: 700;
+      padding: 0.4rem 0.65rem;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+
+    .followup-row input[type="number"]:focus {
+      border-color: #818cf8;
+    }
+
+    /* ── Rule table ── */
+    .rule-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      margin-bottom: 0.875rem;
+    }
+
+    .rule-table th {
+      text-align: left;
+      color: var(--muted, #64748b);
+      font-weight: 600;
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0 0.5rem 0.625rem;
+    }
+
+    .rule-table td {
+      padding: 0.35rem 0.5rem;
+      vertical-align: middle;
+    }
+
+    .rule-table input[type="text"],
+    .rule-table input[type="number"] {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border, rgba(255,255,255,0.07));
+      border-radius: 0.35rem;
+      color: var(--text, #e2e8f0);
+      font-size: 0.8125rem;
+      padding: 0.35rem 0.55rem;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+
+    .rule-table input[type="text"]:focus,
+    .rule-table input[type="number"]:focus {
+      border-color: #818cf8;
+    }
+
+    .rule-table td:last-child { width: 36px; text-align: center; }
+
+    /* ── Buttons ── */
+    .btn-remove {
+      background: none;
+      border: none;
+      color: var(--error, #f87171);
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0.2rem 0.4rem;
+      border-radius: 0.3rem;
+      line-height: 1;
+      opacity: 0.7;
+      transition: opacity 0.15s;
+    }
+
+    .btn-remove:hover { opacity: 1; }
+
+    .btn-add-row {
+      background: rgba(255,255,255,0.04);
+      border: 1px dashed rgba(255,255,255,0.12);
+      border-radius: 0.4rem;
+      color: var(--muted, #64748b);
+      font-size: 0.78125rem;
+      font-weight: 600;
+      padding: 0.4rem 0.85rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .btn-add-row:hover {
+      color: var(--text, #e2e8f0);
+      border-color: rgba(255,255,255,0.22);
+    }
+
+    /* ── Save button ── */
+    .btn-save {
+      align-self: flex-end;
+      padding: 0.65rem 2rem;
+      font-size: 0.9375rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #818cf8, #6366f1);
+      color: #fff;
+      border: none;
+      border-radius: 0.55rem;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(129,140,248,0.3);
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn-save:hover { opacity: 0.88; }
+    .btn-save:active { transform: scale(0.97); }
+    .btn-save:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Status banner ── */
+    .status-banner {
+      display: none;
+      padding: 0.75rem 1rem;
+      border-radius: 0.55rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+    }
+
+    .status-banner--ok {
+      display: block;
+      background: rgba(52,211,153,0.1);
+      border: 1px solid rgba(52,211,153,0.25);
+      color: #34d399;
+    }
+
+    .status-banner--err {
+      display: block;
+      background: rgba(248,113,113,0.1);
+      border: 1px solid rgba(248,113,113,0.25);
+      color: #f87171;
+    }
+  </style>
+</head>
+<body>
+<div class="agent-wrap">
+
+  <header class="agent-topbar">
+    <div class="agent-topbar__title">
+      ⚡ Agent Config
+      <span class="agent-topbar__badge">Phase 1</span>
+    </div>
+    <a class="agent-topbar__back" href="/dashboard/">← Dashboard</a>
+  </header>
+
+  <main class="agent-main" id="agent-main">
+
+    <!-- 1. Follow-up timing -->
+    <div class="config-card">
+      <h2 class="config-card__heading">Follow-up Timing</h2>
+      <p class="config-card__sub">
+        How many minutes after a lead is created should the follow-up be scheduled.
+      </p>
+      <div class="followup-row">
+        <label for="followUpMinutes">Follow up after</label>
+        <input type="number" id="followUpMinutes" min="1" max="1440" value="30" />
+        <span style="font-size:0.8125rem;color:var(--muted)">minutes</span>
+      </div>
+    </div>
+
+    <!-- 2. Classification rules -->
+    <div class="config-card">
+      <h2 class="config-card__heading">Classification Rules</h2>
+      <p class="config-card__sub">
+        Each tag is triggered when the lead's message contains any of its keywords.
+        Keywords are comma-separated and case-insensitive.
+      </p>
+      <table class="rule-table" id="class-table">
+        <thead>
+          <tr>
+            <th style="width:32%">Tag name</th>
+            <th>Trigger keywords (comma-separated)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="class-tbody"></tbody>
+      </table>
+      <button class="btn-add-row" id="btn-add-class">+ Add tag</button>
+    </div>
+
+    <!-- 3. Priority rules -->
+    <div class="config-card">
+      <h2 class="config-card__heading">Priority Rules</h2>
+      <p class="config-card__sub">
+        Each matched keyword adds its score to the lead's priority.
+        A long message (>100 chars) always adds +5 regardless of these rules.
+      </p>
+      <table class="rule-table" id="prio-table">
+        <thead>
+          <tr>
+            <th style="width:45%">Keyword</th>
+            <th>Score</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="prio-tbody"></tbody>
+      </table>
+      <button class="btn-add-row" id="btn-add-prio">+ Add keyword</button>
+    </div>
+
+    <!-- Status banner -->
+    <div class="status-banner" id="status-banner"></div>
+
+    <!-- Save -->
+    <button class="btn-save" id="btn-save">Save changes</button>
+
+  </main>
+</div>
+
+<script type="module" src="/dashboard/js/agent.js"></script>
+</body>
+</html>

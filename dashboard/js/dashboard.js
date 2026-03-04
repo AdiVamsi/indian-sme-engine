@@ -64,6 +64,7 @@ function checkTokenAndSchedule(token) {
 function doLogout(reason) {
   if (wsClient) wsClient.close();
   clearTimeout(expiryTimer);
+  sessionStorage.removeItem('dash_token');
 
   api            = null;
   ui             = null;
@@ -154,6 +155,9 @@ $('login-form').addEventListener('submit', async (e) => {
     api = DashAPI(data.token, {
       onUnauthorized: () => doLogout('Session expired. Please log in again.'),
     });
+
+    /* Persist token for agent.html (separate page, same session) */
+    sessionStorage.setItem('dash_token', data.token);
 
     /* Schedule auto-logout at token expiry */
     checkTokenAndSchedule(data.token);

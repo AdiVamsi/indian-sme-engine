@@ -18,11 +18,31 @@ const createLead = async (businessId, data) => {
   return lead;
 };
 
-const findLeadsByBusiness = (businessId, status) =>
-  prisma.lead.findMany({
-    where: { businessId, ...(status ? { status } : {}) },
+const findLeadsByBusiness = async (businessId, status) => {
+  const leads = await prisma.lead.findMany({
+    where:   { businessId, ...(status ? { status } : {}) },
     orderBy: { createdAt: 'desc' },
+    include: {
+      activities: {
+        where:   { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
+        orderBy: { createdAt: 'desc' },
+      },
+    },
   });
+
+  return leads.map(({ activities, ...lead }) => {
+    const classAct = activities.find((a) => a.type === 'AGENT_CLASSIFIED');
+    const prioAct  = activities.find((a) => a.type === 'AGENT_PRIORITIZED');
+
+    const tags          = classAct?.metadata?.tags         ?? [];
+    const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
+    const priority      = priorityScore >= 30 ? 'HIGH'
+                        : priorityScore >= 10 ? 'NORMAL'
+                        :                       'LOW';
+
+    return { ...lead, priorityScore, tags, priority };
+  });
+};
 
 const updateLeadStatus = (id, businessId, status) =>
   prisma.lead.updateMany({ where: { id, businessId }, data: { status } });

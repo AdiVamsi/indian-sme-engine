@@ -684,7 +684,14 @@ function onNewLead(lead) {
   row.classList.add('lead-new--visible');
   ui.prependRow('leads-tbody', row);
 
-  ui.showToast(config.notifText?.newLead ?? 'New lead!');
+  const name = lead.name ? `: ${lead.name}` : '';
+  const toastMsg = lead.priority === 'HIGH'
+    ? `🔥 New High Priority Lead${name}`
+    : lead.priority === 'NORMAL'
+      ? `⭐ New Lead${name}`
+      : (config.notifText?.newLead ?? `New lead${name}`);
+
+  ui.showToast(toastMsg, lead.priority === 'HIGH' ? 'success' : 'info');
 }
 
 function onRemoteLeadStatusChange({ id, status }) {

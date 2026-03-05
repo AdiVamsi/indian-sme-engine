@@ -26,6 +26,24 @@ const create = async (req, res) => {
 
   try {
     const lead = await createLead(req.user.businessId, result.data);
+
+    /* Non-blocking broadcast — never let WS failure affect the HTTP response */
+    try {
+      broadcast(req.user.businessId, 'lead:new', {
+        id:            lead.id,
+        name:          lead.name,
+        phone:         lead.phone,
+        email:         lead.email,
+        status:        lead.status,
+        priority:      lead.priority,
+        priorityScore: lead.priorityScore,
+        tags:          lead.tags,
+        createdAt:     lead.createdAt,
+      });
+    } catch (wsErr) {
+      console.error('[LeadsController] broadcast lead:new failed:', wsErr.message);
+    }
+
     return res.status(201).json(lead);
   } catch (err) {
     console.error(err);

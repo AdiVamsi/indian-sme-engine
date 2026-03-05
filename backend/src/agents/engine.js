@@ -1,7 +1,8 @@
 'use strict';
 
-const { PrismaClient } = require('@prisma/client');
-const { applyPolicy }  = require('./policies/basicPolicy');
+const { PrismaClient }        = require('@prisma/client');
+const { applyPolicy }         = require('./policies/basicPolicy');
+const { runLeadAutomations }  = require('../services/leadAutomation.service');
 
 const prisma = new PrismaClient();
 
@@ -97,14 +98,25 @@ async function run({ type, leadId, businessId }) {
     }),
   ]);
 
-  /* 6. Return structured result — Lead table is NOT mutated. */
+  /* 6. Run rule-based automations; failures are logged, never propagated. */
+  let automationsTriggered = 0;
+  try {
+    const automationResult = await runLeadAutomations(lead.id, { tags, priorityScore });
+    automationsTriggered   = automationResult.triggered;
+    console.log(`[AgentEngine] Automations triggered for lead ${lead.id}: ${automationsTriggered}`);
+  } catch (err) {
+    console.error(`[AgentEngine] runLeadAutomations failed for lead ${lead.id} —`, err.message);
+  }
+
+  /* 7. Return structured result — Lead table is NOT mutated. */
   return {
-    leadId:            lead.id,
+    leadId:               lead.id,
     businessId,
     priorityScore,
     tags,
-    followUpAt:        followUpAt.toISOString(),
-    activitiesCreated: 3,
+    followUpAt:           followUpAt.toISOString(),
+    activitiesCreated:    3,
+    automationsTriggered,
   };
 }
 

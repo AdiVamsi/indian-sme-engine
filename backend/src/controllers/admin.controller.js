@@ -1,6 +1,7 @@
 'use strict';
 
 const { LeadStatus, AppointmentStatus } = require('@prisma/client');
+const z = require('zod');
 
 // Login reuses the existing auth controller — same schema, same logic.
 const { login } = require('./auth.controller');
@@ -14,6 +15,9 @@ const {
   getBusinessProfile,
   getLeadsByDay,
 } = require('../services/admin.service');
+
+const { updateLeadStatus } = require('../services/leads.service');
+const { broadcast }        = require('../realtime/socket');
 
 const { getIndustryConfig } = require('../constants/industry.config');
 
@@ -122,6 +126,35 @@ const leadsByDay = async (req, res) => {
   }
 };
 
+const leadStatusSchema = z.object({
+  status: z.enum(Object.values(LeadStatus)),
+});
+
+/* ── PATCH /api/admin/leads/:id/status ──
+   Updates a lead's status and logs a STATUS_CHANGED activity.
+   Broadcasts the change to all connected clients for this business.
+*/
+const updateStatus = async (req, res) => {
+  const parsed = leadStatusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0].message });
+  }
+  try {
+    const result = await updateLeadStatus(req.params.id, req.user.businessId, parsed.data.status);
+    if (result.count === 0) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+    broadcast(req.user.businessId, 'lead:status_changed', {
+      id:     req.params.id,
+      status: parsed.data.status,
+    });
+    return res.json({ updated: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 module.exports = {
   login,
   getConfig,
@@ -132,4 +165,5 @@ module.exports = {
   services,
   testimonials,
   leadsByDay,
+  updateStatus,
 };

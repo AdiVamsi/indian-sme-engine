@@ -13,6 +13,7 @@ const {
   appointments,
   services,
   testimonials,
+  updateStatus,
 } = require('../controllers/admin.controller');
 
 const router = Router();
@@ -24,8 +25,9 @@ router.post('/login', login);
 router.get('/config',        authenticate, getConfig);
 router.get('/business',      authenticate, getBusiness);
 router.get('/dashboard',     authenticate, dashboard);
-router.get('/leads',         authenticate, leads);
-router.get('/leads/by-day',  authenticate, leadsByDay);
+router.get  ('/leads',           authenticate, leads);
+router.get  ('/leads/by-day',    authenticate, leadsByDay);
+router.patch('/leads/:id/status', authenticate, updateStatus);
 router.get('/appointments',  authenticate, appointments);
 router.get('/services',      authenticate, services);
 router.get('/testimonials',  authenticate, testimonials);

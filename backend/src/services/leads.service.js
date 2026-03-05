@@ -8,14 +8,20 @@ const prisma = new PrismaClient();
 const createLead = async (businessId, data) => {
   const lead = await prisma.lead.create({ data: { businessId, ...data } });
 
-  /* Run agent pipeline; log errors but never fail the caller. */
+  /* Run agent pipeline; capture scores for broadcast payload.
+   * Errors are logged but never fail the caller. */
+  let priorityScore = 0;
+  let tags          = [];
   try {
-    await AgentEngine.run({ type: 'LEAD_CREATED', leadId: lead.id, businessId: lead.businessId });
+    const result = await AgentEngine.run({ type: 'LEAD_CREATED', leadId: lead.id, businessId: lead.businessId });
+    priorityScore = result.priorityScore ?? 0;
+    tags          = result.tags          ?? [];
   } catch (err) {
     console.error('[LeadsService] AgentEngine failed for lead', lead.id, '—', err.message);
   }
 
-  return lead;
+  const priority = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';
+  return { ...lead, priorityScore, tags, priority };
 };
 
 const findLeadsByBusiness = async (businessId, status) => {
@@ -44,8 +50,22 @@ const findLeadsByBusiness = async (businessId, status) => {
   });
 };
 
-const updateLeadStatus = (id, businessId, status) =>
-  prisma.lead.updateMany({ where: { id, businessId }, data: { status } });
+const updateLeadStatus = async (id, businessId, status) => {
+  const existing = await prisma.lead.findFirst({ where: { id, businessId } });
+  if (!existing) return { count: 0 };
+  await prisma.$transaction([
+    prisma.lead.update({ where: { id }, data: { status } }),
+    prisma.leadActivity.create({
+      data: {
+        leadId:   id,
+        type:     'STATUS_CHANGED',
+        message:  `Status changed from ${existing.status} to ${status}`,
+        metadata: { oldStatus: existing.status, newStatus: status },
+      },
+    }),
+  ]);
+  return { count: 1 };
+};
 
 const deleteLead = (id, businessId) =>
   prisma.lead.deleteMany({ where: { id, businessId } });

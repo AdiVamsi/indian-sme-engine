@@ -200,6 +200,14 @@
       flex-shrink: 0;
     }
 
+    /* Activity message */
+    .tl-card__msg {
+      font-size: 0.8125rem;
+      color: var(--text-2);
+      margin: 0.35rem 0 0.25rem;
+      line-height: 1.45;
+    }
+
     /* Metadata pills / key-value */
     .tl-meta {
       display: flex;
@@ -289,8 +297,8 @@
 
     <!-- Lead meta (name / phone) — populated by JS -->
     <div class="lead-meta hidden" id="lead-meta">
-      <p class="lead-meta__name" id="lead-name"></p>
-      <p class="lead-meta__sub"  id="lead-sub"></p>
+      <h2 class="lead-meta__name" id="leadName"></h2>
+      <p  class="lead-meta__sub"  id="leadPhone"></p>
     </div>
 
     <p class="activity-heading">Activity Timeline</p>

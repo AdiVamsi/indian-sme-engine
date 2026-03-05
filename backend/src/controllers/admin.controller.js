@@ -16,7 +16,7 @@ const {
   getLeadsByDay,
 } = require('../services/admin.service');
 
-const { updateLeadStatus } = require('../services/leads.service');
+const { updateLeadStatus, getLeadActivity } = require('../services/leads.service');
 const { broadcast }        = require('../realtime/socket');
 
 const { getIndustryConfig } = require('../constants/industry.config');
@@ -155,6 +155,21 @@ const updateStatus = async (req, res) => {
   }
 };
 
+/* ── GET /api/admin/leads/:id/activity ──
+   Returns the lead record + all its activity events for the timeline page.
+   Multi-tenant guard is inside getLeadActivity (checks businessId).
+*/
+const leadActivity = async (req, res) => {
+  try {
+    const result = await getLeadActivity(req.params.id, req.user.businessId);
+    if (!result) return res.status(404).json({ error: 'Lead not found' });
+    return res.json(result);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 module.exports = {
   login,
   getConfig,
@@ -166,4 +181,5 @@ module.exports = {
   testimonials,
   leadsByDay,
   updateStatus,
+  leadActivity,
 };

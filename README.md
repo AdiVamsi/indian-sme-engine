@@ -4,11 +4,12 @@
 ![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma&logoColor=white)
-![Jest](https://img.shields.io/badge/Tests-28%20passing-brightgreen?logo=jest&logoColor=white)
+![WebSockets](https://img.shields.io/badge/WebSockets-Live-6366f1?logo=socket.io&logoColor=white)
+![Jest](https://img.shields.io/badge/Tests-passing-brightgreen?logo=jest&logoColor=white)
 ![Render](https://img.shields.io/badge/Backend-Render-46E3B7?logo=render&logoColor=white)
 ![Netlify](https://img.shields.io/badge/Frontend-Netlify-00C7B7?logo=netlify&logoColor=white)
 
-A **full-stack, multi-tenant CRM platform** for Indian small businesses — built from scratch in 8 days. A live public landing page captures student enquiries and feeds them directly into a secured backend API with a full lead management system.
+AI-powered CRM platform for Indian small businesses to capture, score, prioritize, and manage leads automatically.
 
 ---
 
@@ -24,49 +25,39 @@ A **full-stack, multi-tenant CRM platform** for Indian small businesses — buil
 
 ---
 
-## What Was Built
+## Features
 
-This is a real, production-deployed system — not a tutorial clone.
-
-- **Multi-tenant architecture** — one API serves multiple businesses, each fully isolated
-- **Public lead capture** — a live landing page sends enquiries to the backend database
-- **Full CRM backend** — leads, services, testimonials, and appointments, all behind JWT auth
-- **28 integration tests** — Jest + Supertest, isolated per-business, all passing
-- **Production hardened** — rate limiting, honeypot, Helmet, input validation, graceful shutdown
-- **Deployed end-to-end** — Render (backend) + Netlify (frontend) + Render PostgreSQL (database)
+- **AI Lead Classification** — agent tags each incoming lead (e.g. `DEMO_REQUEST`, `URGENT`) based on configurable keyword rules
+- **AI Lead Prioritization** — every lead receives a numeric priority score; configurable keyword weights + message-length bonus
+- **Automation Engine** — rule-based automations trigger on tags and score thresholds (e.g. auto-schedule demo, flag high-value leads)
+- **Multi-Tenant CRM Architecture** — one API instance serves unlimited businesses; every query is scoped by `businessId` from JWT
+- **Lead Workflow Pipeline** — NEW → CONTACTED → QUALIFIED → WON / LOST with full status history
+- **Activity Timeline** — every agent action, status change, and automation is logged as a `LeadActivity` row with metadata
+- **Real-time Dashboard** — WebSocket push on every new lead; dashboard updates instantly without page reload
+- **Public Lead Capture Forms** — rate-limited, honeypot-protected public endpoints per business slug
 
 ---
 
 ## System Architecture
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                        STUDENT / USER                         │
-└────────────────────────┬──────────────────────────────────────┘
-                         │
-              ┌──────────▼──────────┐
-              │   NETLIFY (CDN)     │  index.html + style.css
-              │   Vanilla JS SPA    │  config.js · js/api.js · script.js
-              └──────────┬──────────┘
-                         │ HTTPS POST /api/public/:slug/leads
-                         │
-              ┌──────────▼──────────────────────┐
-              │   RENDER — Express REST API      │
-              │                                  │
-              │  Auth middleware (JWT)           │
-              │  Route → Controller → Service    │
-              │  Zod validation · Rate limiter   │
-              │  Helmet · Morgan · Error handler │
-              └──────────┬──────────────────────┘
-                         │ Prisma ORM
-                         │
-              ┌──────────▼──────────────────────┐
-              │   RENDER — PostgreSQL 16         │
-              │                                  │
-              │  Business · User · Lead          │
-              │  Service · Testimonial           │
-              │  Appointment                     │
-              └──────────────────────────────────┘
+Public Form → POST /api/public/:slug/leads
+                │
+                ▼
+         Express API (JWT auth, Zod validation, rate limiting)
+                │
+                ├─► Prisma → PostgreSQL  (Lead + LeadActivity stored)
+                │
+                ├─► AgentEngine
+                │     ├─ applyPolicy()    → classificationRules + priorityRules from AgentConfig
+                │     ├─ LeadActivity     → AGENT_CLASSIFIED, AGENT_PRIORITIZED, FOLLOW_UP_SCHEDULED
+                │     └─ runAutomations() → rule-based triggers, further LeadActivity rows
+                │
+                └─► WebSocket broadcast  → lead:new (priorityScore + tags included)
+                                               │
+                                               ▼
+                                     Admin Dashboard (Vanilla JS)
+                                     live row prepend + toast alert
 ```
 
 ---
@@ -80,6 +71,7 @@ This is a real, production-deployed system — not a tutorial clone.
 | Express 5 | HTTP framework |
 | Prisma 6 | ORM + migrations |
 | PostgreSQL 16 | Relational database |
+| WebSockets (`ws`) | Real-time push to dashboard |
 | JWT | Stateless authentication |
 | Zod | Request body validation |
 | Bcrypt | Password hashing |
@@ -93,7 +85,8 @@ This is a real, production-deployed system — not a tutorial clone.
 |-----------|---------|
 | HTML5 | Semantic structure |
 | CSS3 | Design system (custom properties, BEM, responsive) |
-| Vanilla JS (ES6) | Dynamic rendering, animations, form logic |
+| Vanilla JS (ES6 modules) | Dashboard, realtime, agent config, lead timeline |
+| WebSocket API | Live lead feed without page reload |
 | IntersectionObserver | Scroll animations + counter trigger |
 | Fetch API | Backend communication |
 
@@ -111,33 +104,45 @@ This is a real, production-deployed system — not a tutorial clone.
 indian-sme-engine/
 ├── backend/
 │   ├── prisma/
-│   │   ├── schema.prisma        ← 5 models, 3 enums
+│   │   ├── schema.prisma        ← data models (Lead, LeadActivity, AgentConfig, …)
 │   │   ├── migrations/          ← committed migration history
 │   │   └── seed.js              ← idempotent seed
-│   ├── src/
-│   │   ├── config/env.js        ← centralised env validation
-│   │   ├── controllers/         ← HTTP layer
-│   │   ├── services/            ← DB query layer
-│   │   ├── routes/              ← Express routers
-│   │   ├── middleware/          ← JWT auth + error handler
-│   │   ├── utils/               ← jwt + hash helpers
-│   │   └── tests/               ← 28 integration tests
-│   ├── .env.example             ← env var template
-│   ├── render.yaml              ← Render deploy config
-│   └── Dockerfile               ← Docker support
+│   └── src/
+│       ├── agents/              ← AgentEngine + basicPolicy + automations
+│       ├── config/env.js        ← centralised env validation
+│       ├── controllers/         ← HTTP layer
+│       ├── services/            ← DB query layer
+│       ├── routes/              ← Express routers
+│       ├── realtime/socket.js   ← WebSocket server + broadcast()
+│       ├── middleware/          ← JWT auth + error handler
+│       └── utils/               ← jwt + hash helpers
 │
-└── frontend/
-    ├── index.html               ← zero-content shell
+├── dashboard/                   ← Admin SPA (Vanilla JS, ES modules)
+│   ├── index.html               ← main dashboard (login + CRM tabs)
+│   ├── agent.html               ← AI agent config editor
+│   ├── lead-activity.html       ← per-lead activity timeline
+│   ├── lead-priority.html       ← AI priority visualization
+│   ├── style.css                ← shared design system
+│   └── js/
+│       ├── api.js               ← DashAPI factory (all fetch calls)
+│       ├── ui.js                ← DashUI factory (all DOM rendering)
+│       ├── realtime.js          ← WebSocket client + auto-reconnect
+│       ├── dashboard.js         ← orchestration (login, tabs, realtime)
+│       ├── agent.js             ← agent config page
+│       ├── lead-activity.js     ← activity timeline page
+│       └── lead-priority.js     ← priority cards page
+│
+└── frontend/                    ← Public landing page (no framework)
+    ├── index.html
     ├── config.js                ← all content + API config
-    ├── script.js                ← render + animation + form logic
-    ├── style.css                ← full design system
-    └── js/
-        └── api.js               ← backend communication layer
+    ├── script.js                ← render + animations + form logic
+    ├── style.css
+    └── js/api.js
 ```
 
 ---
 
-## Quick Start (Local)
+## How to Run Locally
 
 ```bash
 # Backend
@@ -148,12 +153,17 @@ npx prisma migrate dev
 npx prisma db seed
 npm run dev                 # → http://localhost:4000
 
-# Frontend (separate terminal)
-cd frontend
-npx serve .                 # → http://localhost:3000
+# Dashboard (served by the backend at /dashboard)
+# → http://localhost:4000/dashboard/
+
+# Public form (served by the backend at /form)
+# → http://localhost:4000/form/
 ```
 
-Update `frontend/config.js` → `baseUrl: 'http://localhost:4000'` for local testing.
+Default seed credentials:
+- **Slug:** `sharma-jee-academy-delhi`
+- **Email:** `owner@sharmajeeacademy.in`
+- **Password:** `Admin@12345`
 
 ---
 
@@ -162,14 +172,22 @@ Update `frontend/config.js` → `baseUrl: 'http://localhost:4000'` for local tes
 ```
 GET  /api/health                              → liveness
 GET  /api/health/full                         → uptime + environment
-POST /api/auth/login                          → returns JWT
+POST /api/admin/login                         → returns JWT
 POST /api/public/:slug/leads                  → public lead capture (no auth)
 
-GET  /api/me                                  → current user  [auth]
-POST|GET|PATCH|DELETE  /api/leads             → lead CRM      [auth]
-POST|GET|PATCH|DELETE  /api/services          → services      [auth]
-POST|GET|DELETE        /api/testimonials      → testimonials  [auth]
-POST|GET|PATCH|DELETE  /api/appointments      → appointments  [auth]
+GET  /api/admin/config                        → dashboard config (industry-aware) [auth]
+GET  /api/admin/dashboard                     → stat counts                       [auth]
+GET  /api/admin/leads                         → leads with priorityScore + tags   [auth]
+
+GET  /api/leads/:id/activity                  → lead activity timeline            [auth]
+PATCH /api/leads/:id/status                   → update lead status                [auth]
+DELETE /api/leads/:id                         → delete lead                       [auth]
+
+GET|PUT /api/agent                            → agent config (rules + timing)     [auth]
+
+POST|GET|PATCH|DELETE  /api/appointments      → appointments                      [auth]
+POST|GET|PATCH|DELETE  /api/services          → services                          [auth]
+POST|GET|DELETE        /api/testimonials      → testimonials                      [auth]
 ```
 
 ---
@@ -179,7 +197,6 @@ POST|GET|PATCH|DELETE  /api/appointments      → appointments  [auth]
 ```bash
 cd backend
 npm test
-# 28 tests · 7 suites · ~3s
 ```
 
 All tests create isolated business data and clean up on completion — safe to run repeatedly against any dev database.

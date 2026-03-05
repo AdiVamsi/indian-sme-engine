@@ -888,6 +888,15 @@ tbody td:first-child   { color: var(--text); font-weight: 500; }
 .btn-timeline:hover  { color: var(--primary); background: var(--primary-10); }
 .btn-timeline:active { transform: scale(0.84); }
 
+/* ── Clickable lead name in table ── */
+.lead-name-link {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+.lead-name-link:hover { color: var(--primary); text-decoration: underline; }
+
 /* ── Priority badges (shared by leads table + lead-priority page) ── */
 .priority-badge {
   display: inline-block;

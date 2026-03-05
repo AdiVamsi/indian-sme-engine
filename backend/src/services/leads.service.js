@@ -71,13 +71,22 @@ const deleteLead = (id, businessId) =>
   prisma.lead.deleteMany({ where: { id, businessId } });
 
 const getLeadActivity = async (id, businessId) => {
-  /* Multi-tenant guard: verify lead belongs to this business */
-  const lead = await prisma.lead.findFirst({ where: { id, businessId } });
-  if (!lead) return null;
-  const activities = await prisma.leadActivity.findMany({
-    where: { leadId: id },
+  /* Single query: filter by lead relation for multi-tenant safety */
+  const rows = await prisma.leadActivity.findMany({
+    where: { leadId: id, lead: { businessId } },
+    include: { lead: { select: { name: true, phone: true } } },
     orderBy: { createdAt: 'asc' },
   });
+
+  if (!rows.length) {
+    /* No activities yet — confirm lead exists for this business */
+    const existing = await prisma.lead.findFirst({ where: { id, businessId } });
+    if (!existing) return null;
+    return { lead: { id, name: existing.name, phone: existing.phone }, activities: [] };
+  }
+
+  const lead       = { id, ...rows[0].lead };
+  const activities = rows.map(({ lead: _l, ...act }) => act);
   return { lead, activities };
 };
 

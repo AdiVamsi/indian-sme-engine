@@ -211,7 +211,7 @@ export function DashUI(config) {
       : '';
 
     tr.innerHTML = `
-      <td>${esc(lead.name)}</td>
+      <td><a class="lead-name-link" href="/dashboard/lead-activity.html?leadId=${esc(lead.id)}">${esc(lead.name)}</a></td>
       <td>${esc(lead.phone)}</td>
       <td>${esc(lead.email || '—')}</td>
       <td>${buildStatusSelect(lead.id, lead.status, config.leadStatuses)}</td>

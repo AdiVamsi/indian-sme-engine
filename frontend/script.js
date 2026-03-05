@@ -481,6 +481,8 @@ form.addEventListener('submit', async (e) => {
     document.querySelectorAll('.card.is-selectable').forEach((c) => {
       c.classList.remove('is-selected', 'is-dimmed');
     });
+    /* Auto-clear so the form is visually ready for another submission */
+    setTimeout(() => setStatus('', ''), 2000);
   } catch (err) {
     setStatus(err.message || 'Request failed', 'error');
   } finally {

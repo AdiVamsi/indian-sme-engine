@@ -140,7 +140,14 @@ $('login-form').addEventListener('submit', async (e) => {
     ).catch(() => ({ ok: false, data: { error: 'Could not reach server.' } }));
 
     if (!ok) {
-      errEl.textContent = data.error || 'Login failed.';
+      /* data.error may be a Zod flatten object { fieldErrors, formErrors }
+         when required fields are blank — extract the first human-readable string */
+      const errMsg = typeof data.error === 'string'
+        ? data.error
+        : Object.values(data.error?.fieldErrors ?? {}).flat()[0]
+            ?? data.error?.formErrors?.[0]
+            ?? 'Invalid credentials. Please check your details.';
+      errEl.textContent = errMsg;
       return;
     }
 

@@ -27,7 +27,7 @@ if (!leadId) {
 const authHeaders = () => ({ Authorization: `Bearer ${token}` });
 
 async function fetchActivity(id) {
-  const res = await fetch(`${API_BASE_URL}/api/leads/${id}/activity`, {
+  const res = await fetch(`${API_BASE_URL}/api/admin/leads/${id}/activity`, {
     headers: authHeaders(),
   });
   if (res.status === 401) {
@@ -60,6 +60,11 @@ const ACTIVITY_MAP = {
     label: 'Follow-up scheduled',
     icon: '📅',
     dotClass: 'tl-dot--followup',
+  },
+  STATUS_CHANGED: {
+    label: 'Status updated',
+    icon: '🔄',
+    dotClass: 'tl-dot--default',
   },
 };
 
@@ -94,14 +99,15 @@ function renderMeta(type, meta) {
     return `<div class="tl-meta">${pills}</div>`;
   }
 
-  /* AGENT_PRIORITIZED — score badge */
+  /* AGENT_PRIORITIZED — score badge (AgentEngine stores as priorityScore) */
   if (type === 'AGENT_PRIORITIZED') {
-    if (meta.score == null) return '';
+    const score = meta.priorityScore ?? meta.score;
+    if (score == null) return '';
     return `
       <div class="tl-meta">
         <span class="tl-meta__kv">
           <span class="tl-meta__kv-label">Score:</span>
-          <span class="tl-meta__kv-value">${escHtml(String(meta.score))}</span>
+          <span class="tl-meta__kv-value">${escHtml(String(score))}</span>
         </span>
       </div>`;
   }
@@ -163,6 +169,10 @@ function buildTimeline(activities) {
     const time = formatDateTime(act.createdAt);
     const metaHtml = renderMeta(act.type, act.metadata);
 
+    const msgHtml = act.message
+      ? `<p class="tl-card__msg">${escHtml(act.message)}</p>`
+      : '';
+
     return `
       <div class="tl-item" style="animation-delay:${i * 60}ms">
         <div class="tl-dot ${escHtml(dotClass)}" aria-hidden="true">${icon}</div>
@@ -171,6 +181,7 @@ function buildTimeline(activities) {
             <span class="tl-card__event">${escHtml(label)}</span>
             <span class="tl-card__time">${escHtml(time)}</span>
           </div>
+          ${msgHtml}
           ${metaHtml}
         </div>
       </div>`;
@@ -204,12 +215,12 @@ function renderEmpty() {
 
 function renderLeadMeta(lead) {
   if (!lead) return;
-  const metaEl = document.getElementById('lead-meta');
-  const nameEl = document.getElementById('lead-name');
-  const subEl  = document.getElementById('lead-sub');
-  if (nameEl) nameEl.textContent = lead.name ?? lead.customerName ?? 'Unknown lead';
-  if (subEl)  subEl.textContent  = [lead.phone, lead.email].filter(Boolean).join(' · ');
-  if (metaEl) metaEl.classList.remove('hidden');
+  const metaEl  = document.getElementById('lead-meta');
+  const nameEl  = document.getElementById('leadName');
+  const phoneEl = document.getElementById('leadPhone');
+  if (nameEl)  nameEl.textContent  = lead.name ?? 'Unknown lead';
+  if (phoneEl) phoneEl.textContent = lead.phone ?? '';
+  if (metaEl)  metaEl.classList.remove('hidden');
 }
 
 /* ── Utilities ──────────────────────────────────────────────────────────── */

@@ -156,6 +156,9 @@ $('login-form').addEventListener('submit', async (e) => {
       onUnauthorized: () => doLogout('Session expired. Please log in again.'),
     });
 
+    /* Expose on window so browser console can inspect: window.api */
+    window.api = api;
+
     /* Persist token for agent.html (separate page, same session) */
     localStorage.setItem('dash_token', data.token);
 
@@ -172,8 +175,14 @@ $('login-form').addEventListener('submit', async (e) => {
         <div class="skeleton" style="width:55%;height:2.25rem;border-radius:0.4rem"></div>
       </div>`).join('');
 
-    await bootDashboard();
-    startRealtime(data.token);
+    try {
+      await bootDashboard();
+      startRealtime(data.token);
+    } catch (err) {
+      console.error('[Login] bootDashboard failed:', err);
+      errEl.textContent = 'Dashboard failed to load. Please try again.';
+      doLogout();
+    }
 
   } finally {
     if (loginBtn)   loginBtn.disabled       = false;
@@ -183,26 +192,49 @@ $('login-form').addEventListener('submit', async (e) => {
 });
 
 /* ─────────────────────────────────────────────────
-   BOOT — parallel load of config + data
+   SAFE FETCH — wraps an API call so a single failure
+   never crashes the entire boot sequence.
+───────────────────────────────────────────────── */
+async function safeFetch(fn, label) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`[Dashboard] ${label} failed:`, err);
+    return null;
+  }
+}
+
+/* ─────────────────────────────────────────────────
+   BOOT — loads each widget independently so one
+   failing endpoint never freezes the whole UI.
 ───────────────────────────────────────────────── */
 async function bootDashboard() {
-  const [cfg, summary, leads, chartData] = await Promise.all([
-    api.getConfig(),
-    api.getDashboard(),
-    api.getLeads(),
-    api.getLeadsByDay(7),
-  ]);
+  console.log('[Dashboard] Boot starting');
 
+  /* Config is required — it seeds DashUI and all column/stat labels.
+     If this fails the caller's try-catch handles it. */
+  const cfg = await api.getConfig();
   config = cfg;
   ui     = DashUI(cfg);
   loadedSections.add('leads');
 
   ui.applyMood();
   ui.renderBizHeader();
-  ui.renderStats(summary);
-  ui.renderChart(chartData);
   ui.renderColumns('leads-thead', cfg.tableColumns.leads);
-  renderLeads(leads);
+
+  /* Stats — optional; skeleton stays if it fails */
+  const summary = await safeFetch(() => api.getDashboard(), 'dashboard stats');
+  if (summary) ui.renderStats(summary);
+
+  /* Leads — optional; empty state shown if it fails */
+  const leads = await safeFetch(() => api.getLeads(), 'leads');
+  renderLeads(leads ?? []);
+
+  /* Chart — optional; chart area stays blank if it fails */
+  const chartData = await safeFetch(() => api.getLeadsByDay(7), 'leads by day');
+  if (chartData) ui.renderChart(chartData);
+
+  console.log('[Dashboard] Boot completed');
 }
 
 /* ─────────────────────────────────────────────────
@@ -672,3 +704,47 @@ function onRemoteLeadStatusChange({ id, status }) {
   if (oldStatus !== 'NEW' && status === 'NEW')
     ui.updateStat('newLeads', ui.getStat('newLeads') + 1);
 }
+
+/* ─────────────────────────────────────────────────
+   AUTO-LOGIN — restore session from persisted token
+   Runs once on every page load. If a valid, non-expired
+   token exists in localStorage the login screen is skipped
+   and the dashboard boots immediately.
+───────────────────────────────────────────────── */
+(async () => {
+  const stored = localStorage.getItem('dash_token');
+  if (!stored) return;
+
+  /* Reject expired tokens without hitting the server */
+  const payload = decodeJwt(stored);
+  if (!payload?.exp || payload.exp * 1000 <= Date.now()) {
+    localStorage.removeItem('dash_token');
+    return;
+  }
+
+  api = DashAPI(stored, {
+    onUnauthorized: () => doLogout('Session expired. Please log in again.'),
+  });
+
+  /* Expose on window so browser console can inspect: window.api */
+  window.api = api;
+
+  checkTokenAndSchedule(stored);
+
+  $('login-screen').classList.add('hidden');
+  $('dashboard-screen').classList.remove('hidden');
+
+  $('stats-grid').innerHTML = Array(6).fill(0).map(() => `
+    <div class="stat-card">
+      <div class="skeleton skeleton--sm" style="margin-bottom:0.5rem"></div>
+      <div class="skeleton" style="width:55%;height:2.25rem;border-radius:0.4rem"></div>
+    </div>`).join('');
+
+  try {
+    await bootDashboard();
+    startRealtime(stored);
+  } catch (err) {
+    console.error('[AutoLogin] bootDashboard failed:', err);
+    doLogout('Could not load dashboard data. Please log in again.');
+  }
+})();

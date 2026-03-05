@@ -38,8 +38,11 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
 
     const business = await findBusinessBySlug(req.params.businessSlug);
     if (!business) {
+      console.warn('[Public] Business not found for slug:', req.params.businessSlug);
       return res.status(404).json({ error: 'Business not found' });
     }
+
+    console.log('[Public] Creating lead for business:', business.id, '| slug:', req.params.businessSlug);
 
     const lead = await createLead(business.id, {
       name:    data.name,

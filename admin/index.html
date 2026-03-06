@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SME Engine — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" />
+  <link rel="stylesheet" href="/admin/style.css" />
+</head>
+<body>
+
+<!-- ── Toast area ──────────────────────────────────────────────────────────── -->
+<div id="toast-area" class="toast-area" aria-live="polite"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- LOGIN SCREEN                                                              -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="login-card__brand">
+      <span class="login-card__icon">⚡</span>
+      <span class="login-card__title">Admin Control Center</span>
+    </div>
+    <p class="login-card__sub">Platform-level access. SuperAdmin only.</p>
+
+    <form id="login-form" class="login-form" autocomplete="off">
+      <div class="field">
+        <label class="field__label" for="login-password">Admin Password</label>
+        <input
+          type="password"
+          id="login-password"
+          class="field__input"
+          placeholder="Enter your admin password"
+          autocomplete="current-password"
+          required
+        />
+      </div>
+      <p id="login-error" class="login-error" role="alert"></p>
+      <button type="submit" id="login-btn" class="btn-primary btn--full">Log in</button>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- ADMIN SCREEN                                                              -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="admin-screen" class="admin-screen" hidden>
+
+  <!-- Mobile sidebar overlay -->
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar__brand">
+      <span class="sidebar__icon">⚡</span>
+      <div>
+        <div class="sidebar__name">Admin</div>
+        <div class="sidebar__tagline">Control Center</div>
+      </div>
+    </div>
+
+    <nav class="sidebar__nav">
+      <a class="sidebar__link sidebar__link--active" data-tab="overview" href="#">
+        <span class="sidebar__link-icon">◈</span> Overview
+      </a>
+      <a class="sidebar__link" data-tab="businesses" href="#">
+        <span class="sidebar__link-icon">◉</span> Businesses
+      </a>
+      <a class="sidebar__link" data-tab="leads" href="#">
+        <span class="sidebar__link-icon">◎</span> Leads Explorer
+      </a>
+      <a class="sidebar__link" data-tab="logs" href="#">
+        <span class="sidebar__link-icon">◌</span> Automation Logs
+      </a>
+    </nav>
+
+    <div class="sidebar__footer">
+      <button id="logout-btn" class="btn-logout">← Log out</button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="admin-main">
+
+    <!-- Mobile topbar (hidden on desktop) -->
+    <div class="mobile-bar">
+      <button id="sidebar-toggle" class="hamburger-btn" aria-label="Open navigation">
+        <span></span><span></span><span></span>
+      </button>
+      <span class="mobile-bar__title">⚡ Admin</span>
+    </div>
+
+    <!-- ── OVERVIEW ─────────────────────────────────────────────────────── -->
+    <section id="section-overview" class="admin-section">
+      <header class="section-header">
+        <h1 class="section-header__title">Overview</h1>
+        <p class="section-header__sub">Platform-wide snapshot</p>
+      </header>
+
+      <!-- KPI cards -->
+      <div id="overview-stats" class="stats-grid"></div>
+
+      <!-- Two-column: left (chart + signals) / right (activity) -->
+      <div class="overview-grid">
+        <div class="overview-col">
+          <div class="overview-panel">
+            <h3 class="panel-title">Leads Per Day — Last 7 Days</h3>
+            <div id="leads-chart" class="chart-container"></div>
+          </div>
+          <div class="overview-panel">
+            <h3 class="panel-title">Platform Signals</h3>
+            <div id="platform-signals"></div>
+          </div>
+        </div>
+        <div class="overview-panel">
+          <h3 class="panel-title">Recent Platform Activity</h3>
+          <div id="overview-activity"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── BUSINESSES ───────────────────────────────────────────────────── -->
+    <section id="section-businesses" class="admin-section" hidden>
+      <header class="section-header">
+        <h1 class="section-header__title">Businesses</h1>
+        <p class="section-header__sub">All registered tenants</p>
+      </header>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Business</th>
+              <th>Industry</th>
+              <th>Location</th>
+              <th class="col-num">Leads</th>
+              <th>Last Activity</th>
+            </tr>
+          </thead>
+          <tbody id="businesses-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── LEADS EXPLORER ───────────────────────────────────────────────── -->
+    <section id="section-leads" class="admin-section" hidden>
+      <header class="section-header">
+        <h1 class="section-header__title">Leads Explorer</h1>
+        <p class="section-header__sub">Cross-tenant lead view — latest 200</p>
+      </header>
+      <div class="toolbar">
+        <input
+          type="search"
+          id="leads-search"
+          class="toolbar__search"
+          placeholder="Filter by name, email, or business…"
+        />
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Lead</th>
+              <th>Business</th>
+              <th>Status</th>
+              <th>Priority</th>
+              <th class="col-num">Score</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="leads-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── AUTOMATION LOGS ──────────────────────────────────────────────── -->
+    <section id="section-logs" class="admin-section" hidden>
+      <header class="section-header">
+        <h1 class="section-header__title">Automation Logs</h1>
+        <p class="section-header__sub">Agent events across all businesses — latest 200</p>
+      </header>
+      <div id="logs-feed" class="feed"></div>
+    </section>
+
+  </main>
+</div>
+
+<script type="module" src="/admin/js/admin.js"></script>
+</body>
+</html>

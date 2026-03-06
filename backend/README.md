@@ -218,7 +218,7 @@ The `render.yaml` at the project root declares the service. Key settings:
 | Runtime | Node |
 | Build command | `npm install` (triggers `postinstall → prisma generate`) |
 | Start command | `npm start` |
-| Required env vars | `DATABASE_URL`, `JWT_SECRET` |
+| Required env vars | `DATABASE_URL`, `JWT_SECRET`, `SUPERADMIN_PASSWORD`, `SUPERADMIN_SECRET` |
 
 On each deploy, Render runs `npm install` → `prisma generate` (via postinstall hook) → `npm start`.
 
@@ -226,13 +226,35 @@ On each deploy, Render runs `npm install` → `prisma generate` (via postinstall
 
 ## Environment Variables
 
+### Business dashboard (existing)
+
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `JWT_SECRET` | ✅ | Secret key for signing JWTs |
+| `JWT_SECRET` | ✅ | Secret key for signing business-user JWTs |
 | `JWT_EXPIRES_IN` | — | Token lifetime (default: `7d`) |
 | `PORT` | — | Server port (default: `4000`) |
 | `NODE_ENV` | — | `development` or `production` |
+
+### Admin Control Center (SuperAdmin)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SUPERADMIN_PASSWORD` | ✅ | Password for the `/admin` control panel login |
+| `SUPERADMIN_SECRET` | ✅ | Signing secret for SuperAdmin JWTs — **must differ from `JWT_SECRET`** |
+
+> **Security note:** `SUPERADMIN_SECRET` is intentionally separate from `JWT_SECRET` so that a
+> compromised business-user token cannot be re-signed or elevated to SuperAdmin access.
+> The server will **refuse to start** if either variable is missing.
+
+**Development** — add to `backend/.env`:
+```
+SUPERADMIN_PASSWORD=your-strong-password-here
+SUPERADMIN_SECRET=your-long-random-secret-here
+```
+
+**Production (Render)** — set via the Render dashboard under *Environment → Environment Variables*.
+Never commit real values to source control.
 
 See `.env.example` for the full template.
 

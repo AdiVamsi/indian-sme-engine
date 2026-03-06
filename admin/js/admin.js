@@ -1,0 +1,631 @@
+/**
+ * admin.js — SME Engine Admin Control Center
+ *
+ * Sections : overview | businesses | leads | logs
+ * Auth     : SUPERADMIN JWT → localStorage 'admin_token'
+ * Polling  : overview + activity refreshed every 30 s
+ */
+
+import { AdminAPI } from './admin-api.js';
+
+/* ── State ───────────────────────────────────────────────────────────────── */
+let token        = localStorage.getItem('admin_token') ?? null;
+let api          = AdminAPI(token);
+let activeTab    = 'overview';
+let _pollTimer   = null;
+let _cachedBusinesses = [];
+const loadedSections = new Set();
+
+/* ── DOM helper ──────────────────────────────────────────────────────────── */
+const $ = (id) => document.getElementById(id);
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+function toast(msg, type = 'info') {
+  const wrap = $('toast-area');
+  const el = document.createElement('div');
+  el.className = `toast toast--${type}`;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('toast--visible'));
+  setTimeout(() => {
+    el.classList.remove('toast--visible');
+    setTimeout(() => el.remove(), 300);
+  }, 3500);
+}
+
+/* ── Auth helpers ────────────────────────────────────────────────────────── */
+function requireAuth() {
+  if (!token) { showLogin(); return false; }
+  return true;
+}
+
+function showLogin() {
+  $('admin-screen').style.display = 'none';
+  $('login-screen').style.display = 'flex';
+  $('login-password').value = '';
+  $('login-error').textContent = '';
+  $('login-password').focus();
+}
+
+function showAdmin() {
+  $('login-screen').style.display = 'none';
+  $('admin-screen').style.display = 'flex';
+}
+
+function handleUnauthorized() {
+  stopPolling();
+  localStorage.removeItem('admin_token');
+  token = null;
+  api = AdminAPI(null);
+  showLogin();
+  toast('Session expired. Please log in again.', 'error');
+}
+
+/* ── Login ───────────────────────────────────────────────────────────────── */
+$('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('login-btn');
+  const errEl = $('login-error');
+  const password = $('login-password').value.trim();
+  if (!password) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Logging in…';
+  errEl.textContent = '';
+
+  try {
+    const data = await AdminAPI(null).login(password);
+    token = data.token;
+    localStorage.setItem('admin_token', token);
+    api = AdminAPI(token);
+    loadedSections.clear();
+    showAdmin();
+    await bootAdmin();
+  } catch (err) {
+    errEl.textContent = err.message === 'Invalid credentials'
+      ? 'Incorrect password.'
+      : (err.message || 'Login failed.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Log in';
+  }
+});
+
+/* ── Logout ──────────────────────────────────────────────────────────────── */
+$('logout-btn').addEventListener('click', () => {
+  stopPolling();
+  localStorage.removeItem('admin_token');
+  token = null;
+  api = AdminAPI(null);
+  loadedSections.clear();
+  activeTab = 'overview';
+  showLogin();
+});
+
+/* ── Tab switching ───────────────────────────────────────────────────────── */
+const ALL_TABS = ['overview', 'businesses', 'leads', 'logs'];
+
+function switchTab(tab) {
+  activeTab = tab;
+
+  document.querySelectorAll('.sidebar__link').forEach((el) => {
+    el.classList.toggle('sidebar__link--active', el.dataset.tab === tab);
+  });
+
+  ALL_TABS.forEach((t) => {
+    const el = $(`section-${t}`);
+    if (el) el.hidden = (t !== tab);
+  });
+
+  loadSection(tab);
+}
+
+document.querySelectorAll('.sidebar__link').forEach((el) => {
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeMobileSidebar();
+    if (requireAuth()) switchTab(el.dataset.tab);
+  });
+});
+
+/* ── Lazy section loading ────────────────────────────────────────────────── */
+async function loadSection(tab) {
+  if (loadedSections.has(tab)) return;
+
+  try {
+    switch (tab) {
+      case 'overview':   await fetchAndRenderOverview();   break;
+      case 'businesses': await fetchAndRenderBusinesses(); break;
+      case 'leads':      await fetchAndRenderLeads();      break;
+      case 'logs':       await fetchAndRenderLogs();       break;
+    }
+    loadedSections.add(tab);
+  } catch (err) {
+    if (err.status === 401) { handleUnauthorized(); return; }
+    toast(err.message || `Failed to load ${tab}.`, 'error');
+  }
+}
+
+/* ── Boot + 30-second poll ───────────────────────────────────────────────── */
+async function bootAdmin() {
+  switchTab('overview');
+  startPolling();
+}
+
+function startPolling() {
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(async () => {
+    if (activeTab !== 'overview') return;
+    try {
+      const [stats, leads, logs] = await Promise.all([
+        api.getOverview(),
+        api.getLeads(),
+        api.getLogs(),
+      ]);
+      updateKPICounters(stats);
+      renderPlatformSignals(leads, _cachedBusinesses);
+      renderOverviewActivity(logs);
+    } catch (err) {
+      if (err.status === 401) { handleUnauthorized(); }
+    }
+  }, 30_000);
+}
+
+function stopPolling() {
+  clearInterval(_pollTimer);
+  _pollTimer = null;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* OVERVIEW                                                                   */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+async function fetchAndRenderOverview() {
+  $('overview-stats').innerHTML      = skeletonCards(4);
+  $('leads-chart').innerHTML         = skeletonBlock(120);
+  $('platform-signals').innerHTML    = skeletonSignals();
+  $('overview-activity').innerHTML   = skeletonFeed(7);
+
+  /* Parallel fetch for fast load */
+  const [stats, leads, businesses, logs] = await Promise.all([
+    api.getOverview(),
+    api.getLeads(),
+    api.getBusinesses(),
+    api.getLogs(),
+  ]);
+
+  _cachedBusinesses = businesses;
+
+  renderKPICards(stats);
+  renderLeadsChart(leads);
+  renderPlatformSignals(leads, businesses);
+  renderOverviewActivity(logs);
+}
+
+/* ── KPI cards with stable IDs for counter updates ──────────────────────── */
+function renderKPICards(data) {
+  $('overview-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-card__label">Businesses</div>
+      <div class="stat-card__value" id="stat-businesses">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Total Leads</div>
+      <div class="stat-card__value" id="stat-leads">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Users</div>
+      <div class="stat-card__value" id="stat-users">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__label">Events Today</div>
+      <div class="stat-card__value" id="stat-logs-today">0</div>
+    </div>
+  `;
+
+  /* Stagger counter animations */
+  setTimeout(() => animateCounter($('stat-businesses'), 0, data.businesses), 0);
+  setTimeout(() => animateCounter($('stat-leads'),      0, data.leads),       80);
+  setTimeout(() => animateCounter($('stat-users'),      0, data.users),       160);
+  setTimeout(() => animateCounter($('stat-logs-today'), 0, data.logsToday),   240);
+}
+
+/* Animate from current displayed value → new value (used by polling) */
+function updateKPICounters(data) {
+  const map = {
+    businesses: 'stat-businesses',
+    leads:      'stat-leads',
+    users:      'stat-users',
+    logsToday:  'stat-logs-today',
+  };
+  for (const [field, id] of Object.entries(map)) {
+    const el = $(id);
+    if (!el) continue;
+    const current = parseInt(el.textContent, 10) || 0;
+    if (current !== data[field]) animateCounter(el, current, data[field]);
+  }
+}
+
+/* ── Leads per day — SVG bar chart ──────────────────────────────────────── */
+function renderLeadsChart(leads) {
+  const container = $('leads-chart');
+  if (!container) return;
+
+  /* Build last 7 days */
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push({
+      date:  d.toISOString().slice(0, 10),
+      label: d.toLocaleDateString('en-IN', { weekday: 'short' }),
+      count: 0,
+    });
+  }
+
+  leads.forEach((l) => {
+    const slot = days.find((d) => d.date === l.createdAt?.slice(0, 10));
+    if (slot) slot.count++;
+  });
+
+  const CHART_H = 110;
+  const BAR_W   = 28;
+  const GAP     = 14;
+  const PAD     = 10;
+  const LABEL_H = 22;
+  const maxVal  = Math.max(...days.map((d) => d.count), 1);
+  const totalW  = PAD * 2 + days.length * (BAR_W + GAP) - GAP;
+
+  const svgBars = days.map((d, i) => {
+    const x    = PAD + i * (BAR_W + GAP);
+    const barH = Math.round((d.count / maxVal) * CHART_H);
+    const barY = CHART_H - barH;
+    return `
+      <g>
+        ${d.count > 0
+          ? `<text x="${x + BAR_W / 2}" y="${barY - 5}" text-anchor="middle" class="bar-count">${d.count}</text>`
+          : ''}
+        <rect class="bar"
+          x="${x}" y="${CHART_H}" width="${BAR_W}" height="0" rx="4"
+          data-y="${barY}" data-h="${barH}"
+        />
+        <text x="${x + BAR_W / 2}" y="${CHART_H + LABEL_H - 4}"
+          text-anchor="middle" class="bar-label">${d.label}</text>
+      </g>`;
+  }).join('');
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${totalW} ${CHART_H + LABEL_H}"
+         width="100%" class="leads-svg" preserveAspectRatio="xMidYMid meet">
+      ${svgBars}
+    </svg>`;
+
+  /* Staggered bar animation */
+  container.querySelectorAll('.bar').forEach((bar, i) => {
+    const tY = parseFloat(bar.dataset.y);
+    const tH = parseFloat(bar.dataset.h);
+    if (tH === 0) return;
+    setTimeout(() => animateBar(bar, CHART_H, tY, tH, 700), i * 70);
+  });
+}
+
+/* ── Recent platform activity feed ──────────────────────────────────────── */
+function renderOverviewActivity(logs) {
+  const feed = $('overview-activity');
+  if (!feed) return;
+
+  const recent = logs.slice(0, 15);
+  if (!recent.length) {
+    feed.innerHTML = `<p class="feed__empty">No recent activity.</p>`;
+    return;
+  }
+
+  feed.innerHTML = recent.map((r, i) => `
+    <div class="activity-item" style="animation-delay:${i * 35}ms">
+      <span class="activity-item__icon">${LOG_ICONS[r.type] ?? '🤖'}</span>
+      <div class="activity-item__body">
+        <div class="activity-item__event">${esc(r.type.replace(/_/g, ' '))}</div>
+        <div class="activity-item__biz">${esc(r.lead?.business?.name ?? '—')}</div>
+      </div>
+      <div class="activity-item__time">${fmtRelative(r.createdAt)}</div>
+    </div>
+  `).join('');
+}
+
+/* ── Platform Signals ────────────────────────────────────────────────────── */
+function renderPlatformSignals(leads, businesses) {
+  const el = $('platform-signals');
+  if (!el) return;
+
+  const todayStr     = new Date().toISOString().slice(0, 10);
+  const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000);
+
+  /* Signal 1 — Top lead source today */
+  const todayLeads = leads.filter((l) => l.createdAt?.slice(0, 10) === todayStr);
+  const bizTally   = {};
+  todayLeads.forEach((l) => { bizTally[l.businessName] = (bizTally[l.businessName] ?? 0) + 1; });
+  const topEntry = Object.entries(bizTally).sort((a, b) => b[1] - a[1])[0];
+  const s1 = topEntry
+    ? { icon: '🔥', text: `${topEntry[0]} received ${topEntry[1]} lead${topEntry[1] > 1 ? 's' : ''} today`, alert: true }
+    : { icon: '—', text: 'No new leads recorded today yet', alert: false };
+
+  /* Signal 2 — High priority leads waiting */
+  const urgent = leads.filter((l) => (l.score ?? 0) >= 30 && l.status === 'NEW');
+  const s2 = urgent.length > 0
+    ? { icon: '⚠️', text: `${urgent.length} high-priority lead${urgent.length > 1 ? 's' : ''} waiting for response`, alert: true }
+    : { icon: '✓', text: 'No urgent leads waiting', alert: false };
+
+  /* Signal 3 — Inactive businesses (no lead activity in past 7 days) */
+  const inactive = businesses.filter(
+    (b) => !b.lastActivity || new Date(b.lastActivity) < sevenDaysAgo,
+  );
+  const s3 = inactive.length > 0
+    ? { icon: '💤', text: `${inactive.length} business${inactive.length > 1 ? 'es' : ''} inactive this week`, alert: true }
+    : { icon: '✓', text: 'All businesses active this week', alert: false };
+
+  /* Signal 4 — Lead spike: today > 2× yesterday */
+  const todayCount = todayLeads.length;
+  const yestCount  = leads.filter((l) => l.createdAt?.slice(0, 10) === yesterdayStr).length;
+  const isSpike    = yestCount > 0 && todayCount > yestCount * 2;
+  const s4 = isSpike
+    ? { icon: '📈', text: `Lead spike detected — ${todayCount} today vs ${yestCount} yesterday`, alert: true }
+    : { icon: '→', text: 'No lead spike detected today', alert: false };
+
+  el.innerHTML = [s1, s2, s3, s4].map((s, i) => `
+    <div class="signal-row signal-row--${s.alert ? 'alert' : 'ok'}"
+         style="animation-delay:${i * 55}ms">
+      <span class="signal-row__icon">${s.icon}</span>
+      <span class="signal-row__text">${esc(s.text)}</span>
+    </div>
+  `).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* BUSINESSES                                                                 */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+async function fetchAndRenderBusinesses() {
+  const tbody = $('businesses-tbody');
+  tbody.innerHTML = skeletonRows(5, 5);
+
+  const rows = await api.getBusinesses();
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="table__empty">No businesses found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map((b) => `
+    <tr>
+      <td>
+        <div class="cell-primary">${esc(b.name)}</div>
+        <div class="cell-sub">${esc(b.slug)}</div>
+      </td>
+      <td>${esc(b.industry ?? '—')}</td>
+      <td>${esc([b.city, b.country].filter(Boolean).join(', ') || '—')}</td>
+      <td class="cell-num">${b.leadCount}</td>
+      <td class="cell-date">${fmtDate(b.lastActivity ?? b.createdAt)}</td>
+    </tr>
+  `).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* LEADS EXPLORER                                                             */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+let _allLeads = [];
+
+async function fetchAndRenderLeads() {
+  const tbody = $('leads-tbody');
+  tbody.innerHTML = skeletonRows(8, 6);
+
+  _allLeads = await api.getLeads();
+  renderLeadsTable(_allLeads);
+
+  $('leads-search').addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase();
+    renderLeadsTable(
+      q ? _allLeads.filter((l) =>
+        l.name?.toLowerCase().includes(q) ||
+        l.businessName?.toLowerCase().includes(q)
+      ) : _allLeads
+    );
+  });
+}
+
+function renderLeadsTable(rows) {
+  const tbody = $('leads-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="table__empty">No leads found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((l) => `
+    <tr>
+      <td>
+        <div class="cell-primary">${esc(l.name)}</div>
+        <div class="cell-sub">${esc(l.phone ?? '')}</div>
+      </td>
+      <td>${esc(l.businessName ?? '—')}</td>
+      <td><span class="badge badge--status badge--${(l.status ?? '').toLowerCase()}">${esc(l.status ?? '—')}</span></td>
+      <td>—</td>
+      <td class="cell-num">${l.score ?? 0}</td>
+      <td class="cell-date">${fmtDate(l.createdAt)}</td>
+    </tr>
+  `).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* AUTOMATION LOGS                                                            */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+const LOG_ICONS = {
+  AGENT_CLASSIFIED:    '🏷️',
+  AGENT_PRIORITIZED:   '⚡',
+  FOLLOW_UP_SCHEDULED: '🕐',
+  FOLLOW_UP_SENT:      '📨',
+};
+
+async function fetchAndRenderLogs() {
+  const feed = $('logs-feed');
+  feed.innerHTML = skeletonFeed(8);
+
+  const rows = await api.getLogs();
+
+  if (!rows.length) {
+    feed.innerHTML = `<p class="feed__empty">No automation events recorded yet.</p>`;
+    return;
+  }
+
+  feed.innerHTML = rows.map((r) => `
+    <div class="feed-item">
+      <div class="feed-item__icon">${LOG_ICONS[r.type] ?? '🤖'}</div>
+      <div class="feed-item__body">
+        <div class="feed-item__primary">${esc(r.type.replace(/_/g, ' '))}</div>
+        <div class="feed-item__sub">
+          ${esc(r.lead?.name ?? '—')} · ${esc(r.lead?.business?.name ?? '—')}
+          ${r.note ? ` · <em>${esc(r.note)}</em>` : ''}
+        </div>
+      </div>
+      <div class="feed-item__time">${fmtDate(r.createdAt)}</div>
+    </div>
+  `).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* SKELETON HELPERS                                                           */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+function skeletonCards(n) {
+  return Array.from({ length: n }, () => `
+    <div class="stat-card stat-card--skeleton">
+      <div class="skel skel--label"></div>
+      <div class="skel skel--value"></div>
+    </div>`
+  ).join('');
+}
+
+function skeletonBlock(h = 120) {
+  return `<div class="skel skel--block" style="height:${h}px;border-radius:0.5rem"></div>`;
+}
+
+function skeletonRows(n, cols) {
+  return Array.from({ length: n }, () =>
+    `<tr>${Array.from({ length: cols }, () =>
+      `<td><div class="skel skel--line"></div></td>`
+    ).join('')}</tr>`
+  ).join('');
+}
+
+function skeletonFeed(n) {
+  return Array.from({ length: n }, () => `
+    <div class="feed-item feed-item--skeleton">
+      <div class="skel skel--icon"></div>
+      <div class="feed-item__body">
+        <div class="skel skel--line"></div>
+        <div class="skel skel--line skel--short"></div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+function skeletonSignals() {
+  return Array.from({ length: 4 }, (_, i) => `
+    <div class="signal-row signal-row--ok">
+      <div class="skel" style="width:1.25rem;height:1.25rem;border-radius:50%;flex-shrink:0"></div>
+      <div class="skel skel--line" style="flex:1;width:${60 + i * 7}%"></div>
+    </div>`
+  ).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* UTILITIES                                                                  */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  }).format(new Date(iso));
+}
+
+function fmtRelative(iso) {
+  if (!iso) return '—';
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+/**
+ * Animate a numeric counter from `from` → `to` using ease-out cubic.
+ */
+function animateCounter(el, from, to, duration = 900) {
+  if (!el) return;
+  const start = performance.now();
+  const range = to - from;
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    el.textContent = Math.round(from + range * (1 - Math.pow(1 - t, 3)));
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/**
+ * Animate an SVG <rect> bar from (startY, h=0) → (endY, endH).
+ */
+function animateBar(bar, startY, endY, endH, duration) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const e = 1 - Math.pow(1 - t, 3);
+    bar.setAttribute('y',      startY + (endY - startY) * e);
+    bar.setAttribute('height', endH * e);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* MOBILE SIDEBAR                                                             */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+function closeMobileSidebar() {
+  $('sidebar').classList.remove('sidebar--open');
+  $('sidebar-overlay').classList.remove('visible');
+}
+
+$('sidebar-toggle')?.addEventListener('click', () => {
+  $('sidebar').classList.toggle('sidebar--open');
+  $('sidebar-overlay').classList.toggle('visible');
+});
+
+$('sidebar-overlay')?.addEventListener('click', closeMobileSidebar);
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* BOOT                                                                       */
+/* ══════════════════════════════════════════════════════════════════════════ */
+(function init() {
+  /* Set explicit display — CSS display:flex on both containers overrides [hidden] */
+  $('login-screen').style.display = 'none';
+  $('admin-screen').style.display = 'none';
+
+  if (token) {
+    showAdmin();
+    bootAdmin();
+  } else {
+    showLogin();
+  }
+})();

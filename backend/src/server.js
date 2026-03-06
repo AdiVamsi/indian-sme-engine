@@ -1,5 +1,8 @@
 'use strict';
 
+/* Must be the first line — loads .env before any module reads process.env */
+require('dotenv').config();
+
 const { PORT, NODE_ENV } = require('./config/env');
 const { PrismaClient } = require('@prisma/client');
 const app = require('./app');

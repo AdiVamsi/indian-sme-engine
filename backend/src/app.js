@@ -15,6 +15,7 @@ const appointmentsRoutes = require('./routes/appointments.routes');
 const publicRoutes = require('./routes/public.routes');
 const adminRoutes = require('./routes/admin.routes');
 const agentRoutes = require('./routes/agentConfig.routes');
+const superadminRoutes = require('./routes/superadmin.routes');
 const { authenticate } = require('./middleware/auth.middleware');
 const { errorHandler } = require('./middleware/error.middleware');
 
@@ -55,8 +56,10 @@ app.use('/api/appointments', authenticate, appointmentsRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/agent', agentRoutes);
+app.use('/api/superadmin', superadminRoutes);
 
 /* ── Static sites (mounted after /api so routes are never shadowed) ── */
+app.use('/admin',     express.static(path.join(__dirname, '../../admin')));
 app.use('/dashboard', express.static(path.join(__dirname, '../../dashboard')));
 app.use('/form',      express.static(path.join(__dirname, '../../frontend')));
 app.use('/',          express.static(path.join(__dirname, '../../landing')));

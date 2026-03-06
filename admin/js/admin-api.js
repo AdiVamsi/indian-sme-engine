@@ -41,5 +41,6 @@ export function AdminAPI(token) {
     updateBusinessStage: (id, stage) => request('PATCH', `/api/superadmin/businesses/${id}/stage`, { stage }),
     getLeads:            ()          => request('GET',   '/api/superadmin/leads'),
     getLogs:             ()          => request('GET',   '/api/superadmin/logs'),
+    getAnalytics:        ()          => request('GET',   '/api/superadmin/analytics'),
   };
 }

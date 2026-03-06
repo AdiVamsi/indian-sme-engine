@@ -15,5 +15,6 @@ router.get  ('/businesses',                 authenticateSuperAdmin, ctrl.busines
 router.patch('/businesses/:id/stage',       authenticateSuperAdmin, ctrl.updateBusinessStage);
 router.get  ('/leads',                      authenticateSuperAdmin, ctrl.leads);
 router.get  ('/logs',                       authenticateSuperAdmin, ctrl.logs);
+router.get  ('/analytics',                  authenticateSuperAdmin, ctrl.analytics);
 
 module.exports = router;

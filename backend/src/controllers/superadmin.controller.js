@@ -112,4 +112,17 @@ const updateBusinessStage = async (req, res) => {
   }
 };
 
-module.exports = { login, overview, businesses, leads, logs, updateBusinessStage };
+/* ── GET /api/superadmin/analytics ─────────────────────────────────────────
+   Platform intelligence: stage distribution, duration, growth, lead signals.
+*/
+const analytics = async (_req, res) => {
+  try {
+    const data = await svc.getAnalytics();
+    res.json(data);
+  } catch (err) {
+    console.error('[superadmin] analytics error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+module.exports = { login, overview, businesses, leads, logs, updateBusinessStage, analytics };

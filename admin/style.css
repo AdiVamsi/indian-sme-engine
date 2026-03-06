@@ -497,6 +497,132 @@ a      { color: inherit; text-decoration: none; }
   border-color: var(--border);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* ANALYTICS PANELS                                                           */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* Wrapper rows below the existing overview-grid */
+.analytics-row {
+  margin-top: 1rem;
+}
+
+.analytics-row--2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* ── Lifecycle Distribution — horizontal bar chart ──────────────────────── */
+.lifecycle-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 2.5rem 4.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  animation: fadeSlideIn 0.3s ease both;
+}
+
+.lifecycle-row:last-child { border-bottom: none; }
+
+.lifecycle-row__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lifecycle-row__bar-wrap {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.lifecycle-row__bar {
+  height: 100%;
+  background: linear-gradient(90deg, #F5B301, #D97706);
+  border-radius: 4px;
+  width: 0%;
+  transition: width 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lifecycle-row__count {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.lifecycle-row__days {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ── Analytics stat grid (growth metrics + lead signals) ─────────────────── */
+.analytics-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+}
+
+.analytics-stat {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.875rem 1rem;
+  transition: border-color 0.15s;
+}
+
+.analytics-stat:hover { border-color: var(--border-2); }
+
+.analytics-stat__val {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 0.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-stat__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.analytics-stat--accent .analytics-stat__val { color: var(--accent); }
+
+/* ── Suggested stage button ──────────────────────────────────────────────── */
+.suggest-btn {
+  appearance: none;
+  background: rgba(245, 179, 1, 0.10);
+  border: 1px solid rgba(245, 179, 1, 0.28);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-family: inherit;
+  padding: 0.2rem 0.65rem;
+  cursor: pointer;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.suggest-btn:hover    { background: rgba(245, 179, 1, 0.18); }
+.suggest-btn:disabled { opacity: 0.5; cursor: wait; }
+
+.text-muted { color: var(--muted); font-size: 0.8125rem; }
+
 /* ── Feed (Automation Logs) ─────────────────────────────────────────────── */
 .feed {
   display: flex;
@@ -805,15 +931,14 @@ a      { color: inherit; text-decoration: none; }
 @media (max-width: 900px) {
   .admin-main { padding: 1.5rem 1.25rem 3rem; }
 
-  .overview-grid {
-    grid-template-columns: 1fr;
-  }
+  .overview-grid       { grid-template-columns: 1fr; }
+  .analytics-row--2col { grid-template-columns: 1fr; }
 
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
 
   .section-header__title { font-size: 1.125rem; }
+
+  .lifecycle-row { grid-template-columns: 110px 1fr 2rem 3.5rem; }
 }
 
 /* ── Mobile (≤ 600px): single column, fixed sidebar, hamburger ─────────── */

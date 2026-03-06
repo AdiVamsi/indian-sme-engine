@@ -185,13 +185,17 @@ async function fetchAndRenderOverview() {
   $('leads-chart').innerHTML         = skeletonBlock(120);
   $('platform-signals').innerHTML    = skeletonSignals();
   $('overview-activity').innerHTML   = skeletonFeed(7);
+  $('lifecycle-chart').innerHTML     = skeletonBlock(180);
+  $('growth-metrics').innerHTML      = skeletonBlock(120);
+  $('lead-signals').innerHTML        = skeletonBlock(100);
 
   /* Parallel fetch for fast load */
-  const [stats, leads, businesses, logs] = await Promise.all([
+  const [stats, leads, businesses, logs, analytics] = await Promise.all([
     api.getOverview(),
     api.getLeads(),
     api.getBusinesses(),
     api.getLogs(),
+    api.getAnalytics(),
   ]);
 
   _cachedBusinesses = businesses;
@@ -200,6 +204,9 @@ async function fetchAndRenderOverview() {
   renderLeadsChart(leads);
   renderPlatformSignals(leads, businesses);
   renderOverviewActivity(logs);
+  renderLifecycleChart(analytics);
+  renderGrowthMetrics(analytics);
+  renderLeadSignals(analytics);
 }
 
 /* ── KPI cards with stable IDs for counter updates ──────────────────────── */
@@ -381,6 +388,123 @@ function renderPlatformSignals(leads, businesses) {
   `).join('');
 }
 
+/* ── Lifecycle Distribution — horizontal bar chart ──────────────────────── */
+function renderLifecycleChart(analytics) {
+  const el = $('lifecycle-chart');
+  if (!el) return;
+
+  const dist     = analytics.stageDistribution ?? {};
+  const duration = analytics.avgStageDuration  ?? {};
+  const total    = Object.values(dist).reduce((s, n) => s + n, 0);
+
+  if (total === 0) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:0.8125rem;padding:0.5rem 0">No business data yet.</p>';
+    return;
+  }
+
+  const maxCount = Math.max(...BUSINESS_STAGES.map((s) => dist[s] ?? 0), 1);
+
+  el.innerHTML = BUSINESS_STAGES.map((stage, i) => {
+    const count = dist[stage] ?? 0;
+    const pct   = Math.round((count / maxCount) * 100);
+    const days  = duration[stage];
+    return `
+      <div class="lifecycle-row" style="animation-delay:${i * 55}ms">
+        <div class="lifecycle-row__label">${esc(STAGE_LABELS[stage])}</div>
+        <div class="lifecycle-row__bar-wrap">
+          <div class="lifecycle-row__bar" data-pct="${pct}"></div>
+        </div>
+        <div class="lifecycle-row__count">${count}</div>
+        <div class="lifecycle-row__days">${days != null ? `${days}d avg` : '—'}</div>
+      </div>`;
+  }).join('');
+
+  /* Animate bars via CSS transition */
+  el.querySelectorAll('.lifecycle-row__bar').forEach((bar) => {
+    const pct = parseFloat(bar.dataset.pct);
+    bar.style.width = '0%';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      bar.style.width = `${pct}%`;
+    }));
+  });
+}
+
+/* ── Platform Growth Metrics ─────────────────────────────────────────────── */
+function renderGrowthMetrics(analytics) {
+  const el = $('growth-metrics');
+  if (!el) return;
+  const g = analytics.growthMetrics ?? {};
+
+  el.innerHTML = `
+    <div class="analytics-stat-grid">
+      <div class="analytics-stat">
+        <div class="analytics-stat__val" id="ag-total">0</div>
+        <div class="analytics-stat__label">Total Businesses</div>
+      </div>
+      <div class="analytics-stat">
+        <div class="analytics-stat__val" id="ag-website">0</div>
+        <div class="analytics-stat__label">Website Live</div>
+      </div>
+      <div class="analytics-stat">
+        <div class="analytics-stat__val" id="ag-gen-leads">0</div>
+        <div class="analytics-stat__label">Generating Leads</div>
+      </div>
+      <div class="analytics-stat">
+        <div class="analytics-stat__val" id="ag-automation">0</div>
+        <div class="analytics-stat__label">Using Automation</div>
+      </div>
+      <div class="analytics-stat">
+        <div class="analytics-stat__val" id="ag-scaling">0</div>
+        <div class="analytics-stat__label">Scaling</div>
+      </div>
+      <div class="analytics-stat analytics-stat--accent">
+        <div class="analytics-stat__val"><span id="ag-rate">0</span>%</div>
+        <div class="analytics-stat__label">Activation Rate</div>
+      </div>
+    </div>`;
+
+  setTimeout(() => animateCounter($('ag-total'),     0, g.total           ?? 0),   0);
+  setTimeout(() => animateCounter($('ag-website'),   0, g.withWebsite     ?? 0),  60);
+  setTimeout(() => animateCounter($('ag-gen-leads'), 0, g.generatingLeads ?? 0), 120);
+  setTimeout(() => animateCounter($('ag-automation'),0, g.usingAutomation ?? 0), 180);
+  setTimeout(() => animateCounter($('ag-scaling'),   0, g.scaling         ?? 0), 240);
+  setTimeout(() => animateCounter($('ag-rate'),      0, g.activationRate  ?? 0), 300);
+}
+
+/* ── Lead Conversion Signals ─────────────────────────────────────────────── */
+function renderLeadSignals(analytics) {
+  const el = $('lead-signals');
+  if (!el) return;
+  const s = analytics.leadSignals ?? {};
+  const timeStr = s.avgHoursToFirstContact != null
+    ? `${s.avgHoursToFirstContact}h`
+    : '—';
+
+  el.innerHTML = `
+    <div class="analytics-stat-grid">
+      <div class="analytics-stat">
+        <div class="analytics-stat__val" id="ls-score">0</div>
+        <div class="analytics-stat__label">Avg Priority Score</div>
+      </div>
+      <div class="analytics-stat">
+        <div class="analytics-stat__val">${esc(timeStr)}</div>
+        <div class="analytics-stat__label">Avg Time to Contact</div>
+      </div>
+      <div class="analytics-stat">
+        <div class="analytics-stat__val"><span id="ls-contacted">0</span>%</div>
+        <div class="analytics-stat__label">Contacted Rate</div>
+      </div>
+      <div class="analytics-stat analytics-stat--accent">
+        <div class="analytics-stat__val"><span id="ls-qualified">0</span>%</div>
+        <div class="analytics-stat__label">Qualified / Won</div>
+      </div>
+    </div>`;
+
+  setTimeout(() => animateCounter($('ls-score'),    0, s.avgPriorityScore  ?? 0),  0);
+  setTimeout(() => animateCounter($('ls-contacted'),0, s.pctContacted      ?? 0), 60);
+  setTimeout(() => animateCounter($('ls-qualified'),0, s.pctQualifiedOrWon ?? 0), 120);
+}
+
 /* ══════════════════════════════════════════════════════════════════════════ */
 /* BUSINESSES                                                                 */
 /* ══════════════════════════════════════════════════════════════════════════ */
@@ -403,14 +527,25 @@ const STAGE_LABELS = {
   SCALING:           'Scaling',
 };
 
+/**
+ * Returns the next suggested lifecycle stage for a business based on data
+ * signals, or null if no suggestion applies.
+ */
+function getSuggestedStage(b) {
+  if (b.stage === 'WEBSITE_LIVE'      && b.leadCount            > 10)  return 'LEADS_ACTIVE';
+  if (b.stage === 'LEADS_ACTIVE'      && b.automationEventCount > 20)  return 'AUTOMATION_ACTIVE';
+  if (b.stage === 'AUTOMATION_ACTIVE' && b.leadCount            > 200) return 'SCALING';
+  return null;
+}
+
 async function fetchAndRenderBusinesses() {
   const tbody = $('businesses-tbody');
-  tbody.innerHTML = skeletonRows(5, 6);
+  tbody.innerHTML = skeletonRows(5, 7);
 
   const rows = await api.getBusinesses();
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="table__empty">No businesses found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="table__empty">No businesses found.</td></tr>`;
     return;
   }
 
@@ -419,6 +554,16 @@ async function fetchAndRenderBusinesses() {
     const stageOptions = BUSINESS_STAGES.map((s) =>
       `<option value="${s}"${s === stage ? ' selected' : ''}>${esc(STAGE_LABELS[s])}</option>`
     ).join('');
+
+    const suggested = getSuggestedStage(b);
+    const suggestCell = suggested
+      ? `<button class="suggest-btn"
+           data-biz-id="${esc(b.id)}"
+           data-stage="${esc(suggested)}">
+           ↑ ${esc(STAGE_LABELS[suggested])}
+         </button>`
+      : `<span class="text-muted">—</span>`;
+
     return `
       <tr data-biz-id="${esc(b.id)}">
         <td>
@@ -428,10 +573,13 @@ async function fetchAndRenderBusinesses() {
         <td>${esc(b.industry ?? '—')}</td>
         <td>${esc([b.city, b.country].filter(Boolean).join(', ') || '—')}</td>
         <td>
-          <select class="stage-select stage-select--${stage.toLowerCase()}" data-biz-id="${esc(b.id)}" data-current="${esc(stage)}">
+          <select class="stage-select stage-select--${stage.toLowerCase()}"
+                  data-biz-id="${esc(b.id)}"
+                  data-current="${esc(stage)}">
             ${stageOptions}
           </select>
         </td>
+        <td>${suggestCell}</td>
         <td class="cell-num">${b.leadCount}</td>
         <td class="cell-date">${fmtDate(b.lastActivity ?? b.createdAt)}</td>
       </tr>`;
@@ -440,6 +588,31 @@ async function fetchAndRenderBusinesses() {
   /* Wire stage selects */
   tbody.querySelectorAll('.stage-select').forEach((sel) => {
     sel.addEventListener('change', onStageChange);
+  });
+
+  /* Event delegation for suggest-btn — re-registered each render */
+  tbody.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.suggest-btn');
+    if (!btn) return;
+
+    const bizId = btn.dataset.bizId;
+    const stage = btn.dataset.stage;
+    const label = STAGE_LABELS[stage];
+
+    btn.disabled    = true;
+    btn.textContent = '…';
+
+    try {
+      await api.updateBusinessStage(bizId, stage);
+      toast(`Stage → ${label}`, 'success');
+      /* Invalidate cache and re-render so suggestion clears */
+      loadedSections.delete('businesses');
+      await fetchAndRenderBusinesses();
+    } catch (err) {
+      btn.disabled    = false;
+      btn.textContent = `↑ ${label}`;
+      toast(err.message || 'Could not update stage', 'error');
+    }
   });
 }
 

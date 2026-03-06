@@ -10,9 +10,10 @@ const router = Router();
 router.post('/login', ctrl.login);
 
 /* Protected — SUPERADMIN token required */
-router.get('/overview',    authenticateSuperAdmin, ctrl.overview);
-router.get('/businesses',  authenticateSuperAdmin, ctrl.businesses);
-router.get('/leads',       authenticateSuperAdmin, ctrl.leads);
-router.get('/logs',        authenticateSuperAdmin, ctrl.logs);
+router.get  ('/overview',                   authenticateSuperAdmin, ctrl.overview);
+router.get  ('/businesses',                 authenticateSuperAdmin, ctrl.businesses);
+router.patch('/businesses/:id/stage',       authenticateSuperAdmin, ctrl.updateBusinessStage);
+router.get  ('/leads',                      authenticateSuperAdmin, ctrl.leads);
+router.get  ('/logs',                       authenticateSuperAdmin, ctrl.logs);
 
 module.exports = router;

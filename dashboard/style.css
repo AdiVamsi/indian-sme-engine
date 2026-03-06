@@ -1677,6 +1677,194 @@ td.empty { text-align: center; padding: 3rem 1rem; cursor: default; }
 .drawer-error { color: var(--error); }
 
 /* ══════════════════════════════════════════════
+   NEXT BEST ACTION — suggestion cards in drawer
+══════════════════════════════════════════════ */
+.nba-card {
+  background: var(--elevated);
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.125rem;
+  animation: fadeSlideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+.nba-card + .nba-card { margin-top: 0.625rem; }
+
+.nba-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 0.5rem;
+}
+
+.nba-card__icon {
+  font-size: 1.125rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.nba-card__label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.nba-card__reason {
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  line-height: 1.45;
+  margin-bottom: 0.75rem;
+}
+
+.nba-card__conf {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.nba-card__conf-track {
+  flex: 1;
+  height: 3px;
+  background: var(--border-md);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.nba-card__conf-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nba-card__conf-pct {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════════════════════════════════════
+   OUTREACH DRAFT CARD
+══════════════════════════════════════════════ */
+.outreach-card {
+  background: var(--elevated);
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  animation: fadeSlideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.outreach-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.outreach-card__type {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.outreach-card__conf {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.outreach-card__conf-track {
+  width: 60px;
+  height: 3px;
+  background: var(--border-md);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.outreach-card__conf-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.outreach-card__conf-pct {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.outreach-card__textarea {
+  width: 100%;
+  min-height: 7rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  padding: 0.75rem;
+  resize: vertical;
+  transition: border-color 0.15s;
+  outline: none;
+}
+
+.outreach-card__textarea:not([readonly]):focus {
+  border-color: var(--accent);
+}
+
+.outreach-card__textarea[readonly] {
+  cursor: default;
+  color: var(--text-2);
+}
+
+.outreach-card__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.outreach-card__btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border-md);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.outreach-card__btn--copy {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+.outreach-card__btn--copy:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.outreach-card__btn--edit {
+  background: transparent;
+  color: var(--text-2);
+}
+
+.outreach-card__btn--edit:hover {
+  background: var(--panel-hover);
+  color: var(--text);
+  border-color: var(--border-hi);
+}
+
+/* ══════════════════════════════════════════════
    SKELETON LOADERS
 ══════════════════════════════════════════════ */
 @keyframes shimmer {

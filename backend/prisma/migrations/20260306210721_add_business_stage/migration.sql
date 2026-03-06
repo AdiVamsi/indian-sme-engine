@@ -1,0 +1,5 @@
+-- CreateEnum
+CREATE TYPE "BusinessStage" AS ENUM ('STARTING', 'WEBSITE_DESIGN', 'WEBSITE_LIVE', 'LEADS_ACTIVE', 'AUTOMATION_ACTIVE', 'SCALING');
+
+-- AlterTable
+ALTER TABLE "Business" ADD COLUMN     "stage" "BusinessStage" NOT NULL DEFAULT 'STARTING';

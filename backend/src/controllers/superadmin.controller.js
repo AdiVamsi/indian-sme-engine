@@ -1,8 +1,11 @@
 'use strict';
 
 const crypto = require('crypto');
+const { BusinessStage } = require('@prisma/client');
 const { signSuperAdmin } = require('../utils/superadmin-jwt');
 const svc = require('../services/superadmin.service');
+
+const VALID_STAGES = new Set(Object.values(BusinessStage));
 
 /* Fail fast at startup — SUPERADMIN_PASSWORD must be set explicitly. */
 if (!process.env.SUPERADMIN_PASSWORD) {
@@ -86,4 +89,27 @@ const logs = async (_req, res) => {
   }
 };
 
-module.exports = { login, overview, businesses, leads, logs };
+/* ── PATCH /api/superadmin/businesses/:id/stage ─────────────────────────────
+   Updates the lifecycle stage of a business.
+   Body: { stage: BusinessStage }
+*/
+const updateBusinessStage = async (req, res) => {
+  const { stage } = req.body ?? {};
+
+  if (!stage || !VALID_STAGES.has(stage)) {
+    return res.status(400).json({
+      error: `Invalid stage. Must be one of: ${[...VALID_STAGES].join(', ')}`,
+    });
+  }
+
+  try {
+    const updated = await svc.updateBusinessStage(req.params.id, stage);
+    if (!updated) return res.status(404).json({ error: 'Business not found' });
+    return res.json(updated);
+  } catch (err) {
+    console.error('[superadmin] updateBusinessStage error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+module.exports = { login, overview, businesses, leads, logs, updateBusinessStage };

@@ -23,6 +23,15 @@ enum ActivityType {
   AUTOMATION_ADMISSION_INTENT
 }
 
+enum BusinessStage {
+  STARTING
+  WEBSITE_DESIGN
+  WEBSITE_LIVE
+  LEADS_ACTIVE
+  AUTOMATION_ACTIVE
+  SCALING
+}
+
 enum LeadStatus {
   NEW
   CONTACTED
@@ -52,6 +61,7 @@ model Business {
   timezone  String?   @default("Asia/Kolkata")
   currency  String?   @default("INR")
   logoUrl   String?
+  stage     BusinessStage @default(STARTING)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -2,7 +2,8 @@
 
 const { z } = require('zod');
 
-const { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead, getLeadActivity } = require('../services/leads.service');
+const { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead, getLeadActivity, getLeadForSuggestions } = require('../services/leads.service');
+const { getLeadSuggestions } = require('../agents/leadSuggestions');
 const { broadcast } = require('../realtime/socket');
 
 const leadStatusEnum = z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'WON', 'LOST']);

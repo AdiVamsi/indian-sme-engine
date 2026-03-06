@@ -16,7 +16,9 @@ const {
   getLeadsByDay,
 } = require('../services/admin.service');
 
-const { updateLeadStatus, getLeadActivity } = require('../services/leads.service');
+const { updateLeadStatus, getLeadActivity, getLeadForSuggestions, getLeadForOutreach } = require('../services/leads.service');
+const { getLeadSuggestions } = require('../agents/leadSuggestions');
+const { getOutreachDraft }   = require('../agents/outreachDrafts');
 const { broadcast }        = require('../realtime/socket');
 
 const { getIndustryConfig } = require('../constants/industry.config');
@@ -170,6 +172,36 @@ const leadActivity = async (req, res) => {
   }
 };
 
+/* ── GET /api/admin/leads/:id/suggestions ──
+   Fetches the lead (scoped by businessId), runs the deterministic suggestion
+   engine, and returns the ranked suggestion list. No DB writes — read-only.
+*/
+const leadSuggestions = async (req, res) => {
+  try {
+    const lead = await getLeadForSuggestions(req.params.id, req.user.businessId);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    return res.json(getLeadSuggestions(lead));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/* ── GET /api/admin/leads/:id/outreach-draft ──
+   Fetches the lead (scoped by businessId), runs the deterministic outreach
+   draft engine, and returns a single suggested message. No DB writes — read-only.
+*/
+const leadOutreachDraft = async (req, res) => {
+  try {
+    const lead = await getLeadForOutreach(req.params.id, req.user.businessId);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    return res.json(getOutreachDraft(lead));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 module.exports = {
   login,
   getConfig,
@@ -182,4 +214,6 @@ module.exports = {
   leadsByDay,
   updateStatus,
   leadActivity,
+  leadSuggestions,
+  leadOutreachDraft,
 };

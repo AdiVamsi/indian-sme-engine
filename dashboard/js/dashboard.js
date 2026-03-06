@@ -990,24 +990,56 @@ async function openLeadDrawer(leadId) {
   );
   $('drawer-pane-activity').classList.remove('drawer__pane--hidden');
   $('drawer-pane-overview').classList.add('drawer__pane--hidden');
+  $('drawer-pane-suggestions').classList.add('drawer__pane--hidden');
+  $('drawer-pane-outreach').classList.add('drawer__pane--hidden');
 
   /* Open */
   drawer.classList.add('is-open');
   document.body.style.overflow = 'hidden';
 
-  /* Show spinner while fetching */
+  /* Show spinners while fetching both data sources in parallel */
   $('drawer-timeline').innerHTML = `
     <div class="drawer-loading">
       <div class="drawer-loading__spinner"></div>
       Loading timeline…
     </div>`;
+  $('drawer-suggestions').innerHTML = `
+    <div class="drawer-loading">
+      <div class="drawer-loading__spinner"></div>
+      Analysing lead…
+    </div>`;
+  $('drawer-outreach').innerHTML = `
+    <div class="drawer-loading">
+      <div class="drawer-loading__spinner"></div>
+      Drafting message…
+    </div>`;
 
-  try {
-    const result = await api.getLeadActivity(leadId);
-    _renderDrawerTimeline(result);
-    _renderDrawerOverview(result?.lead ?? cached);
-  } catch (err) {
-    $('drawer-timeline').innerHTML = `<p class="drawer-error">Could not load: ${_escDrawer(err.message)}</p>`;
+  const [actRes, sugRes, outRes] = await Promise.allSettled([
+    api.getLeadActivity(leadId),
+    api.getLeadSuggestions(leadId),
+    api.getLeadOutreachDraft(leadId),
+  ]);
+
+  if (actRes.status === 'fulfilled') {
+    _renderDrawerTimeline(actRes.value);
+    _renderDrawerOverview(actRes.value?.lead ?? cached);
+  } else {
+    $('drawer-timeline').innerHTML =
+      `<p class="drawer-error">Could not load timeline: ${_escDrawer(actRes.reason?.message)}</p>`;
+  }
+
+  if (sugRes.status === 'fulfilled') {
+    _renderDrawerSuggestions(sugRes.value);
+  } else {
+    $('drawer-suggestions').innerHTML =
+      `<p class="drawer-error">Could not load suggestions.</p>`;
+  }
+
+  if (outRes.status === 'fulfilled') {
+    _renderDrawerOutreach(outRes.value);
+  } else {
+    $('drawer-outreach').innerHTML =
+      `<p class="drawer-error">Could not load outreach draft.</p>`;
   }
 }
 
@@ -1080,6 +1112,104 @@ function _renderDrawerOverview(lead) {
     </div>`;
 }
 
+const NBA_ICONS = {
+  CALL_NOW:               '⚡',
+  SEND_DEMO_LINK:         '🔗',
+  FOLLOW_UP:              '📩',
+  SEND_ADMISSION_DETAILS: '📋',
+};
+
+function _renderDrawerSuggestions(suggestions) {
+  const el = $('drawer-suggestions');
+  if (!el) return;
+
+  if (!Array.isArray(suggestions) || !suggestions.length) {
+    el.innerHTML = `
+      <div class="drawer-empty">
+        ✓<br>No recommendation yet.<br>Continue monitoring this lead.
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = suggestions.map((s, i) => {
+    const pct  = Math.round((s.confidence ?? 0) * 100);
+    const icon = NBA_ICONS[s.action] ?? '💡';
+    return `
+      <div class="nba-card" style="--i:${i}">
+        <div class="nba-card__header">
+          <span class="nba-card__icon">${icon}</span>
+          <span class="nba-card__label">${_escDrawer(s.label)}</span>
+        </div>
+        <p class="nba-card__reason">${_escDrawer(s.reason)}</p>
+        <div class="nba-card__conf">
+          <div class="nba-card__conf-track">
+            <div class="nba-card__conf-fill" style="width:${pct}%"></div>
+          </div>
+          <span class="nba-card__conf-pct">${pct}% confidence</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+const OUTREACH_TYPE_LABELS = {
+  DEMO_REPLY:       'Demo enquiry reply',
+  ADMISSION_REPLY:  'Admission enquiry reply',
+  URGENT_REPLY:     'Urgent reply',
+  FOLLOW_UP:        'Follow-up',
+  GENERAL_REPLY:    'General reply',
+};
+
+function _renderDrawerOutreach(draft) {
+  const el = $('drawer-outreach');
+  if (!el) return;
+
+  if (!draft || !draft.message) {
+    el.innerHTML = `<div class="drawer-empty">✉<br>No suggested message yet.</div>`;
+    return;
+  }
+
+  const pct   = Math.round((draft.confidence ?? 0) * 100);
+  const label = OUTREACH_TYPE_LABELS[draft.type] ?? draft.type;
+  const id    = 'outreach-textarea';
+
+  el.innerHTML = `
+    <div class="outreach-card">
+      <div class="outreach-card__header">
+        <span class="outreach-card__type">${_escDrawer(label)}</span>
+        <div class="outreach-card__conf">
+          <div class="outreach-card__conf-track">
+            <div class="outreach-card__conf-fill" style="width:${pct}%"></div>
+          </div>
+          <span class="outreach-card__conf-pct">${pct}%</span>
+        </div>
+      </div>
+      <textarea id="${id}" class="outreach-card__textarea" readonly>${_escDrawer(draft.message)}</textarea>
+      <div class="outreach-card__actions">
+        <button class="outreach-card__btn outreach-card__btn--copy" id="outreach-copy-btn">Copy Message</button>
+        <button class="outreach-card__btn outreach-card__btn--edit" id="outreach-edit-btn">Edit Message</button>
+      </div>
+    </div>`;
+
+  $('outreach-copy-btn').addEventListener('click', () => {
+    const text = document.getElementById(id).value;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = $('outreach-copy-btn');
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    });
+  });
+
+  $('outreach-edit-btn').addEventListener('click', () => {
+    const ta  = document.getElementById(id);
+    const btn = $('outreach-edit-btn');
+    const editing = ta.readOnly;
+    ta.readOnly = !editing;
+    btn.textContent = editing ? 'Lock Message' : 'Edit Message';
+    if (editing) ta.focus();
+  });
+}
+
 /* Drawer controls */
 $('drawer-close')?.addEventListener('click', closeLeadDrawer);
 $('drawer-overlay')?.addEventListener('click', closeLeadDrawer);
@@ -1094,8 +1224,10 @@ document.querySelectorAll('.drawer__tab').forEach((tab) => {
     document.querySelectorAll('.drawer__tab').forEach((t) =>
       t.classList.toggle('is-active', t.dataset.drawerTab === target)
     );
-    $('drawer-pane-activity').classList.toggle('drawer__pane--hidden', target !== 'activity');
-    $('drawer-pane-overview').classList.toggle('drawer__pane--hidden', target !== 'overview');
+    $('drawer-pane-activity').classList.toggle('drawer__pane--hidden',    target !== 'activity');
+    $('drawer-pane-overview').classList.toggle('drawer__pane--hidden',    target !== 'overview');
+    $('drawer-pane-suggestions').classList.toggle('drawer__pane--hidden', target !== 'suggestions');
+    $('drawer-pane-outreach').classList.toggle('drawer__pane--hidden',    target !== 'outreach');
   });
 });
 

@@ -15,6 +15,8 @@ const {
   testimonials,
   updateStatus,
   leadActivity,
+  leadSuggestions,
+  leadOutreachDraft,
 } = require('../controllers/admin.controller');
 
 const router = Router();
@@ -28,7 +30,9 @@ router.get('/business',      authenticate, getBusiness);
 router.get('/dashboard',     authenticate, dashboard);
 router.get  ('/leads',               authenticate, leads);
 router.get  ('/leads/by-day',        authenticate, leadsByDay);
-router.get  ('/leads/:id/activity',  authenticate, leadActivity);
+router.get  ('/leads/:id/activity',     authenticate, leadActivity);
+router.get  ('/leads/:id/suggestions',    authenticate, leadSuggestions);
+router.get  ('/leads/:id/outreach-draft', authenticate, leadOutreachDraft);
 router.patch('/leads/:id/status',    authenticate, updateStatus);
 router.get('/appointments',  authenticate, appointments);
 router.get('/services',      authenticate, services);

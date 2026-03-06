@@ -385,29 +385,85 @@ function renderPlatformSignals(leads, businesses) {
 /* BUSINESSES                                                                 */
 /* ══════════════════════════════════════════════════════════════════════════ */
 
+const BUSINESS_STAGES = [
+  'STARTING',
+  'WEBSITE_DESIGN',
+  'WEBSITE_LIVE',
+  'LEADS_ACTIVE',
+  'AUTOMATION_ACTIVE',
+  'SCALING',
+];
+
+const STAGE_LABELS = {
+  STARTING:          'Starting',
+  WEBSITE_DESIGN:    'Website Design',
+  WEBSITE_LIVE:      'Website Live',
+  LEADS_ACTIVE:      'Leads Active',
+  AUTOMATION_ACTIVE: 'Automation Active',
+  SCALING:           'Scaling',
+};
+
 async function fetchAndRenderBusinesses() {
   const tbody = $('businesses-tbody');
-  tbody.innerHTML = skeletonRows(5, 5);
+  tbody.innerHTML = skeletonRows(5, 6);
 
   const rows = await api.getBusinesses();
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="table__empty">No businesses found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="table__empty">No businesses found.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = rows.map((b) => `
-    <tr>
-      <td>
-        <div class="cell-primary">${esc(b.name)}</div>
-        <div class="cell-sub">${esc(b.slug)}</div>
-      </td>
-      <td>${esc(b.industry ?? '—')}</td>
-      <td>${esc([b.city, b.country].filter(Boolean).join(', ') || '—')}</td>
-      <td class="cell-num">${b.leadCount}</td>
-      <td class="cell-date">${fmtDate(b.lastActivity ?? b.createdAt)}</td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = rows.map((b) => {
+    const stage = b.stage ?? 'STARTING';
+    const stageOptions = BUSINESS_STAGES.map((s) =>
+      `<option value="${s}"${s === stage ? ' selected' : ''}>${esc(STAGE_LABELS[s])}</option>`
+    ).join('');
+    return `
+      <tr data-biz-id="${esc(b.id)}">
+        <td>
+          <div class="cell-primary">${esc(b.name)}</div>
+          <div class="cell-sub">${esc(b.slug)}</div>
+        </td>
+        <td>${esc(b.industry ?? '—')}</td>
+        <td>${esc([b.city, b.country].filter(Boolean).join(', ') || '—')}</td>
+        <td>
+          <select class="stage-select stage-select--${stage.toLowerCase()}" data-biz-id="${esc(b.id)}" data-current="${esc(stage)}">
+            ${stageOptions}
+          </select>
+        </td>
+        <td class="cell-num">${b.leadCount}</td>
+        <td class="cell-date">${fmtDate(b.lastActivity ?? b.createdAt)}</td>
+      </tr>`;
+  }).join('');
+
+  /* Wire stage selects */
+  tbody.querySelectorAll('.stage-select').forEach((sel) => {
+    sel.addEventListener('change', onStageChange);
+  });
+}
+
+async function onStageChange(e) {
+  const sel      = e.target;
+  const bizId    = sel.dataset.bizId;
+  const newStage = sel.value;
+  const prev     = sel.dataset.current;
+
+  sel.disabled = true;
+  sel.className = 'stage-select stage-select--loading';
+
+  try {
+    await api.updateBusinessStage(bizId, newStage);
+    sel.dataset.current = newStage;
+    sel.className = `stage-select stage-select--${newStage.toLowerCase()}`;
+    toast(`Stage → ${STAGE_LABELS[newStage]}`, 'success');
+  } catch (err) {
+    sel.value     = prev;
+    sel.className = `stage-select stage-select--${prev.toLowerCase()}`;
+    toast(err.message || 'Could not update stage', 'error');
+  } finally {
+    sel.disabled = false;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
@@ -448,7 +504,7 @@ function renderLeadsTable(rows) {
       </td>
       <td>${esc(l.businessName ?? '—')}</td>
       <td><span class="badge badge--status badge--${(l.status ?? '').toLowerCase()}">${esc(l.status ?? '—')}</span></td>
-      <td>—</td>
+      <td><span class="badge badge--${(l.priority ?? 'low').toLowerCase()}">${esc(l.priority ?? 'LOW')}</span></td>
       <td class="cell-num">${l.score ?? 0}</td>
       <td class="cell-date">${fmtDate(l.createdAt)}</td>
     </tr>

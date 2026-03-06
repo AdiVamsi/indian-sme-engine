@@ -35,10 +35,11 @@ export function AdminAPI(token) {
   }
 
   return {
-    login:         (password)  => request('POST', '/api/superadmin/login', { password }),
-    getOverview:   ()          => request('GET',  '/api/superadmin/overview'),
-    getBusinesses: ()          => request('GET',  '/api/superadmin/businesses'),
-    getLeads:      ()          => request('GET',  '/api/superadmin/leads'),
-    getLogs:       ()          => request('GET',  '/api/superadmin/logs'),
+    login:               (password)  => request('POST',  '/api/superadmin/login', { password }),
+    getOverview:         ()          => request('GET',   '/api/superadmin/overview'),
+    getBusinesses:       ()          => request('GET',   '/api/superadmin/businesses'),
+    updateBusinessStage: (id, stage) => request('PATCH', `/api/superadmin/businesses/${id}/stage`, { stage }),
+    getLeads:            ()          => request('GET',   '/api/superadmin/leads'),
+    getLogs:             ()          => request('GET',   '/api/superadmin/logs'),
   };
 }

@@ -3,20 +3,27 @@
 /* ── Fallbacks used when AgentConfig rules are absent or structurally invalid ── */
 const FALLBACK_CLASSIFICATION = {
   keywords: {
-    DEMO_REQUEST: ['demo'],
-    ADMISSION:    ['admission'],
+    ADMISSION:         ['admission', 'enroll', 'admission open', 'join'],
+    DEMO_REQUEST:      ['demo', 'trial', 'demo class'],
+    FEE_ENQUIRY:       ['fee', 'fees', 'price', 'cost', 'charges'],
+    COURSE_INFO:       ['course', 'syllabus', 'curriculum'],
+    CALL_REQUEST:      ['call me', 'phone call', 'talk'],
+    WHATSAPP_REQUEST:  ['whatsapp', 'send details'],
+    LOCATION_QUERY:    ['location', 'address', 'where are you'],
+    GENERAL_ENQUIRY:   ['info', 'details', 'information'],
   },
 };
 
 const FALLBACK_PRIORITY = {
   weights: {
     urgent:      30,
-    immediately: 30,
-    asap:        30,
-    immediate:   30,
-    'need now':  30,
-    'right now': 30,
+    immediately: 25,
+    today:       20,
+    admission:   25,
+    demo:        20,
+    call:        15,
     price:       10,
+    fees:        10,
   },
 };
 

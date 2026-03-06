@@ -33,6 +33,7 @@ async function getAllBusinesses() {
       name:      true,
       slug:      true,
       industry:  true,
+      stage:     true,
       city:      true,
       country:   true,
       createdAt: true,
@@ -52,6 +53,7 @@ async function getAllBusinesses() {
     name:         b.name,
     slug:         b.slug,
     industry:     b.industry,
+    stage:        b.stage,
     city:         b.city,
     country:      b.country,
     createdAt:    b.createdAt,
@@ -62,30 +64,44 @@ async function getAllBusinesses() {
 
 /**
  * getAllLeads
- * Cross-tenant lead list — most recent 100, with business name included.
+ * Cross-tenant lead list — most recent 100, with business name and enriched
+ * priority data derived from AGENT_PRIORITIZED / AGENT_CLASSIFIED activities.
  */
 async function getAllLeads() {
-  try {
-    const leads = await prisma.lead.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-      include: {
-        business: { select: { id: true, name: true } },
+  const leads = await prisma.lead.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+    include: {
+      business:   { select: { id: true, name: true } },
+      activities: {
+        where:   { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
+        orderBy: { createdAt: 'desc' },
       },
-    });
+    },
+  });
 
-    return leads.map((l) => ({
+  return leads.map(({ activities, ...l }) => {
+    const prioAct  = activities.find((a) => a.type === 'AGENT_PRIORITIZED');
+    const classAct = activities.find((a) => a.type === 'AGENT_CLASSIFIED');
+
+    const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
+    const tags          = classAct?.metadata?.tags          ?? [];
+    const priority      = priorityScore >= 30 ? 'HIGH'
+                        : priorityScore >= 10 ? 'NORMAL'
+                        :                       'LOW';
+
+    return {
       id:           l.id,
       name:         l.name,
       phone:        l.phone,
       status:       l.status,
-      score:        l.score ?? 0,
+      score:        priorityScore,
+      priority,
+      tags,
       businessName: l.business?.name ?? 'Unknown',
       createdAt:    l.createdAt,
-    }));
-  } catch (err) {
-    throw err;
-  }
+    };
+  });
 }
 
 /**
@@ -120,4 +136,20 @@ async function getAutomationLogs() {
   }));
 }
 
-module.exports = { getOverview, getAllBusinesses, getAllLeads, getAutomationLogs };
+/**
+ * updateBusinessStage
+ * Updates the lifecycle stage of a single business.
+ * Returns the updated Business or null if not found.
+ */
+async function updateBusinessStage(id, stage) {
+  const existing = await prisma.business.findUnique({ where: { id } });
+  if (!existing) return null;
+
+  return prisma.business.update({
+    where: { id },
+    data:  { stage },
+    select: { id: true, name: true, slug: true, stage: true },
+  });
+}
+
+module.exports = { getOverview, getAllBusinesses, getAllLeads, getAutomationLogs, updateBusinessStage };

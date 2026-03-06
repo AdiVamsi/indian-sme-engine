@@ -90,4 +90,49 @@ const getLeadActivity = async (id, businessId) => {
   return { lead, activities };
 };
 
-module.exports = { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead, getLeadActivity };
+/**
+ * getLeadForSuggestions
+ * Fetches a lead with all its activities, enriching tags and priorityScore
+ * from the AGENT_CLASSIFIED / AGENT_PRIORITIZED activity metadata so that
+ * the suggestion engine receives the full picture.
+ */
+const getLeadForSuggestions = async (id, businessId) => {
+  const lead = await prisma.lead.findFirst({
+    where:   { id, businessId },
+    include: { activities: { orderBy: { createdAt: 'asc' } } },
+  });
+  if (!lead) return null;
+
+  const classAct = lead.activities.find((a) => a.type === 'AGENT_CLASSIFIED');
+  const prioAct  = lead.activities.find((a) => a.type === 'AGENT_PRIORITIZED');
+
+  return {
+    ...lead,
+    tags:          classAct?.metadata?.tags          ?? [],
+    priorityScore: prioAct?.metadata?.priorityScore  ?? 0,
+  };
+};
+
+/**
+ * getLeadForOutreach
+ * Same enrichment pattern as getLeadForSuggestions — used by the outreach
+ * draft engine to access tags, priorityScore, and the full activity list.
+ */
+const getLeadForOutreach = async (id, businessId) => {
+  const lead = await prisma.lead.findFirst({
+    where:   { id, businessId },
+    include: { activities: { orderBy: { createdAt: 'asc' } } },
+  });
+  if (!lead) return null;
+
+  const classAct = lead.activities.find((a) => a.type === 'AGENT_CLASSIFIED');
+  const prioAct  = lead.activities.find((a) => a.type === 'AGENT_PRIORITIZED');
+
+  return {
+    ...lead,
+    tags:          classAct?.metadata?.tags         ?? [],
+    priorityScore: prioAct?.metadata?.priorityScore ?? 0,
+  };
+};
+
+module.exports = { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead, getLeadActivity, getLeadForSuggestions, getLeadForOutreach };

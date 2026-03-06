@@ -10,10 +10,30 @@ const FALLBACK_CLASSIFICATION = {
 
 const FALLBACK_PRIORITY = {
   weights: {
-    urgent: 30,
-    price:  10,
+    urgent:      30,
+    immediately: 30,
+    asap:        30,
+    immediate:   30,
+    'need now':  30,
+    'right now': 30,
+    price:       10,
   },
 };
+
+/**
+ * Built-in urgency phrases that always add +30, independent of config weights.
+ * Ensures "I need a class immediately" is HIGH priority even with minimal config.
+ */
+const BUILT_IN_URGENT_PHRASES = [
+  'immediately',
+  'asap',
+  'right now',
+  'need now',
+  'as soon as possible',
+  'immediate',
+  'today only',
+  'very urgent',
+];
 
 /**
  * resolveClassificationRules
@@ -100,6 +120,11 @@ function applyPolicy(lead, config) {
 
   /* Universal rule: detailed message signals serious enquiry */
   if (message.length > 100) priorityScore += 5;
+
+  /* Built-in urgency boost — applies regardless of configured keyword weights */
+  if (BUILT_IN_URGENT_PHRASES.some((phrase) => message.includes(phrase))) {
+    priorityScore += 30;
+  }
 
   return { priorityScore, tags };
 }

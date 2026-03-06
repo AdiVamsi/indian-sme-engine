@@ -24,6 +24,28 @@ export function DashUI(config) {
       timeStyle: 'short',
     });
 
+  /* ── Relative timestamp ── */
+  const fmtRelativeDate = (iso) => {
+    const now     = Date.now();
+    const then    = new Date(iso).getTime();
+    const diff    = now - then;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours   = Math.floor(minutes / 60);
+    const days    = Math.floor(hours / 24);
+
+    if (seconds < 60)  return 'just now';
+    if (minutes < 60)  return `${minutes}m ago`;
+    if (hours < 24)    return `${hours}h ago`;
+    if (days === 1)    return 'Yesterday';
+    if (days < 7)      return `${days} days ago`;
+
+    return new Date(iso).toLocaleString('en-IN', {
+      timeZone: tz,
+      dateStyle: 'medium',
+    });
+  };
+
   const fmtCurrency = (amount) => {
     if (amount == null) return '—';
     try {
@@ -61,11 +83,23 @@ export function DashUI(config) {
     const biz = config.business;
     if (!biz) return;
 
+    /* Topbar business name */
     const nameEl = $('biz-name');
     if (nameEl) nameEl.textContent = biz.name ?? '';
 
+    /* Overview section greeting as section-title */
     const greetEl = $('greeting');
     if (greetEl) greetEl.textContent = buildGreeting();
+
+    /* Sub-label under greeting */
+    const subEl = $('biz-name-sub');
+    if (subEl) {
+      const parts = [];
+      if (biz.city)     parts.push(biz.city);
+      if (biz.country)  parts.push(biz.country);
+      if (biz.industry) parts.push(biz.industry.charAt(0).toUpperCase() + biz.industry.slice(1));
+      subEl.textContent = parts.join(' · ');
+    }
 
     const logoEl = $('biz-logo');
     if (logoEl) {
@@ -99,7 +133,7 @@ export function DashUI(config) {
   function countUp(el, target) {
     if (!el) return;
     const from  = parseInt(el.textContent, 10) || 0;
-    const dur   = 700;
+    const dur   = 400;
     const start = Date.now();
     const tick  = () => {
       const p    = Math.min((Date.now() - start) / dur, 1);
@@ -114,20 +148,18 @@ export function DashUI(config) {
      3D CARD TILT — mouse-tracked perspective tilt
   ───────────────────────────────────────────── */
   function initCardTilt(card) {
-    /* Skip on touch devices — CSS media query handles the static case */
     if (!window.matchMedia('(hover: hover)').matches) return;
 
     card.addEventListener('mousemove', (e) => {
       const r  = card.getBoundingClientRect();
       const dx = ((e.clientX - r.left)  / r.width  - 0.5) * 2;
       const dy = ((e.clientY - r.top)   / r.height - 0.5) * 2;
-      const rx = dy * -7;
-      const ry = dx *  7;
-      /* Dynamic shadow follows inverse of tilt direction */
-      const sx = dx * -10;
-      const sy = dy *  10;
+      const rx = dy * -6;
+      const ry = dx *  6;
+      const sx = dx * -8;
+      const sy = dy *  8;
       card.style.transform = `perspective(600px) rotateX(${rx}deg) rotateY(${ry}deg) translateZ(6px)`;
-      card.style.boxShadow = `${sx}px ${sy}px 28px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.07)`;
+      card.style.boxShadow = `${sx}px ${sy}px 28px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,158,11,0.08)`;
     });
 
     card.addEventListener('mouseleave', () => {
@@ -143,7 +175,6 @@ export function DashUI(config) {
     config.statCards.forEach(({ key, label }, index) => {
       const card = document.createElement('div');
       card.className = 'stat-card';
-      /* Stagger entrance animation */
       card.style.setProperty('--card-index', String(index));
 
       const lbl = document.createElement('span');
@@ -158,8 +189,6 @@ export function DashUI(config) {
       card.append(lbl, val);
       grid.appendChild(card);
       countUp(val, summary[key] ?? 0);
-
-      /* Wire 3D tilt after card is in DOM */
       initCardTilt(card);
     });
   }
@@ -211,13 +240,13 @@ export function DashUI(config) {
       : '';
 
     tr.innerHTML = `
-      <td><a class="lead-name-link" href="/dashboard/lead-activity.html?leadId=${esc(lead.id)}">${esc(lead.name)}</a></td>
+      <td><button class="lead-name-btn" data-lead-id="${esc(lead.id)}">${esc(lead.name)}</button></td>
       <td>${esc(lead.phone)}</td>
       <td>${esc(lead.email || '—')}</td>
       <td>${buildStatusSelect(lead.id, lead.status, config.leadStatuses)}</td>
       <td>${buildPriorityBadge(lead.priority)}</td>
       <td><span class="score-val">${esc(String(lead.priorityScore ?? 0))}</span>${tagHtml}</td>
-      <td>${fmtDate(lead.createdAt)}</td>
+      <td class="td-reltime" title="${esc(fmtDate(lead.createdAt))}">${esc(fmtRelativeDate(lead.createdAt))}</td>
       <td style="white-space:nowrap">
         <a class="btn-timeline" href="/dashboard/lead-activity.html?leadId=${esc(lead.id)}" title="View timeline">⏱</a>
         <button class="btn-delete" data-id="${esc(lead.id)}" title="Delete">🗑</button>
@@ -280,14 +309,8 @@ export function DashUI(config) {
   }
 
   /* ─────────────────────────────────────────────
-     SVG BAR CHART — leads by day with animated entry
+     SVG LINE CHART — leads by day with animated draw
   ───────────────────────────────────────────── */
-  function animateChartBars() {
-    document.querySelectorAll('.chart-bar rect').forEach((rect, i) => {
-      setTimeout(() => rect.classList.add('bar--visible'), i * 90);
-    });
-  }
-
   function renderChart(data) {
     const container = $('chart-container');
     if (!container) return;
@@ -297,34 +320,153 @@ export function DashUI(config) {
       return;
     }
 
-    const max = Math.max(...data.map((d) => d.count), 1);
-    const W   = 300;
-    const H   = 90;
-    const gap = 5;
-    const bw  = Math.floor((W - gap * (data.length - 1)) / data.length);
+    const max  = Math.max(...data.map((d) => d.count), 1);
+    const W    = 400;
+    const H    = 96;
+    const padL = 6;
+    const padR = 6;
+    const padT = 16;
+    const plotW = W - padL - padR;
+    const plotH = H - padT;
 
-    const bars = data.map((d, i) => {
-      const bh    = Math.max(Math.round((d.count / max) * H), d.count > 0 ? 4 : 1);
-      const x     = i * (bw + gap);
-      const y     = H - bh;
-      const label = new Date(d.date + 'T12:00:00').toLocaleDateString('en-IN', {
+    /* Compute SVG point coords */
+    const pts = data.map((d, i) => ({
+      x:     padL + (data.length > 1 ? (i / (data.length - 1)) * plotW : plotW / 2),
+      y:     padT + plotH - (d.count / max) * plotH,
+      count: d.count,
+      date:  d.date,
+    }));
+
+    const linePath  = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    const areaPath  = `${linePath} L ${pts[pts.length - 1].x.toFixed(1)} ${H} L ${pts[0].x.toFixed(1)} ${H} Z`;
+
+    const labels = pts.map((p) => {
+      const label = new Date(p.date + 'T12:00:00').toLocaleDateString('en-IN', {
         timeZone: tz, weekday: 'short',
       });
-      return `
-        <g class="chart-bar" title="${label}: ${d.count}">
-          <rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="3" ry="3" />
-          <text x="${x + bw / 2}" y="${H + 14}" class="chart-label" text-anchor="middle">${esc(label)}</text>
-          ${d.count > 0 ? `<text x="${x + bw / 2}" y="${y - 4}" class="chart-val" text-anchor="middle">${d.count}</text>` : ''}
-        </g>`;
+      return `<text x="${p.x.toFixed(1)}" y="${H + 14}" class="chart-label" text-anchor="middle">${esc(label)}</text>`;
     }).join('');
 
+    const dots = pts.map((p, i) => `
+      <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" class="chart-dot" style="--dot-i:${i}" />
+      ${p.count > 0 ? `<text x="${p.x.toFixed(1)}" y="${(p.y - 8).toFixed(1)}" class="chart-val" text-anchor="middle">${p.count}</text>` : ''}`
+    ).join('');
+
     container.innerHTML = `
-      <svg viewBox="0 0 ${W} ${H + 22}" class="leads-chart" role="img" aria-label="Leads per day">
-        ${bars}
+      <svg viewBox="0 0 ${W} ${H + 20}" class="leads-chart" role="img" aria-label="Leads per day">
+        <defs>
+          <linearGradient id="lineAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stop-color="var(--accent)" stop-opacity="0.22"/>
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.01"/>
+          </linearGradient>
+        </defs>
+        <path d="${areaPath}" fill="url(#lineAreaGrad)" />
+        <path d="${linePath}" fill="none" stroke="var(--accent)" stroke-width="2"
+              stroke-linejoin="round" stroke-linecap="round" class="chart-line" />
+        ${dots}
+        ${labels}
       </svg>`;
 
-    /* Stagger bar entrance after next paint */
-    requestAnimationFrame(animateChartBars);
+    /* Animate: draw line, then fade in dots */
+    requestAnimationFrame(() => {
+      const line = container.querySelector('.chart-line');
+      if (line) {
+        const len = line.getTotalLength ? line.getTotalLength() : 1200;
+        line.style.strokeDasharray  = `${len}`;
+        line.style.strokeDashoffset = `${len}`;
+        line.classList.add('chart-line--animate');
+      }
+      container.querySelectorAll('.chart-dot').forEach((dot, i) => {
+        setTimeout(() => dot.classList.add('chart-dot--visible'), 300 + i * 60);
+      });
+    });
+  }
+
+  /* ─────────────────────────────────────────────
+     SVG DONUT CHART — lead status distribution
+  ───────────────────────────────────────────── */
+  const DONUT_COLORS = {
+    NEW:       '#F59E0B',
+    CONTACTED: '#D97706',
+    QUALIFIED: '#92400E',
+    WON:       '#22C55E',
+    LOST:      '#71717A',
+  };
+  const DONUT_DEFAULT = '#4B5563';
+
+  function renderDonutChart(leads) {
+    const container = $('donut-container');
+    if (!container) return;
+
+    const total = leads.length;
+    if (!total) {
+      container.innerHTML = '<p class="chart-empty">No lead data yet.</p>';
+      return;
+    }
+
+    /* Tally statuses */
+    const counts = {};
+    leads.forEach((l) => { counts[l.status] = (counts[l.status] || 0) + 1; });
+
+    const size         = 130;
+    const cx           = size / 2;
+    const cy           = size / 2;
+    const r            = 46;
+    const circumference = 2 * Math.PI * r;
+
+    /* Sort by count descending */
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+    let offset = 0;
+    const segments = entries.map(([status, count]) => {
+      const pct   = count / total;
+      const dash  = pct * circumference;
+      const color = DONUT_COLORS[status] ?? DONUT_DEFAULT;
+      const seg   = { status, count, dash, offset, color };
+      offset += dash;
+      return seg;
+    });
+
+    const svgSegments = segments.map((seg) => `
+      <circle
+        class="donut-segment"
+        cx="${cx}" cy="${cy}" r="${r}"
+        fill="none"
+        stroke="${seg.color}"
+        stroke-width="18"
+        stroke-dasharray="${seg.dash.toFixed(2)} ${(circumference - seg.dash).toFixed(2)}"
+        stroke-dashoffset="${(circumference - seg.offset).toFixed(2)}"
+        transform="rotate(-90 ${cx} ${cy})"
+      />`).join('');
+
+    const legend = segments.map((seg, i) => `
+      <div class="donut-legend-item" style="--legend-i:${i}">
+        <span class="donut-legend-dot" style="background:${seg.color}"></span>
+        <span class="donut-legend-label">${esc(seg.status)}</span>
+        <span class="donut-legend-count">${seg.count}</span>
+      </div>`).join('');
+
+    container.innerHTML = `
+      <div class="donut-wrap">
+        <div class="donut-svg-wrap">
+          <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="donut-svg" role="img" aria-label="Lead status distribution">
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="18" />
+            ${svgSegments}
+            <text x="${cx}" y="${cy - 4}" text-anchor="middle" class="donut-center-num">${total}</text>
+            <text x="${cx}" y="${cy + 14}" text-anchor="middle" class="donut-center-label">Leads</text>
+          </svg>
+        </div>
+        <div class="donut-legend">
+          ${legend}
+        </div>
+      </div>`;
+
+    /* Stagger-animate segments in */
+    requestAnimationFrame(() => {
+      container.querySelectorAll('.donut-segment').forEach((seg, i) => {
+        setTimeout(() => seg.classList.add('donut-segment--visible'), i * 80 + 60);
+      });
+    });
   }
 
   /* ── Row animation helpers ── */
@@ -455,12 +597,14 @@ export function DashUI(config) {
   return {
     esc,
     fmtDate,
+    fmtRelativeDate,
     fmtCurrency,
     applyMood,
     renderBizHeader,
     renderStats,
     renderColumns,
     renderChart,
+    renderDonutChart,
     buildLeadRow,
     buildApptRow,
     buildServiceRow,
@@ -482,8 +626,6 @@ export function DashUI(config) {
 
 /* ─────────────────────────────────────────────────────────
    LOGIN CARD 3D TILT
-   Runs once at module load (ES modules defer, so DOM is ready).
-   Gives the login card a subtle perspective tilt tracking the cursor.
 ───────────────────────────────────────────────────────── */
 (function initLoginCardTilt() {
   const card = document.getElementById('login-card');
@@ -497,7 +639,6 @@ export function DashUI(config) {
   });
 
   card.addEventListener('mouseleave', () => {
-    /* Smooth spring-back */
     card.style.transition = 'transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)';
     card.style.transform  = '';
     setTimeout(() => { card.style.transition = ''; }, 620);

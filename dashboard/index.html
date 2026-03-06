@@ -6,7 +6,7 @@
   <title>SME Engine — Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" />
   <link rel="stylesheet" href="/dashboard/style.css" />
 </head>
 <body>
@@ -14,13 +14,11 @@
 <!-- ─────────────────────────── LOGIN ─────────────────────────── -->
 <div id="login-screen" class="login-wrap">
 
-  <!-- Animated background orbs -->
   <div class="login-orb login-orb--a"></div>
   <div class="login-orb login-orb--b"></div>
   <div class="login-orb login-orb--c"></div>
   <div class="login-grid"></div>
 
-  <!-- Card -->
   <div class="login-card" id="login-card">
 
     <div class="login-brand">
@@ -57,95 +55,277 @@
 <!-- ─────────────────────────── DASHBOARD ─────────────────────────── -->
 <div id="dashboard-screen" class="hidden">
 
-  <header class="topbar">
-    <div class="topbar__left">
-      <img id="biz-logo" class="biz-logo" src="" alt="" style="display:none" />
-      <div class="topbar__brand">
-        <span id="biz-name" class="topbar__title"></span>
-        <span id="ws-status" class="ws-status ws-status--off">○ Connecting…</span>
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar__header">
+      <div class="sidebar__brand">
+        <span class="sidebar__brand-mark">⚡</span>
+        <span class="sidebar__brand-name">SME Engine</span>
       </div>
-    </div>
-    <div class="topbar__right">
-      <button id="logout-btn" class="btn-logout">Sign out</button>
-    </div>
-  </header>
-
-  <div id="notif" class="notif"></div>
-
-  <main class="main">
-
-    <p id="greeting" class="greeting"></p>
-
-    <div id="stats-grid" class="stats"></div>
-
-    <div class="chart-wrap">
-      <h3 class="chart-title">Leads — last 7 days</h3>
-      <div id="chart-container" class="chart-container"></div>
+      <button class="sidebar__toggle" id="sidebar-toggle" title="Toggle sidebar"></button>
     </div>
 
-    <nav class="tabs" role="tablist">
-      <button class="tab tab--active" data-tab="leads"        role="tab">Leads</button>
-      <button class="tab"             data-tab="appointments"  role="tab">Appointments</button>
-      <button class="tab"             data-tab="services"      role="tab">Services</button>
-      <button class="tab"             data-tab="testimonials"  role="tab">Testimonials</button>
+    <nav class="sidebar__nav" id="sidebar-nav">
+
+      <p class="sidebar__section-label">Main</p>
+      <a class="sidebar__item is-active" data-tab="overview" href="#" role="button">
+        <span class="sidebar__item-icon">◈</span>
+        <span class="sidebar__item-label">Overview</span>
+      </a>
+      <a class="sidebar__item" data-tab="leads" href="#" role="button">
+        <span class="sidebar__item-icon">◎</span>
+        <span class="sidebar__item-label">Leads</span>
+      </a>
+      <a class="sidebar__item" data-tab="automations" href="#" role="button">
+        <span class="sidebar__item-icon">⚡</span>
+        <span class="sidebar__item-label">Automations</span>
+      </a>
+
+      <p class="sidebar__section-label">Manage</p>
+      <a class="sidebar__item" data-tab="appointments" href="#" role="button">
+        <span class="sidebar__item-icon">◷</span>
+        <span class="sidebar__item-label">Appointments</span>
+      </a>
+      <a class="sidebar__item" data-tab="services" href="#" role="button">
+        <span class="sidebar__item-icon">◈</span>
+        <span class="sidebar__item-label">Services</span>
+      </a>
+      <a class="sidebar__item" data-tab="testimonials" href="#" role="button">
+        <span class="sidebar__item-icon">◉</span>
+        <span class="sidebar__item-label">Testimonials</span>
+      </a>
+
+      <p class="sidebar__section-label">Config</p>
+      <a class="sidebar__item" href="/dashboard/agent.html">
+        <span class="sidebar__item-icon">◑</span>
+        <span class="sidebar__item-label">Agent Config</span>
+      </a>
+      <a class="sidebar__item" data-tab="settings" href="#" role="button">
+        <span class="sidebar__item-icon">◎</span>
+        <span class="sidebar__item-label">Settings</span>
+      </a>
+
     </nav>
 
-    <!-- Leads -->
-    <section id="section-leads" class="section">
-      <div class="section-header">
-        <h2 class="section-title">Leads</h2>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr id="leads-thead"></tr></thead>
-          <tbody id="leads-tbody"></tbody>
-        </table>
-      </div>
-    </section>
+    <div class="sidebar__footer">
+      <button class="sidebar__item" id="sidebar-logout">
+        <span class="sidebar__item-icon">→</span>
+        <span class="sidebar__item-label">Sign out</span>
+      </button>
+    </div>
+  </aside>
 
-    <!-- Appointments -->
-    <section id="section-appointments" class="section hidden">
-      <div class="section-header">
-        <h2 class="section-title">Appointments</h2>
-        <button class="btn-create" id="btn-new-appointment">+ New</button>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr id="appt-thead"></tr></thead>
-          <tbody id="appt-tbody"></tbody>
-        </table>
-      </div>
-    </section>
+  <!-- ── Main body (right of sidebar) ── -->
+  <div class="dash-body">
 
-    <!-- Services -->
-    <section id="section-services" class="section hidden">
-      <div class="section-header">
-        <h2 class="section-title">Services</h2>
-        <button class="btn-create" id="btn-new-service">+ New</button>
+    <header class="topbar">
+      <div class="topbar__left">
+        <img id="biz-logo" class="biz-logo" src="" alt="" style="display:none" />
+        <div class="topbar__brand">
+          <span id="biz-name" class="topbar__title"></span>
+          <span id="ws-status" class="ws-status ws-status--off">● Live</span>
+        </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr id="services-thead"></tr></thead>
-          <tbody id="services-tbody"></tbody>
-        </table>
-      </div>
-    </section>
 
-    <!-- Testimonials -->
-    <section id="section-testimonials" class="section hidden">
-      <div class="section-header">
-        <h2 class="section-title">Testimonials</h2>
-        <button class="btn-create" id="btn-new-testimonial">+ New</button>
+      <div class="topbar__center">
+        <button class="topbar-search-btn" id="topbar-search-btn" title="Search leads (⌘K)">
+          <svg class="topbar-search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M10 10L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span class="topbar-search-label">Search leads…</span>
+          <kbd class="topbar-search-kbd">⌘K</kbd>
+        </button>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr id="testimonials-thead"></tr></thead>
-          <tbody id="testimonials-tbody"></tbody>
-        </table>
-      </div>
-    </section>
 
-  </main>
+      <div class="topbar__right">
+        <button id="logout-btn" class="btn-logout">Sign out</button>
+      </div>
+    </header>
+
+    <div id="notif" class="notif"></div>
+
+    <main class="main">
+
+      <!-- ── Overview (default landing) ── -->
+      <section id="section-overview" class="section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title" id="greeting">Overview</h2>
+            <p class="section-sub" id="biz-name-sub"></p>
+          </div>
+        </div>
+        <div id="stats-grid" class="stats"></div>
+        <div class="charts-grid">
+          <div class="chart-wrap">
+            <h3 class="chart-title">Leads · last 7 days</h3>
+            <div id="chart-container" class="chart-container"></div>
+          </div>
+          <div class="chart-wrap">
+            <h3 class="chart-title">Status distribution</h3>
+            <div id="donut-container" class="donut-container"></div>
+          </div>
+        </div>
+        <div class="recent-activity-section">
+          <h3 class="recent-activity__title">Recent Activity</h3>
+          <div id="overview-activity"></div>
+        </div>
+      </section>
+
+      <!-- ── Leads ── -->
+      <section id="section-leads" class="section hidden">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Leads</h2>
+            <p class="section-sub">All incoming enquiries</p>
+          </div>
+        </div>
+        <div class="leads-toolbar">
+          <span class="search-slash-hint">/</span>
+          <input class="leads-search" id="leads-search" type="search" placeholder="Search by name or phone…" />
+          <div class="toolbar-divider"></div>
+          <select class="leads-filter" id="leads-status-filter">
+            <option value="">All Statuses</option>
+          </select>
+          <div class="toolbar-divider"></div>
+          <select class="leads-filter" id="leads-priority-filter">
+            <option value="">All Priorities</option>
+            <option value="HIGH">🔴 High</option>
+            <option value="NORMAL">🟡 Normal</option>
+            <option value="LOW">⚪ Low</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr id="leads-thead"></tr></thead>
+            <tbody id="leads-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Automations ── -->
+      <section id="section-automations" class="section hidden">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Automations</h2>
+            <p class="section-sub">AI agent activity feed</p>
+          </div>
+        </div>
+        <div id="automations-feed" class="automations-feed"></div>
+      </section>
+
+      <!-- ── Appointments ── -->
+      <section id="section-appointments" class="section hidden">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Appointments</h2>
+            <p class="section-sub">Scheduled sessions</p>
+          </div>
+          <button class="btn-create" id="btn-new-appointment">+ New</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr id="appt-thead"></tr></thead>
+            <tbody id="appt-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Services ── -->
+      <section id="section-services" class="section hidden">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Services</h2>
+            <p class="section-sub">Your offered services</p>
+          </div>
+          <button class="btn-create" id="btn-new-service">+ New</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr id="services-thead"></tr></thead>
+            <tbody id="services-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Testimonials ── -->
+      <section id="section-testimonials" class="section hidden">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Testimonials</h2>
+            <p class="section-sub">Customer reviews</p>
+          </div>
+          <button class="btn-create" id="btn-new-testimonial">+ New</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr id="testimonials-thead"></tr></thead>
+            <tbody id="testimonials-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Settings ── -->
+      <section id="section-settings" class="section hidden">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Settings</h2>
+            <p class="section-sub">Account and business configuration</p>
+          </div>
+        </div>
+        <div class="settings-placeholder">
+          <div class="settings-placeholder__icon">⚙</div>
+          <p class="settings-placeholder__title">Settings coming soon</p>
+          <p class="settings-placeholder__sub">Business configuration options will appear here in a future update.</p>
+        </div>
+      </section>
+
+      <!-- Hidden nav tabs kept for JS compatibility -->
+      <nav class="tabs" role="tablist" aria-hidden="true">
+        <button class="tab" data-tab="overview"      role="tab">Overview</button>
+        <button class="tab" data-tab="leads"         role="tab">Leads</button>
+        <button class="tab" data-tab="automations"   role="tab">Automations</button>
+        <button class="tab" data-tab="appointments"  role="tab">Appointments</button>
+        <button class="tab" data-tab="services"      role="tab">Services</button>
+        <button class="tab" data-tab="testimonials"  role="tab">Testimonials</button>
+        <button class="tab" data-tab="settings"      role="tab">Settings</button>
+      </nav>
+
+    </main>
+  </div><!-- .dash-body -->
+
+</div><!-- #dashboard-screen -->
+
+<!-- ─────────────────────────── LEAD DRAWER ─────────────────────────── -->
+<div id="lead-drawer" class="drawer">
+  <div class="drawer__overlay" id="drawer-overlay"></div>
+  <div class="drawer__panel">
+
+    <div class="drawer__header">
+      <div class="drawer__lead-info">
+        <h2 class="drawer__name"  id="drawer-name">—</h2>
+        <p  class="drawer__phone" id="drawer-phone"></p>
+      </div>
+      <button class="drawer__close" id="drawer-close" title="Close">✕</button>
+    </div>
+
+    <div class="drawer__meta" id="drawer-meta"></div>
+
+    <div class="drawer__tabs">
+      <button class="drawer__tab is-active" data-drawer-tab="activity">Activity</button>
+      <button class="drawer__tab"           data-drawer-tab="overview">Overview</button>
+    </div>
+
+    <div class="drawer__body">
+      <div id="drawer-pane-activity" class="drawer__pane">
+        <div id="drawer-timeline"></div>
+      </div>
+      <div id="drawer-pane-overview" class="drawer__pane drawer__pane--hidden">
+        <div id="drawer-overview-content"></div>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 <!-- ── Delete confirmation modal ── -->

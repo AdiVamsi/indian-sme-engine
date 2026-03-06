@@ -20,12 +20,14 @@ if (slugRow && BUSINESS_SLUG) slugRow.style.display = 'none';
 let api            = null;
 let ui             = null;
 let config         = null;
-let activeTab      = 'leads';
+let activeTab      = 'overview';
 let loadedSections = new Set();
 let wsClient       = null;
 let expiryTimer    = null;
 
 const $ = (id) => document.getElementById(id);
+
+const ALL_SECTIONS = ['overview', 'leads', 'automations', 'appointments', 'services', 'testimonials', 'settings'];
 
 /* ─────────────────────────────────────────────────
    JWT UTILITIES
@@ -71,7 +73,7 @@ function doLogout(reason) {
   config         = null;
   wsClient       = null;
   expiryTimer    = null;
-  activeTab      = 'leads';
+  activeTab      = 'overview';
   loadedSections.clear();
 
   document.body.removeAttribute('data-mood');
@@ -89,7 +91,10 @@ function doLogout(reason) {
   $('biz-name').textContent          = '';
 
   const greetEl = $('greeting');
-  if (greetEl) greetEl.textContent = '';
+  if (greetEl) greetEl.textContent = 'Overview';
+
+  const subEl = $('biz-name-sub');
+  if (subEl) subEl.textContent = '';
 
   const logoEl = $('biz-logo');
   if (logoEl) logoEl.style.display = 'none';
@@ -97,13 +102,22 @@ function doLogout(reason) {
   const chartEl = $('chart-container');
   if (chartEl) chartEl.innerHTML = '';
 
-  /* Reset tabs */
+  const donutEl = $('donut-container');
+  if (donutEl) donutEl.innerHTML = '';
+
+  const autoEl = $('automations-feed');
+  if (autoEl) autoEl.innerHTML = '';
+
+  /* Reset tabs + sidebar */
   document.querySelectorAll('.tab').forEach((b) =>
-    b.classList.toggle('tab--active', b.dataset.tab === 'leads')
+    b.classList.toggle('tab--active', b.dataset.tab === 'overview')
   );
-  ['leads', 'appointments', 'services', 'testimonials'].forEach((t) => {
+  document.querySelectorAll('#sidebar-nav .sidebar__item[data-tab]').forEach((item) =>
+    item.classList.toggle('is-active', item.dataset.tab === 'overview')
+  );
+  ALL_SECTIONS.forEach((t) => {
     const el = $(`section-${t}`);
-    if (el) el.classList.toggle('hidden', t !== 'leads');
+    if (el) el.classList.toggle('hidden', t !== 'overview');
   });
 
   $('login-form').reset();
@@ -113,6 +127,35 @@ function doLogout(reason) {
 }
 
 $('logout-btn').addEventListener('click', () => doLogout());
+
+/* ─────────────────────────────────────────────────
+   SIDEBAR
+───────────────────────────────────────────────── */
+(function initSidebar() {
+  const sidebar = $('sidebar');
+  if (!sidebar) return;
+
+  /* Restore persisted collapsed state */
+  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    sidebar.classList.add('is-collapsed');
+  }
+
+  $('sidebar-toggle')?.addEventListener('click', () => {
+    sidebar.classList.toggle('is-collapsed');
+    localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('is-collapsed'));
+  });
+
+  /* Sidebar nav items → switchTab */
+  document.querySelectorAll('#sidebar-nav .sidebar__item[data-tab]').forEach((item) => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      switchTab(item.dataset.tab);
+    });
+  });
+
+  /* Sidebar sign-out mirrors existing button */
+  $('sidebar-logout')?.addEventListener('click', () => doLogout());
+}());
 
 /* ─────────────────────────────────────────────────
    LOGIN
@@ -223,11 +266,23 @@ async function bootDashboard() {
   const cfg = await api.getConfig();
   config = cfg;
   ui     = DashUI(cfg);
+  loadedSections.add('overview');
   loadedSections.add('leads');
 
   ui.applyMood();
   ui.renderBizHeader();
   ui.renderColumns('leads-thead', cfg.tableColumns.leads);
+
+  /* Populate status filter options from enum */
+  const statusSelect = $('leads-status-filter');
+  if (statusSelect && cfg.leadStatuses) {
+    cfg.leadStatuses.forEach((s) => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      statusSelect.appendChild(opt);
+    });
+  }
 
   /* Stats — optional; skeleton stays if it fails */
   const summary = await safeFetch(() => api.getDashboard(), 'dashboard stats');
@@ -240,6 +295,10 @@ async function bootDashboard() {
   /* Chart — optional; chart area stays blank if it fails */
   const chartData = await safeFetch(() => api.getLeadsByDay(7), 'leads by day');
   if (chartData) ui.renderChart(chartData);
+
+  /* Donut chart — computed from already-loaded leads */
+  ui.renderDonutChart(_allLeads);
+  renderOverviewActivity(_allLeads);
 
   console.log('[Dashboard] Boot completed');
 }
@@ -255,11 +314,17 @@ async function switchTab(tab) {
   if (tab === activeTab) return;
   activeTab = tab;
 
+  /* Hidden tab buttons (JS state signal) */
   document.querySelectorAll('.tab').forEach((b) =>
     b.classList.toggle('tab--active', b.dataset.tab === tab)
   );
 
-  ['leads', 'appointments', 'services', 'testimonials'].forEach((t) => {
+  /* Sidebar active highlight */
+  document.querySelectorAll('#sidebar-nav .sidebar__item[data-tab]').forEach((item) =>
+    item.classList.toggle('is-active', item.dataset.tab === tab)
+  );
+
+  ALL_SECTIONS.forEach((t) => {
     const el = $(`section-${t}`);
     if (el) el.classList.toggle('hidden', t !== tab);
   });
@@ -285,6 +350,9 @@ async function loadSection(tab) {
     ui.renderColumns('testimonials-thead', config.tableColumns.testimonials);
     ui.showSkeletonRows('testimonials-tbody', config.tableColumns.testimonials.length);
     renderTestimonials(await api.getTestimonials());
+
+  } else if (tab === 'automations') {
+    renderAutomations(_allLeads);
   }
 }
 
@@ -335,23 +403,112 @@ function simpleEmptyState(icon, title, sub) {
 }
 
 /* ─────────────────────────────────────────────────
-   LEADS
+   LEADS — cache + search/filter
 ───────────────────────────────────────────────── */
+let _allLeads = [];
+
 function renderLeads(leads) {
+  _allLeads = leads ?? [];
+  _applyLeadFilters();
+  if (ui) ui.renderDonutChart(_allLeads);
+}
+
+function _applyLeadFilters() {
+  const search   = ($('leads-search')?.value   ?? '').toLowerCase().trim();
+  const status   = $('leads-status-filter')?.value   ?? '';
+  const priority = $('leads-priority-filter')?.value ?? '';
+
+  const filtered = _allLeads.filter((l) => {
+    const matchSearch   = !search   || (l.name?.toLowerCase().includes(search) || l.phone?.includes(search));
+    const matchStatus   = !status   || l.status   === status;
+    const matchPriority = !priority || l.priority === priority;
+    return matchSearch && matchStatus && matchPriority;
+  });
+
+  _renderFilteredLeads(filtered);
+}
+
+function _renderFilteredLeads(leads) {
   const tbody   = $('leads-tbody');
   const colSpan = (config.tableColumns.leads?.length ?? 5) + 1;
   tbody.innerHTML = '';
 
   if (!leads.length) {
-    buildLeadsEmptyState(tbody, colSpan);
+    if (!_allLeads.length) {
+      buildLeadsEmptyState(tbody, colSpan);
+    } else {
+      tbody.innerHTML = `
+        <tr class="empty-row">
+          <td colspan="${colSpan}" class="empty">
+            <div class="empty-state">
+              <p class="empty-state__icon">🔍</p>
+              <p class="empty-state__title">No leads match your filters</p>
+              <p class="empty-state__sub">Try adjusting the search or filter</p>
+            </div>
+          </td>
+        </tr>`;
+    }
     return;
   }
+
   leads.forEach((l) => {
     const row = ui.buildLeadRow(l);
     wireLeadRow(row);
     tbody.appendChild(row);
   });
 }
+
+/* Wire search/filter inputs */
+(function initLeadToolbar() {
+  $('leads-search')?.addEventListener('input',  _applyLeadFilters);
+  $('leads-status-filter')?.addEventListener('change', _applyLeadFilters);
+  $('leads-priority-filter')?.addEventListener('change', _applyLeadFilters);
+}());
+
+/* "/" key focuses the search bar */
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    const searchEl = $('leads-search');
+    if (searchEl) {
+      searchEl.focus();
+      searchEl.select();
+    }
+  }
+});
+
+/* ⌘K / Ctrl+K → switch to Leads and focus search */
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    switchTab('leads');
+    setTimeout(() => {
+      const searchEl = $('leads-search');
+      if (searchEl) { searchEl.focus(); searchEl.select(); }
+    }, 50);
+  }
+});
+
+/* Topbar search button — same as ⌘K */
+$('topbar-search-btn')?.addEventListener('click', () => {
+  switchTab('leads');
+  setTimeout(() => {
+    const searchEl = $('leads-search');
+    if (searchEl) { searchEl.focus(); searchEl.select(); }
+  }, 50);
+});
+
+/* Entire lead row → drawer (except status select / action buttons) */
+$('leads-tbody').addEventListener('click', (e) => {
+  if (e.target.closest('.status-select, .btn-delete, .btn-timeline, .btn-edit, .lead-name-btn')) {
+    /* Let the name button still work for drawer too */
+    const btn = e.target.closest('.lead-name-btn');
+    if (btn) openLeadDrawer(btn.dataset.leadId);
+    return;
+  }
+  const row = e.target.closest('tr[data-lead-id]');
+  if (row) openLeadDrawer(row.dataset.leadId);
+});
 
 function wireLeadRow(row) {
   const sel = row.querySelector('.status-select');
@@ -383,6 +540,14 @@ async function onLeadStatusChange(e) {
       ui.updateStat('newLeads', ui.getStat('newLeads') + 1);
 
     ui.showToast(`Status → ${newStatus}`, 'success');
+
+    /* Keep in-memory cache in sync and refresh overview charts */
+    const cached = _allLeads.find((l) => l.id === id);
+    if (cached) cached.status = newStatus;
+    if (activeTab === 'overview') {
+      ui.renderDonutChart(_allLeads);
+      renderOverviewActivity(_allLeads);
+    }
   } catch (err) {
     console.error('[Dashboard] updateLeadStatus failed:', err);
     select.value = oldStatus || config.leadStatuses[0];
@@ -670,6 +835,67 @@ async function doDeleteTestimonial(id) {
 }
 
 /* ─────────────────────────────────────────────────
+   SHARED ACTIVITY HELPERS
+───────────────────────────────────────────────── */
+
+function _buildActivityEvents(leads) {
+  const events = [];
+  leads.forEach((lead) => {
+    events.push({ type: 'LEAD_CREATED', lead, time: lead.createdAt });
+    if (lead.tags?.length)
+      events.push({ type: 'AGENT_CLASSIFIED', lead, time: lead.createdAt, tags: lead.tags });
+    if (lead.priorityScore != null)
+      events.push({ type: 'AGENT_PRIORITIZED', lead, time: lead.createdAt, score: lead.priorityScore });
+  });
+  events.sort((a, b) => new Date(b.time) - new Date(a.time));
+  return events;
+}
+
+function _renderActivityInto(containerId, events, limit) {
+  const feed = $(containerId);
+  if (!feed) return;
+
+  if (!events.length) {
+    feed.innerHTML = '<p class="auto-empty">No activity yet.</p>';
+    return;
+  }
+
+  feed.innerHTML = events.slice(0, limit).map((ev) => {
+    const cfg = AUTO_EVENT_CFG[ev.type];
+    let detail = _escDrawer(ev.lead.name ?? 'Unknown');
+    if (ev.type === 'AGENT_CLASSIFIED') detail += ` — ${_escDrawer(ev.tags.join(', '))}`;
+    if (ev.type === 'AGENT_PRIORITIZED') detail += ` — Score: ${_escDrawer(ev.score)}`;
+
+    return `
+      <div class="auto-event">
+        <span class="auto-event__icon">${cfg.icon}</span>
+        <div class="auto-event__body">
+          <span class="auto-event__label">${cfg.label}</span>
+          <span class="auto-event__detail">${detail}</span>
+        </div>
+        <span class="auto-event__time">${_fmtDrawerTime(ev.time)}</span>
+      </div>`;
+  }).join('');
+}
+
+function renderOverviewActivity(leads) {
+  _renderActivityInto('overview-activity', _buildActivityEvents(leads), 10);
+}
+
+/* ─────────────────────────────────────────────────
+   AUTOMATIONS FEED — synthetic events from lead data
+───────────────────────────────────────────────── */
+const AUTO_EVENT_CFG = {
+  LEAD_CREATED:      { icon: '📋', label: 'New enquiry received' },
+  AGENT_CLASSIFIED:  { icon: '🏷️',  label: 'Lead classified' },
+  AGENT_PRIORITIZED: { icon: '⚡', label: 'Priority scored' },
+};
+
+function renderAutomations(leads) {
+  _renderActivityInto('automations-feed', _buildActivityEvents(leads), 50);
+}
+
+/* ─────────────────────────────────────────────────
    REALTIME WEBSOCKET
 ───────────────────────────────────────────────── */
 function startRealtime(token) {
@@ -684,6 +910,9 @@ function onNewLead(lead) {
   ui.updateStat('totalLeads', ui.getStat('totalLeads') + 1);
   if (lead.status === config.leadStatuses[0])
     ui.updateStat('newLeads', ui.getStat('newLeads') + 1);
+
+  /* Keep cache in sync */
+  _allLeads.unshift(lead);
 
   const row = ui.buildLeadRow(lead, true);
   wireLeadRow(row);
@@ -718,6 +947,157 @@ function onRemoteLeadStatusChange({ id, status }) {
   if (oldStatus !== 'NEW' && status === 'NEW')
     ui.updateStat('newLeads', ui.getStat('newLeads') + 1);
 }
+
+/* ─────────────────────────────────────────────────
+   LEAD DRAWER
+───────────────────────────────────────────────── */
+const DRAWER_ACTIVITY_MAP = {
+  LEAD_CREATED:        { label: 'Lead created',        icon: '📋', dot: 'dtl-dot--created'    },
+  AGENT_CLASSIFIED:    { label: 'Lead classified',     icon: '🏷️',  dot: 'dtl-dot--classified' },
+  AGENT_PRIORITIZED:   { label: 'Priority score set',  icon: '⚡',  dot: 'dtl-dot--prioritized'},
+  FOLLOW_UP_SCHEDULED: { label: 'Follow-up scheduled', icon: '📅', dot: 'dtl-dot--followup'   },
+  STATUS_CHANGED:      { label: 'Status updated',      icon: '🔄', dot: 'dtl-dot--default'    },
+};
+
+function _escDrawer(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function _fmtDrawerTime(iso) {
+  try {
+    return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+  } catch { return iso; }
+}
+
+async function openLeadDrawer(leadId) {
+  const drawer = $('lead-drawer');
+  if (!drawer) return;
+
+  /* Populate header from cached lead while we fetch */
+  const cached = _allLeads.find((l) => l.id === leadId);
+  $('drawer-name').textContent  = cached?.name  ?? '—';
+  $('drawer-phone').textContent = cached?.phone ?? '';
+  if (cached) {
+    $('drawer-meta').innerHTML = `
+      <span class="drawer__meta-badge">Status: <strong>${_escDrawer(cached.status)}</strong></span>
+      <span class="drawer__meta-badge">Priority: <strong>${_escDrawer(cached.priority ?? 'LOW')}</strong></span>
+      <span class="drawer__meta-badge">Score: <strong>${_escDrawer(cached.priorityScore ?? 0)}</strong></span>`;
+  }
+
+  /* Reset to Activity tab */
+  document.querySelectorAll('.drawer__tab').forEach((t) =>
+    t.classList.toggle('is-active', t.dataset.drawerTab === 'activity')
+  );
+  $('drawer-pane-activity').classList.remove('drawer__pane--hidden');
+  $('drawer-pane-overview').classList.add('drawer__pane--hidden');
+
+  /* Open */
+  drawer.classList.add('is-open');
+  document.body.style.overflow = 'hidden';
+
+  /* Show spinner while fetching */
+  $('drawer-timeline').innerHTML = `
+    <div class="drawer-loading">
+      <div class="drawer-loading__spinner"></div>
+      Loading timeline…
+    </div>`;
+
+  try {
+    const result = await api.getLeadActivity(leadId);
+    _renderDrawerTimeline(result);
+    _renderDrawerOverview(result?.lead ?? cached);
+  } catch (err) {
+    $('drawer-timeline').innerHTML = `<p class="drawer-error">Could not load: ${_escDrawer(err.message)}</p>`;
+  }
+}
+
+function closeLeadDrawer() {
+  const drawer = $('lead-drawer');
+  if (!drawer) return;
+  drawer.classList.remove('is-open');
+  document.body.style.overflow = '';
+}
+
+function _renderDrawerTimeline(data) {
+  if (!data) {
+    $('drawer-timeline').innerHTML = '<p class="drawer-error">Lead not found.</p>';
+    return;
+  }
+
+  const { lead, activities } = data;
+
+  /* Update header with authoritative data */
+  $('drawer-name').textContent  = lead?.name  ?? '—';
+  $('drawer-phone').textContent = lead?.phone ?? '';
+
+  if (!activities.length) {
+    $('drawer-timeline').innerHTML = '<div class="drawer-empty">📭<br>No activity recorded yet.</div>';
+    return;
+  }
+
+  const sorted = [...activities].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+  const html = sorted.map((act, i) => {
+    const cfg  = DRAWER_ACTIVITY_MAP[act.type] ?? {
+      label: act.type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()),
+      icon: '●',
+      dot: 'dtl-dot--default',
+    };
+    const meta = act.metadata;
+
+    let metaHtml = '';
+    if (act.type === 'AGENT_CLASSIFIED' && Array.isArray(meta?.tags) && meta.tags.length) {
+      metaHtml = `<div class="dtl-pills">${meta.tags.map((t) => `<span class="dtl-pill">${_escDrawer(t)}</span>`).join('')}</div>`;
+    } else if (act.type === 'AGENT_PRIORITIZED') {
+      const score = meta?.priorityScore ?? meta?.score;
+      if (score != null) metaHtml = `<div class="dtl-pills"><span class="dtl-pill">Score: ${_escDrawer(score)}</span></div>`;
+    }
+
+    return `
+      <div class="dtl-item" style="--i:${i}">
+        <div class="dtl-dot ${_escDrawer(cfg.dot)}">${cfg.icon}</div>
+        <div class="dtl-content">
+          <div class="dtl-title">${_escDrawer(cfg.label)}</div>
+          <div class="dtl-time">${_escDrawer(_fmtDrawerTime(act.createdAt))}</div>
+          ${act.message ? `<div class="dtl-msg">${_escDrawer(act.message)}</div>` : ''}
+          ${metaHtml}
+        </div>
+      </div>`;
+  }).join('');
+
+  $('drawer-timeline').innerHTML = `<div class="drawer-timeline">${html}</div>`;
+}
+
+function _renderDrawerOverview(lead) {
+  if (!lead) { $('drawer-overview-content').innerHTML = ''; return; }
+  const esc = _escDrawer;
+  $('drawer-overview-content').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:0.75rem;font-size:0.875rem;">
+      <div><span style="color:var(--text-2);font-weight:500;">Name</span><br><strong>${esc(lead.name ?? '—')}</strong></div>
+      <div><span style="color:var(--text-2);font-weight:500;">Phone</span><br><strong>${esc(lead.phone ?? '—')}</strong></div>
+      ${lead.email ? `<div><span style="color:var(--text-2);font-weight:500;">Email</span><br><strong>${esc(lead.email)}</strong></div>` : ''}
+      ${lead.message ? `<div><span style="color:var(--text-2);font-weight:500;">Message</span><br><span style="color:var(--text-2)">${esc(lead.message)}</span></div>` : ''}
+    </div>`;
+}
+
+/* Drawer controls */
+$('drawer-close')?.addEventListener('click', closeLeadDrawer);
+$('drawer-overlay')?.addEventListener('click', closeLeadDrawer);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('lead-drawer')?.classList.contains('is-open')) closeLeadDrawer();
+});
+
+/* Drawer tabs */
+document.querySelectorAll('.drawer__tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset.drawerTab;
+    document.querySelectorAll('.drawer__tab').forEach((t) =>
+      t.classList.toggle('is-active', t.dataset.drawerTab === target)
+    );
+    $('drawer-pane-activity').classList.toggle('drawer__pane--hidden', target !== 'activity');
+    $('drawer-pane-overview').classList.toggle('drawer__pane--hidden', target !== 'overview');
+  });
+});
 
 /* ─────────────────────────────────────────────────
    AUTO-LOGIN — restore session from persisted token

@@ -107,6 +107,7 @@ const ALL_TABS = ['overview', 'businesses', 'leads', 'logs'];
 
 function switchTab(tab) {
   activeTab = tab;
+  history.replaceState(null, '', '#' + tab);
 
   document.querySelectorAll('.sidebar__link').forEach((el) => {
     el.classList.toggle('sidebar__link--active', el.dataset.tab === tab);
@@ -126,6 +127,14 @@ document.querySelectorAll('.sidebar__link').forEach((el) => {
     closeMobileSidebar();
     if (requireAuth()) switchTab(el.dataset.tab);
   });
+});
+
+/* Sync tab when the user navigates with browser back / forward buttons */
+window.addEventListener('hashchange', () => {
+  if (!token) return;
+  const hash = window.location.hash.slice(1);
+  const tab  = ALL_TABS.includes(hash) ? hash : 'overview';
+  if (tab !== activeTab) switchTab(tab);
 });
 
 /* ── Lazy section loading ────────────────────────────────────────────────── */
@@ -148,7 +157,9 @@ async function loadSection(tab) {
 
 /* ── Boot + 30-second poll ───────────────────────────────────────────────── */
 async function bootAdmin() {
-  switchTab('overview');
+  const hash     = window.location.hash.slice(1);
+  const startTab = ALL_TABS.includes(hash) ? hash : 'overview';
+  switchTab(startTab);
   startPolling();
 }
 

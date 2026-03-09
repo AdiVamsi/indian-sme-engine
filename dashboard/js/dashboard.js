@@ -291,6 +291,162 @@ function wireGoLiveCard(cfg) {
 }
 
 /* ─────────────────────────────────────────────────
+   ACTION CENTER — buckets of leads that need human
+   attention right now. Frontend-only computation
+   over the already-loaded _allLeads array.
+─────────────────────────────────────────────────── */
+const AC_MS = { FOLLOWUP: 30 * 60 * 1000, STALE: 4 * 60 * 60 * 1000 };
+
+function computeActionItems() {
+  const now      = Date.now();
+  const urgent   = [];
+  const followup = [];
+  const stale    = [];
+
+  for (const lead of _allLeads) {
+    if (lead.status !== 'NEW') continue;
+    const age      = now - new Date(lead.createdAt).getTime();
+    const isUrgent = lead.priority === 'HIGH';
+
+    if (isUrgent) {
+      urgent.push(lead);
+    } else if (age > AC_MS.STALE) {
+      stale.push(lead);
+    } else if (age > AC_MS.FOLLOWUP) {
+      followup.push(lead);
+    }
+    /* age ≤ 30 min and non-urgent → no bucket yet */
+  }
+
+  /* Oldest first within each bucket */
+  const byAge = (a, b) => new Date(a.createdAt) - new Date(b.createdAt);
+  urgent.sort(byAge);
+  followup.sort(byAge);
+  stale.sort(byAge);
+
+  return { urgent, followup, stale };
+}
+
+function _fmtAge(iso) {
+  const ms  = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 60) return `${min}m ago`;
+  const hr  = Math.floor(min / 60);
+  if (hr  < 24) return `${hr}h ago`;
+  return `${Math.floor(hr / 24)}d ago`;
+}
+
+function renderActionCenter() {
+  const body  = $('ac-body');
+  const badge = $('ac-badge');
+  if (!body) return;
+
+  const { urgent, followup, stale } = computeActionItems();
+  const total = urgent.length + followup.length + stale.length;
+
+  if (badge) badge.textContent = total > 0 ? String(total) : '';
+
+  if (total === 0) {
+    body.innerHTML = `<p class="ac-empty">All caught up — no leads need attention right now.</p>`;
+    return;
+  }
+
+  const buckets = [
+    { key: 'urgent',   mod: 'urgent',   label: 'Urgent',        leads: urgent   },
+    { key: 'followup', mod: 'followup', label: 'Follow-up due', leads: followup },
+    { key: 'stale',    mod: 'stale',    label: 'Stale',         leads: stale    },
+  ];
+
+  body.innerHTML = buckets
+    .filter((b) => b.leads.length > 0)
+    .map((b) => `
+      <div class="ac-bucket ac-bucket--${b.mod}" data-bucket="${b.key}">
+        <div class="ac-bucket__heading" data-toggle="${b.key}">
+          <span class="ac-bucket__dot"></span>
+          ${b.label}
+          <span class="ac-bucket__count">${b.leads.length}</span>
+        </div>
+        <div class="ac-bucket__rows" id="ac-rows-${b.key}">
+          ${b.leads.map((l) => _buildAcRow(l)).join('')}
+        </div>
+      </div>`)
+    .join('');
+
+  /* Wire collapse toggles */
+  body.querySelectorAll('[data-toggle]').forEach((heading) => {
+    heading.addEventListener('click', () => {
+      const rows = $(`ac-rows-${heading.dataset.toggle}`);
+      if (rows) rows.classList.toggle('is-collapsed');
+    });
+  });
+
+  /* Wire "Contacted" buttons */
+  body.querySelectorAll('[data-ac-id]').forEach((btn) => {
+    btn.addEventListener('click', () => handleMarkContacted(btn.dataset.acId, btn));
+  });
+}
+
+function _buildAcRow(lead) {
+  const esc   = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const phone = lead.phone ? ` · ${esc(lead.phone)}` : '';
+  return `
+    <div class="ac-row" data-ac-lead="${lead.id}">
+      <div class="ac-row__info">
+        <div class="ac-row__name">${esc(lead.name || '—')}</div>
+        <div class="ac-row__meta">${_fmtAge(lead.createdAt)}${phone}</div>
+      </div>
+      <button class="ac-row__btn" data-ac-id="${esc(lead.id)}">Contacted</button>
+    </div>`;
+}
+
+async function handleMarkContacted(leadId, btn) {
+  const lead = _allLeads.find((l) => l.id === leadId);
+  if (!lead) return;
+  const oldStatus = lead.status;
+
+  /* Optimistic: mutate status in place — keep lead in _allLeads for other components */
+  btn.disabled    = true;
+  btn.textContent = '…';
+  lead.status     = 'CONTACTED';
+
+  /* Refresh all affected surfaces */
+  renderActionCenter();
+  ui?.renderDonutChart(_allLeads);
+  if (activeTab === 'overview') renderOverviewActivity(_allLeads);
+
+  /* Keep the leads table row in sync if visible */
+  const sel = document.querySelector(`.status-select[data-id="${leadId}"]`);
+  if (sel) {
+    const oldClass = [...sel.classList].find((c) => c.startsWith('status--'));
+    if (oldClass) sel.classList.remove(oldClass);
+    sel.classList.add('status--contacted');
+    sel.value = 'CONTACTED';
+    ui?.applyStatusPulse(sel);
+  }
+  ui?.updateStat('newLeads', Math.max(0, ui.getStat('newLeads') - 1));
+
+  try {
+    await api.updateLeadStatus(leadId, 'CONTACTED');
+    ui?.showToast('Marked contacted', 'success');
+  } catch (err) {
+    console.error('[ActionCenter] markContacted failed:', err);
+    /* Rollback: restore status in place — no re-insert needed */
+    lead.status = oldStatus;
+    renderActionCenter();
+    ui?.renderDonutChart(_allLeads);
+    if (activeTab === 'overview') renderOverviewActivity(_allLeads);
+    if (sel) {
+      const revertClass = [...sel.classList].find((c) => c.startsWith('status--'));
+      if (revertClass) sel.classList.remove(revertClass);
+      sel.classList.add(`status--${oldStatus.toLowerCase()}`);
+      sel.value = oldStatus;
+    }
+    ui?.updateStat('newLeads', ui.getStat('newLeads') + 1);
+    ui?.showToast(err.message || 'Could not update status', 'error');
+  }
+}
+
+/* ─────────────────────────────────────────────────
    ACTIVATION FLOW — first-run overlay for STARTING
    businesses. Resolves when the user completes the
    test lead or clicks "Skip for now".
@@ -450,6 +606,7 @@ async function bootDashboard() {
   /* Donut chart — computed from already-loaded leads */
   ui.renderDonutChart(_allLeads);
   renderOverviewActivity(_allLeads);
+  renderActionCenter();
 
   /* Go Live card — fills URL and wires copy button */
   wireGoLiveCard(cfg);
@@ -484,6 +641,14 @@ async function switchTab(tab) {
   });
 
   await loadSection(tab);
+
+  /* When returning to Overview, always refresh derived displays.
+     loadSection early-returns for already-loaded sections, so we do it here. */
+  if (tab === 'overview' && ui) {
+    ui.renderDonutChart(_allLeads);
+    renderOverviewActivity(_allLeads);
+    renderActionCenter();
+  }
 }
 
 async function loadSection(tab) {
@@ -695,13 +860,12 @@ async function onLeadStatusChange(e) {
 
     ui.showToast(`Status → ${newStatus}`, 'success');
 
-    /* Keep in-memory cache in sync and refresh overview charts */
+    /* Keep in-memory cache in sync and refresh all affected surfaces */
     const cached = _allLeads.find((l) => l.id === id);
     if (cached) cached.status = newStatus;
-    if (activeTab === 'overview') {
-      ui.renderDonutChart(_allLeads);
-      renderOverviewActivity(_allLeads);
-    }
+    ui.renderDonutChart(_allLeads);
+    renderActionCenter();
+    if (activeTab === 'overview') renderOverviewActivity(_allLeads);
   } catch (err) {
     console.error('[Dashboard] updateLeadStatus failed:', err);
     select.value = oldStatus || config.leadStatuses[0];
@@ -1082,24 +1246,39 @@ function onNewLead(lead) {
       : (config.notifText?.newLead ?? `New lead${name}`);
 
   ui.showToast(toastMsg, lead.priority === 'HIGH' ? 'success' : 'info');
+
+  /* Refresh charts — new lead affects distribution and action center buckets */
+  ui.renderDonutChart(_allLeads);
+  if (activeTab === 'overview') {
+    renderOverviewActivity(_allLeads);
+    renderActionCenter();
+  }
 }
 
 function onRemoteLeadStatusChange({ id, status }) {
   const select = document.querySelector(`.status-select[data-id="${id}"]`);
-  if (!select) return;
 
-  const oldClass  = [...select.classList].find((c) => c.startsWith('status--'));
-  const oldStatus = oldClass?.replace('status--', '').toUpperCase() ?? null;
+  if (select) {
+    const oldClass  = [...select.classList].find((c) => c.startsWith('status--'));
+    const oldStatus = oldClass?.replace('status--', '').toUpperCase() ?? null;
 
-  if (oldClass) select.classList.remove(oldClass);
-  select.classList.add(`status--${status.toLowerCase()}`);
-  select.value = status;
-  ui.applyStatusPulse(select);
+    if (oldClass) select.classList.remove(oldClass);
+    select.classList.add(`status--${status.toLowerCase()}`);
+    select.value = status;
+    ui.applyStatusPulse(select);
 
-  if (oldStatus === 'NEW' && status !== 'NEW')
-    ui.updateStat('newLeads', Math.max(0, ui.getStat('newLeads') - 1));
-  if (oldStatus !== 'NEW' && status === 'NEW')
-    ui.updateStat('newLeads', ui.getStat('newLeads') + 1);
+    if (oldStatus === 'NEW' && status !== 'NEW')
+      ui.updateStat('newLeads', Math.max(0, ui.getStat('newLeads') - 1));
+    if (oldStatus !== 'NEW' && status === 'NEW')
+      ui.updateStat('newLeads', ui.getStat('newLeads') + 1);
+  }
+
+  /* Keep cache in sync and refresh all affected surfaces */
+  const cached = _allLeads.find((l) => l.id === id);
+  if (cached) cached.status = status;
+  ui?.renderDonutChart(_allLeads);
+  renderActionCenter();
+  if (activeTab === 'overview') renderOverviewActivity(_allLeads);
 }
 
 /* ─────────────────────────────────────────────────

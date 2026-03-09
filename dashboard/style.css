@@ -2043,3 +2043,153 @@ tbody tr:hover td:first-child {
   border: 1px solid rgba(245, 179, 1, 0.30);
   box-shadow: 0 0 12px rgba(245, 179, 1, 0.10);
 }
+
+/* ══════════════════════════════════════════════
+   ACTIVATION OVERLAY — first-run setup
+══════════════════════════════════════════════ */
+.activation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.activation-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 2.5rem 2rem;
+  background: var(--panel);
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+
+.activation-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.activation-brand__mark {
+  font-size: 1.25rem;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-10);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius-sm);
+}
+
+.activation-brand__name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.activation-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+.activation-sub {
+  font-size: 0.875rem;
+  color: var(--text-2);
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.act-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 4rem;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.act-error {
+  font-size: 0.8rem;
+  color: var(--error, #F87171);
+  min-height: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.act-skip-link {
+  display: block;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  text-align: center;
+  transition: color 0.15s;
+}
+
+.act-skip-link:hover { color: var(--text); }
+
+/* Result panel */
+.act-result-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  background: rgba(52, 211, 153, 0.10);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: 2rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-green);
+  margin-bottom: 1.25rem;
+}
+
+.act-result-body {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.act-result-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.act-result-label {
+  color: var(--text-2);
+  min-width: 6rem;
+  flex-shrink: 0;
+}
+
+.act-result-value {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.act-tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  background: var(--accent-10);
+  border: 1px solid var(--accent-20);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+

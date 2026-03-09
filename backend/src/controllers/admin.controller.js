@@ -45,6 +45,7 @@ const getConfig = async (req, res) => {
       statCards:           industryConf.statCards,
       tableColumns:        industryConf.tableColumns,
       notifText:           industryConf.notifText,
+      needsActivation:     business?.stage === 'STARTING',
     });
   } catch (err) {
     console.error(err);

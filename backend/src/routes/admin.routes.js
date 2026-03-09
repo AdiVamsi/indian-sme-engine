@@ -18,6 +18,7 @@ const {
   leadSuggestions,
   leadOutreachDraft,
 } = require('../controllers/admin.controller');
+const { activate, skip } = require('../controllers/activation.controller');
 
 const router = Router();
 
@@ -37,5 +38,9 @@ router.patch('/leads/:id/status',    authenticate, updateStatus);
 router.get('/appointments',  authenticate, appointments);
 router.get('/services',      authenticate, services);
 router.get('/testimonials',  authenticate, testimonials);
+
+/* ── Activation (first-run setup) ── */
+router.post('/activate',      authenticate, activate);
+router.post('/activate/skip', authenticate, skip);
 
 module.exports = router;

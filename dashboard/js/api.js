@@ -100,7 +100,12 @@ export function DashAPI(token, { onUnauthorized } = {}) {
     getServices:     ()         => req('GET', '/api/admin/services'),
     getTestimonials: ()         => req('GET', '/api/admin/testimonials'),
 
+    /* ── Activation (first-run setup) ── */
+    activate:     ()     => req('POST', '/api/admin/activate'),
+    activateSkip: ()     => req('POST', '/api/admin/activate/skip'),
+
     /* ── Lead mutations ── */
+    createLead:       (data)       => req('POST',   '/api/leads', data),
     updateLeadStatus: (id, status) => req('PATCH',  `/api/leads/${id}/status`, { status }),
     deleteLead:       (id)         => req('DELETE', `/api/leads/${id}`),
 

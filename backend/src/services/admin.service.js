@@ -96,6 +96,7 @@ const getBusinessProfile = (businessId) =>
       timezone: true,
       currency: true,
       logoUrl:  true,
+      stage:    true,
     },
   });
 

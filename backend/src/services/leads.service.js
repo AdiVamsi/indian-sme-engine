@@ -16,8 +16,15 @@ const createLead = async (businessId, data) => {
     const result = await AgentEngine.run({ type: 'LEAD_CREATED', leadId: lead.id, businessId: lead.businessId });
     priorityScore = result.priorityScore ?? 0;
     tags          = result.tags          ?? [];
+
+    /* Advance lifecycle stage on the first successful lead — "lead workflow is now active".
+     * updateMany with stage: 'STARTING' in the where clause is a no-op for all other stages. */
+    await prisma.business.updateMany({
+      where: { id: businessId, stage: 'STARTING' },
+      data:  { stage: 'LEADS_ACTIVE' },
+    });
   } catch (err) {
-    console.error('[LeadsService] AgentEngine failed for lead', lead.id, '—', err.stack || err.message);
+    console.error('[LeadsService] AgentEngine failed for lead', lead.id, '—', err.message);
   }
 
   const priority = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';

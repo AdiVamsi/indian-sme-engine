@@ -258,6 +258,119 @@ async function safeFetch(fn, label) {
    BOOT — loads each widget independently so one
    failing endpoint never freezes the whole UI.
 ───────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────
+   ACTIVATION FLOW — first-run overlay for STARTING
+   businesses. Resolves when the user completes the
+   test lead or clicks "Skip for now".
+───────────────────────────────────────────────── */
+function renderActivationResult(metadata) {
+  const body  = $('act-result-body');
+  const tags  = metadata?.tags ?? [];
+  const score = metadata?.priorityScore ?? 0;
+  const label = score >= 30 ? 'HIGH' : score >= 10 ? 'NORMAL' : 'LOW';
+  const best  = metadata?.bestCategory  ?? '—';
+  const via   = metadata?.via           ?? '—';
+
+  const tagsHtml = tags.length
+    ? tags.map((t) => `<span class="act-tag">${t}</span>`).join('')
+    : '<span style="color:var(--text-2)">none</span>';
+
+  body.innerHTML = `
+    <div class="act-result-row">
+      <span class="act-result-label">Tags detected</span>
+      <span class="act-result-value">${tagsHtml}</span>
+    </div>
+    <div class="act-result-row">
+      <span class="act-result-label">Best intent</span>
+      <span class="act-result-value">${best}</span>
+    </div>
+    <div class="act-result-row">
+      <span class="act-result-label">Priority</span>
+      <span class="act-result-value">${label} (score ${score})</span>
+    </div>
+    <div class="act-result-row">
+      <span class="act-result-label">Classified via</span>
+      <span class="act-result-value">${via}</span>
+    </div>`;
+}
+
+async function runActivationFlow() {
+  return new Promise((resolve) => {
+    const overlay      = $('activation-overlay');
+    const formPanel    = $('act-form-panel');
+    const resultPanel  = $('act-result-panel');
+    const msgArea      = $('act-message');
+    const submitBtn    = $('act-submit');
+    const submitLabel  = $('act-submit-label');
+    const errorEl      = $('act-error');
+    const skipBtn      = $('act-skip');
+    const continueBtn  = $('act-continue');
+
+    overlay.classList.remove('hidden');
+
+    /* Initialise AgentConfig and retrieve test message */
+    api.activate()
+      .then((result) => {
+        if (result.alreadyActivated) {
+          overlay.classList.add('hidden');
+          return resolve();
+        }
+        msgArea.value = result.testMessage ?? '';
+      })
+      .catch(() => {
+        /* If activate() fails, dismiss silently — don't block dashboard boot */
+        overlay.classList.add('hidden');
+        resolve();
+      });
+
+    /* Submit handler */
+    $('act-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const message = msgArea.value.trim();
+      if (!message) return;
+
+      submitBtn.disabled    = true;
+      submitLabel.textContent = 'Processing…';
+      errorEl.textContent   = '';
+
+      try {
+        const lead     = await api.createLead({ name: '[Test] Lead', phone: '+91 00000 00000', message });
+        const activity = await api.getLeadActivity(lead.id);
+
+        const classified = activity?.activities?.find((a) => a.type === 'AGENT_CLASSIFIED');
+        const prioritized = activity?.activities?.find((a) => a.type === 'AGENT_PRIORITIZED');
+
+        renderActivationResult({
+          ...(classified?.metadata  ?? {}),
+          priorityScore: prioritized?.metadata?.priorityScore ?? 0,
+        });
+
+        formPanel.classList.add('hidden');
+        resultPanel.classList.remove('hidden');
+      } catch {
+        submitBtn.disabled    = false;
+        submitLabel.textContent = 'Submit';
+        errorEl.textContent   = 'Something went wrong. Please try again.';
+      }
+    });
+
+    /* Continue after seeing result */
+    continueBtn.addEventListener('click', () => {
+      overlay.classList.add('hidden');
+      resolve();
+    });
+
+    /* Skip — upserts config server-side, stage stays STARTING */
+    skipBtn.addEventListener('click', async () => {
+      skipBtn.disabled    = true;
+      skipBtn.textContent = 'Skipping…';
+      try { await api.activateSkip(); } catch { /* ignore */ }
+      overlay.classList.add('hidden');
+      resolve();
+    });
+  });
+}
+
 async function bootDashboard() {
   console.log('[Dashboard] Boot starting');
 
@@ -265,7 +378,13 @@ async function bootDashboard() {
      If this fails the caller's try-catch handles it. */
   const cfg = await api.getConfig();
   config = cfg;
-  ui     = DashUI(cfg);
+
+  /* Show activation overlay for STARTING businesses before rendering dashboard */
+  if (cfg.needsActivation) {
+    await runActivationFlow();
+  }
+
+  ui = DashUI(cfg);
   loadedSections.add('overview');
   loadedSections.add('leads');
 

@@ -52,6 +52,48 @@
   </div>
 </div>
 
+<!-- ─────────────────── ACTIVATION OVERLAY ─────────────────────────── -->
+<div id="activation-overlay" class="activation-overlay hidden">
+  <div class="activation-card">
+
+    <div class="activation-brand">
+      <span class="activation-brand__mark">⚡</span>
+      <span class="activation-brand__name">SME Engine</span>
+    </div>
+
+    <!-- ── Form panel ── -->
+    <div id="act-form-panel">
+      <h2 class="activation-title">Send your first lead</h2>
+      <p class="activation-sub">See how your system scores and classifies a real enquiry.</p>
+
+      <form id="act-form" novalidate>
+        <div class="form-group">
+          <label for="act-message">Test message</label>
+          <textarea id="act-message" class="field__input act-textarea" rows="3" placeholder="Loading…"></textarea>
+        </div>
+        <p id="act-error" class="act-error"></p>
+        <button type="submit" id="act-submit" class="btn-login">
+          <span id="act-submit-label" class="btn-login__label">Submit</span>
+          <span class="btn-login__icon">→</span>
+        </button>
+      </form>
+
+      <button id="act-skip" class="act-skip-link" type="button">Skip for now</button>
+    </div>
+
+    <!-- ── Result panel (shown after test lead processes) ── -->
+    <div id="act-result-panel" class="hidden">
+      <div class="act-result-badge">✓ Lead processed</div>
+      <div id="act-result-body" class="act-result-body"></div>
+      <button id="act-continue" class="btn-login" type="button">
+        <span class="btn-login__label">Open my dashboard</span>
+        <span class="btn-login__icon">→</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
 <!-- ─────────────────────────── DASHBOARD ─────────────────────────── -->
 <div id="dashboard-screen" class="hidden">
 

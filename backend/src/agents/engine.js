@@ -36,7 +36,6 @@ const DEFAULT_CONFIG = {
  * @returns {Promise<object>} structured result
  */
 async function run({ type, leadId, businessId }) {
-  console.log('[AgentEngine] run() entered — type:', type, 'leadId:', leadId); /* DEBUG */
   if (type !== 'LEAD_CREATED') {
     return { skipped: true, reason: `Unhandled event type: ${type}` };
   }
@@ -75,7 +74,6 @@ async function run({ type, leadId, businessId }) {
   const followUpAt = new Date(Date.now() + config.followUpMinutes * 60 * 1000);
 
   /* 5. Write LeadActivity rows atomically — all scoped to this leadId. */
-  console.log('[AgentEngine] reaching $transaction — tags:', tags, 'score:', priorityScore, 'via:', via); /* DEBUG */
   await prisma.$transaction([
     prisma.leadActivity.create({
       data: {

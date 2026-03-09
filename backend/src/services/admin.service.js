@@ -97,6 +97,7 @@ const getBusinessProfile = (businessId) =>
       currency: true,
       logoUrl:  true,
       stage:    true,
+      slug:     true,
     },
   });
 

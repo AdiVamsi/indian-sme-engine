@@ -259,6 +259,38 @@ async function safeFetch(fn, label) {
    failing endpoint never freezes the whole UI.
 ───────────────────────────────────────────────── */
 /* ─────────────────────────────────────────────────
+   GO LIVE CARD — persistent utility in the Overview
+   tab. Shows the business's public form URL with
+   copy and open actions.
+───────────────────────────────────────────────── */
+function wireGoLiveCard(cfg) {
+  const slug = cfg?.business?.slug;
+  if (!slug) return;
+
+  const formUrl  = `${window.location.origin}/form/${slug}`;
+  const urlEl    = $('golive-url');
+  const copyBtn  = $('golive-copy');
+  const openLink = $('golive-open');
+
+  if (urlEl)    urlEl.textContent = formUrl;
+  if (openLink) openLink.href     = formUrl;
+
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(formUrl);
+        copyBtn.textContent = 'Copied ✓';
+        setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 1500);
+      } catch {
+        /* Clipboard API unavailable — prompt user to copy manually */
+        copyBtn.textContent = 'Copy failed';
+        setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 1500);
+      }
+    });
+  }
+}
+
+/* ─────────────────────────────────────────────────
    ACTIVATION FLOW — first-run overlay for STARTING
    businesses. Resolves when the user completes the
    test lead or clicks "Skip for now".
@@ -418,6 +450,9 @@ async function bootDashboard() {
   /* Donut chart — computed from already-loaded leads */
   ui.renderDonutChart(_allLeads);
   renderOverviewActivity(_allLeads);
+
+  /* Go Live card — fills URL and wires copy button */
+  wireGoLiveCard(cfg);
 
   console.log('[Dashboard] Boot completed');
 }

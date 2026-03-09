@@ -16,6 +16,7 @@ const publicRoutes = require('./routes/public.routes');
 const adminRoutes = require('./routes/admin.routes');
 const agentRoutes = require('./routes/agentConfig.routes');
 const superadminRoutes = require('./routes/superadmin.routes');
+const formRoutes       = require('./routes/form.routes');
 const { authenticate } = require('./middleware/auth.middleware');
 const { errorHandler } = require('./middleware/error.middleware');
 
@@ -61,7 +62,12 @@ app.use('/api/superadmin', superadminRoutes);
 /* ── Static sites (mounted after /api so routes are never shadowed) ── */
 app.use('/admin',     express.static(path.join(__dirname, '../../admin')));
 app.use('/dashboard', express.static(path.join(__dirname, '../../dashboard')));
-app.use('/form',      express.static(path.join(__dirname, '../../frontend')));
+
+/* ── Public lead form (slug-aware, server-side rendered) ── */
+/* Order matters: route handler first, then static assets, then existing frontend fallback. */
+app.use('/form', formRoutes);                                                      /* GET /form/:slug → server-rendered page */
+app.use('/form', express.static(path.join(__dirname, '../../form')));              /* form.js, form.css */
+app.use('/form', express.static(path.join(__dirname, '../../frontend')));          /* existing frontend assets (unchanged) */
 app.use('/',          express.static(path.join(__dirname, '../../landing')));
 
 /* ── Global error handler (must be last) ── */

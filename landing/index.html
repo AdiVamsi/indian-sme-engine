@@ -6,95 +6,313 @@
   <title>SME Engine — CRM for Indian Small Businesses</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Ambient background orbs -->
+
+  <!-- ── Background system (z-index: 0, aria-hidden) ── -->
+  <div class="bg-spotlight" id="js-spotlight" aria-hidden="true"></div>
   <div class="orb orb--a" aria-hidden="true"></div>
   <div class="orb orb--b" aria-hidden="true"></div>
+  <div class="orb orb--c" aria-hidden="true"></div>
+  <div class="hero-grid" aria-hidden="true"></div>
 
+  <!-- ── Main: asymmetric two-column hero ── -->
   <main class="hero">
-    <div class="hero__inner">
 
-      <!-- Logo mark -->
-      <div class="logo" aria-label="SME Engine">
-        <svg class="logo__mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-          <rect width="40" height="40" rx="10" fill="url(#logoGrad)"/>
-          <path d="M12 20h16M20 12v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
-          <circle cx="20" cy="20" r="4" fill="#fff" fill-opacity="0.25"/>
+    <!-- LEFT column: brand + all copy + CTAs -->
+    <div class="hero__left">
+
+      <!-- Brand mark + wordmark -->
+      <div class="logo">
+        <svg class="logo__mark" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+          <rect width="36" height="36" rx="9" fill="url(#lg)"/>
+          <path d="M11 18h14M18 11v14" stroke="#0B0D10" stroke-width="2.5" stroke-linecap="round"/>
           <defs>
-            <linearGradient id="logoGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#818cf8"/>
-              <stop offset="1" stop-color="#34d399"/>
+            <linearGradient id="lg" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#F5B301"/>
+              <stop offset="1" stop-color="#FBBF24"/>
             </linearGradient>
           </defs>
         </svg>
         <span class="logo__name">SME Engine</span>
       </div>
 
-      <!-- Headline -->
+      <!-- System status pill -->
+      <div class="status-badge" aria-label="System status">
+        <span class="status-badge__dot"></span>
+        Running &middot; Open Source &middot; Multi-tenant
+      </div>
+
+      <!-- Main headline -->
       <h1 class="headline">
-        CRM built for<br/>
-        <span class="headline__gradient">Indian small businesses</span>
+        Leads captured.<br/>
+        Classified. Scored.<br/>
+        <span class="headline__gradient">Automated.</span>
       </h1>
 
       <p class="subline">
-        Capture enquiries, manage leads, schedule appointments, and track your services — all from a beautiful real-time dashboard.
+        Real-time lead capture, deterministic AI classification,
+        priority scoring and automation triggers — running on
+        your own infrastructure.
       </p>
 
-      <!-- CTA buttons -->
+      <!-- Primary CTAs -->
       <div class="cta-group">
-        <a class="btn btn--primary" href="https://sme-engine-dashboard.netlify.app" target="_blank" rel="noopener">
+        <a class="btn btn--primary" href="/dashboard">
           Open Dashboard
+          <svg class="btn__icon" viewBox="0 0 14 14" fill="none" width="13" height="13" aria-hidden="true">
+            <path d="M2.5 7h9M7.5 3.5L11 7l-3.5 3.5"
+              stroke="currentColor" stroke-width="1.75"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </a>
-        <a class="btn btn--secondary" href="https://indian-sme-engine.onrender.com/api/public/demo-academy/leads" target="_blank" rel="noopener">
-          Try Lead Form (API)
-        </a>
-        <a class="btn btn--ghost" href="https://github.com/AdiVamsi/indian-sme-engine" target="_blank" rel="noopener">
-          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16" aria-hidden="true">
+        <a class="btn btn--secondary" href="/form">See it live</a>
+        <a class="btn btn--ghost" href="https://github.com/AdiVamsi/indian-sme-engine"
+           target="_blank" rel="noopener">
+          <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14" aria-hidden="true">
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
           </svg>
           GitHub
         </a>
       </div>
 
-      <!-- Demo credentials card -->
-      <div class="demo-card">
-        <p class="demo-card__label">Demo credentials</p>
-        <div class="demo-card__grid">
-          <div class="demo-card__item">
-            <span class="demo-card__key">Business slug</span>
-            <code class="demo-card__val">demo-academy</code>
+      <!-- Quick demo access — compact utility bar, not a heavy card -->
+      <div class="access-bar" role="region" aria-label="Demo credentials">
+        <span class="access-bar__label">Demo</span>
+        <div class="access-bar__creds">
+          <code class="access-chip">demo-academy</code>
+          <span class="access-sep" aria-hidden="true">·</span>
+          <code class="access-chip">demo@smeengine.com</code>
+          <span class="access-sep" aria-hidden="true">·</span>
+          <code class="access-chip">Demo@123</code>
+        </div>
+        <a class="access-bar__open" href="/dashboard" aria-label="Open demo dashboard">Open →</a>
+      </div>
+
+      <!-- Tech capability pills — decorative, non-interactive -->
+      <div class="features">
+        <span class="pill">Real-time WebSockets</span>
+        <span class="pill">Rule-based classifier</span>
+        <span class="pill">Priority scoring</span>
+        <span class="pill">Automation engine</span>
+        <span class="pill">JWT auth</span>
+        <span class="pill">Multi-tenant</span>
+      </div>
+
+    </div><!-- /hero__left -->
+
+    <!-- RIGHT column: product proof composition.
+         Decorative — aria-hidden, screen readers skip this entirely.
+         Layout: prod-frame (main CRM surface) anchors the scene;
+         three floating notification cards overlay and surround it;
+         SVG connector paths trace the lead → classify → automate flow. -->
+    <div class="hero__right" id="js-hero-right" aria-hidden="true">
+
+      <!-- ── SVG flow connector paths ──
+           Dashed lines + animated dots trace the data pipeline:
+           new lead → AI classification → automation trigger.
+           pointer-events: none; z-index sits between frame and cards. -->
+      <svg class="flow-svg" viewBox="0 0 460 560"
+           preserveAspectRatio="none" aria-hidden="true">
+
+        <!-- Path 1: lead card → AI card (amber dashed) -->
+        <path id="fp-amber" class="flow-path flow-path--amber"
+          d="M 265 278 C 350 278, 315 88, 242 88" />
+
+        <!-- Path 2: AI card → automation card (green dashed) -->
+        <path id="fp-green" class="flow-path flow-path--green"
+          d="M 418 148 C 448 250, 432 358, 392 378" />
+
+        <!-- Animated dot: travels lead → AI -->
+        <circle class="flow-dot flow-dot--amber" r="3.5">
+          <animateMotion dur="2.4s" repeatCount="indefinite" calcMode="paced">
+            <mpath href="#fp-amber" />
+          </animateMotion>
+        </circle>
+
+        <!-- Animated dot: travels AI → automation (offset start) -->
+        <circle class="flow-dot flow-dot--green" r="3.5">
+          <animateMotion dur="3s" repeatCount="indefinite" calcMode="paced" begin="0.9s">
+            <mpath href="#fp-green" />
+          </animateMotion>
+        </circle>
+
+      </svg>
+
+      <!-- ── Central product frame — compositional anchor ──
+           Full-width dashboard mockup: titlebar, live stat strip,
+           three lead rows. This fills the dead space and gives
+           the floating cards a surface to emerge from. -->
+      <div class="prod-frame">
+        <div class="prod-frame__bar">
+          <span class="fcard__dot fcard__dot--r"></span>
+          <span class="fcard__dot fcard__dot--y"></span>
+          <span class="fcard__dot fcard__dot--g"></span>
+          <span class="prod-frame__title">SME Engine — Leads</span>
+          <span class="prod-frame__live">● LIVE</span>
+        </div>
+
+        <!-- Stat strip: today count | high priority | auto events -->
+        <div class="prod-frame__stats">
+          <div class="prod-frame__stat">
+            <span class="prod-frame__stat-num" id="js-lead-count">14</span>
+            <span class="prod-frame__stat-label">Today</span>
           </div>
-          <div class="demo-card__item">
-            <span class="demo-card__key">Email</span>
-            <code class="demo-card__val">demo@smeengine.com</code>
+          <div class="prod-frame__stat">
+            <span class="prod-frame__stat-num prod-frame__stat-num--hot">3</span>
+            <span class="prod-frame__stat-label">High priority</span>
           </div>
-          <div class="demo-card__item">
-            <span class="demo-card__key">Password</span>
-            <code class="demo-card__val">Demo@123</code>
+          <div class="prod-frame__stat">
+            <span class="prod-frame__stat-num prod-frame__stat-num--green">12</span>
+            <span class="prod-frame__stat-label">Auto events</span>
+          </div>
+        </div>
+
+        <!-- Lead rows: simplified CRM table -->
+        <div class="prod-frame__rows">
+          <div class="prod-frame__row">
+            <div class="prod-frame__avatar">P</div>
+            <div class="prod-frame__row-info">
+              <span class="prod-frame__row-name">Priya Sharma</span>
+              <span class="fchip fchip--fee">FEE_ENQUIRY</span>
+            </div>
+            <span class="prod-frame__score prod-frame__score--hot">47</span>
+            <span class="fbadge fbadge--hot">HIGH</span>
+          </div>
+          <div class="prod-frame__row">
+            <div class="prod-frame__avatar prod-frame__avatar--b">A</div>
+            <div class="prod-frame__row-info">
+              <span class="prod-frame__row-name">Arjun Mehta</span>
+              <span class="fchip fchip--demo">DEMO_REQUEST</span>
+            </div>
+            <span class="prod-frame__score prod-frame__score--mid">31</span>
+            <span class="fbadge fbadge--mid">NORM</span>
+          </div>
+          <div class="prod-frame__row">
+            <div class="prod-frame__avatar prod-frame__avatar--c">R</div>
+            <div class="prod-frame__row-info">
+              <span class="prod-frame__row-name">Rahul Gupta</span>
+              <span class="fchip fchip--call">CALL_REQUEST</span>
+            </div>
+            <span class="prod-frame__score prod-frame__score--mid">25</span>
+            <span class="fbadge fbadge--mid">NORM</span>
+          </div>
+        </div>
+
+        <!-- Animated scan line: simulates a live updating screen -->
+        <div class="prod-frame__scan"></div>
+      </div>
+
+      <!-- ── Floating event notification cards ──
+           Overlapping the prod-frame edges; represent live events
+           that arrive on top of the main CRM view. -->
+
+      <!-- CARD 1: New lead captured — overlaps frame bottom-left, foreground -->
+      <div class="fcard fcard--lead">
+        <div class="fcard__bar">
+          <span class="fcard__dot fcard__dot--r"></span>
+          <span class="fcard__dot fcard__dot--y"></span>
+          <span class="fcard__dot fcard__dot--g"></span>
+          <span class="fcard__bar-label">new lead captured</span>
+        </div>
+        <div class="fcard__body">
+          <div class="fcard__person">
+            <div class="fcard__avatar">P</div>
+            <div>
+              <div class="fcard__name">Priya Sharma</div>
+              <div class="fcard__meta">+91 98765 43210</div>
+            </div>
+          </div>
+          <div class="fcard__chips">
+            <span class="fchip fchip--fee">FEE_ENQUIRY</span>
+            <span class="fchip fchip--call">CALL_REQUEST</span>
+          </div>
+          <div class="fcard__score-row">
+            <span class="fcard__score-label">Priority score</span>
+            <span class="fcard__score-num">47</span>
+            <span class="fbadge fbadge--hot">HIGH</span>
           </div>
         </div>
       </div>
 
-      <!-- Feature pills -->
-      <div class="features">
-        <span class="pill">Real-time lead notifications</span>
-        <span class="pill">Industry-aware themes</span>
-        <span class="pill">Appointment management</span>
-        <span class="pill">Multi-tenant SaaS</span>
-        <span class="pill">SVG analytics charts</span>
-        <span class="pill">JWT auth + auto-logout</span>
+      <!-- CARD 2: AI classification — overlaps frame top-right -->
+      <div class="fcard fcard--ai">
+        <div class="fcard__bar">
+          <span class="fcard__bar-label">⚡ ai engine classified</span>
+        </div>
+        <div class="fcard__body">
+          <div class="fcard__ai-row">
+            <span class="fchip fchip--demo">DEMO_REQUEST</span>
+            <span class="fcard__name">Arjun Mehta</span>
+          </div>
+          <div class="fcard__quote">"interested in demo class for my son"</div>
+        </div>
       </div>
 
-    </div>
+      <!-- CARD 3: Automation triggered — below the frame -->
+      <div class="fcard fcard--auto">
+        <div class="fcard__bar">
+          <span class="fcard__bar-label">🤖 automation triggered</span>
+        </div>
+        <div class="fcard__body">
+          <div class="fcard__event-row">
+            <div class="fcard__event-icon">✉</div>
+            <div class="fcard__event-info">
+              <div class="fcard__name">WhatsApp follow-up</div>
+              <div class="fcard__meta">sent to Priya Sharma · 2s ago</div>
+            </div>
+            <span class="fbadge fbadge--ok">sent</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /hero__right -->
+
   </main>
 
   <footer class="footer">
     Built with Node.js · Express · Prisma · PostgreSQL · Vanilla JS
     &nbsp;·&nbsp;
-    <a class="footer__health" href="https://indian-sme-engine.onrender.com/api/health" target="_blank" rel="noopener">API health</a>
+    <a class="footer__health" href="/api/health" target="_blank" rel="noopener">API health</a>
   </footer>
+
+  <!--
+  ══════════════════════════════════════════════════════════
+  SPLINE 3D INTEGRATION (optional — vanilla-compatible)
+
+  Replace the floating card panel above with a Spline 3D
+  scene by doing the following:
+
+  1. Create/export your scene at spline.design
+  2. Click Share → Public URL → copy the scene URL
+  3. Uncomment the <script> and <spline-viewer> tags below
+  4. Replace YOUR_SPLINE_SCENE_URL with the copied URL
+  5. Remove or comment-out the hero__right div above
+
+  The <spline-viewer> is a standard web component (no React
+  needed). The CDN script registers it as a custom element.
+  It works in all modern browsers via WebGL.
+
+  Note: Spline scenes are typically 5–20 MB. Acceptable for
+  local dev; add a loading skeleton for production.
+
+  <script type="module"
+    src="https://unpkg.com/@splinetool/viewer@latest/build/spline-viewer.js">
+  </script>
+
+  <div class="hero__right hero__right--spline" aria-hidden="true">
+    <spline-viewer
+      url="YOUR_SPLINE_SCENE_URL"
+      class="spline-scene"
+      loading-anim="true">
+    </spline-viewer>
+  </div>
+  ══════════════════════════════════════════════════════════
+  -->
+
+  <script src="js/hero.js"></script>
+
 </body>
 </html>

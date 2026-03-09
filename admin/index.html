@@ -143,9 +143,12 @@
 
     <!-- ── BUSINESSES ───────────────────────────────────────────────────── -->
     <section id="section-businesses" class="admin-section" hidden>
-      <header class="section-header">
-        <h1 class="section-header__title">Businesses</h1>
-        <p class="section-header__sub">All registered tenants</p>
+      <header class="section-header section-header--actions">
+        <div>
+          <h1 class="section-header__title">Businesses</h1>
+          <p class="section-header__sub">All registered tenants</p>
+        </div>
+        <button id="open-create-biz" class="btn-primary btn-sm">+ Add Business</button>
       </header>
       <div class="table-wrap">
         <table class="data-table">
@@ -206,6 +209,201 @@
     </section>
 
   </main>
+</div>
+
+<!-- ── ONBOARDING WIZARD ───────────────────────────────────────────────────── -->
+<div id="create-biz-modal" class="modal-overlay" hidden>
+  <div class="modal wizard" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+
+    <!-- Wizard header -->
+    <div class="modal__header wizard__header">
+      <div class="wizard__header-text">
+        <h2 class="modal__title" id="wizard-title">Onboard a New Business</h2>
+        <p class="wizard__subtitle">Set up a tenant, owner account, and automation in 2 steps.</p>
+      </div>
+      <button id="close-create-biz" class="modal__close" aria-label="Close">✕</button>
+    </div>
+
+    <!-- Step indicator -->
+    <div class="wizard__steps" aria-hidden="true">
+      <div class="wizard__step wizard__step--active" data-step="1">
+        <span class="wizard__step-num">1</span>
+        <span class="wizard__step-label">Business</span>
+      </div>
+      <div class="wizard__connector"></div>
+      <div class="wizard__step" data-step="2">
+        <span class="wizard__step-num">2</span>
+        <span class="wizard__step-label">Owner</span>
+      </div>
+      <div class="wizard__connector"></div>
+      <div class="wizard__step" data-step="3">
+        <span class="wizard__step-num">3</span>
+        <span class="wizard__step-label">Done</span>
+      </div>
+    </div>
+
+    <!-- ── STEP 1: Business identity ─────────────────────────────────── -->
+    <div id="wizard-step-1" class="wizard__panel modal__body">
+
+      <div class="field">
+        <label class="field__label" for="biz-name">Business Name *</label>
+        <input type="text" id="biz-name" class="field__input"
+          placeholder="Sunrise Coaching Center" autocomplete="off" required />
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="biz-slug">
+          Slug
+          <span class="field__hint">(auto-generated if blank)</span>
+        </label>
+        <div class="field__slug-row">
+          <input type="text" id="biz-slug" class="field__input"
+            placeholder="sunrise-coaching-center" autocomplete="off" />
+          <span id="slug-status" class="slug-status" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="biz-industry">Industry</label>
+          <select id="biz-industry" class="field__input field__select">
+            <option value="">Select…</option>
+            <option value="academy">Academy / Coaching</option>
+            <option value="gym">Gym / Fitness</option>
+            <option value="salon">Salon / Beauty</option>
+            <option value="clinic">Clinic / Healthcare</option>
+            <option value="restaurant">Restaurant / Food</option>
+            <option value="retail">Retail</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="biz-city">City</label>
+          <input type="text" id="biz-city" class="field__input"
+            placeholder="Delhi" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="biz-timezone">Timezone</label>
+          <select id="biz-timezone" class="field__input field__select">
+            <option value="Asia/Kolkata">IST — Asia/Kolkata</option>
+            <option value="Asia/Dubai">GST — Asia/Dubai</option>
+            <option value="Asia/Singapore">SGT — Asia/Singapore</option>
+            <option value="UTC">UTC</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="biz-currency">Currency</label>
+          <select id="biz-currency" class="field__input field__select">
+            <option value="INR">INR — ₹</option>
+            <option value="USD">USD — $</option>
+            <option value="AED">AED — د.إ</option>
+            <option value="SGD">SGD — S$</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="modal__actions">
+        <button type="button" id="cancel-create-biz" class="btn-cancel">Cancel</button>
+        <button type="button" id="wizard-next-1" class="btn-primary">Next →</button>
+      </div>
+    </div>
+
+    <!-- ── STEP 2: Owner account ──────────────────────────────────────── -->
+    <div id="wizard-step-2" class="wizard__panel modal__body" hidden>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="biz-owner-name">Owner Name *</label>
+          <input type="text" id="biz-owner-name" class="field__input"
+            placeholder="Rahul Sharma" autocomplete="off" required />
+        </div>
+        <div class="field">
+          <label class="field__label" for="biz-owner-email">Owner Email *</label>
+          <input type="email" id="biz-owner-email" class="field__input"
+            placeholder="rahul@sunrise.in" autocomplete="off" required />
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="biz-owner-password">
+          Temporary Password *
+          <span class="field__hint">(min. 8 characters)</span>
+        </label>
+        <input type="password" id="biz-owner-password" class="field__input"
+          placeholder="••••••••" autocomplete="new-password" required minlength="8" />
+        <div class="pw-strength" id="pw-strength" aria-live="polite"></div>
+      </div>
+
+      <div class="modal__divider"></div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="biz-followup">Follow-up delay</label>
+          <select id="biz-followup" class="field__input field__select">
+            <option value="15">15 minutes</option>
+            <option value="30" selected>30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="120">2 hours</option>
+            <option value="1440">24 hours</option>
+          </select>
+        </div>
+        <div class="field field--toggle">
+          <label class="field__label" for="biz-autoreply">Auto-reply</label>
+          <label class="toggle">
+            <input type="checkbox" id="biz-autoreply" />
+            <span class="toggle__track"></span>
+            <span class="toggle__label-off">Off</span>
+            <span class="toggle__label-on">On</span>
+          </label>
+        </div>
+      </div>
+
+      <p id="create-biz-error" class="login-error" role="alert"></p>
+
+      <div class="modal__actions">
+        <button type="button" id="wizard-back-2" class="btn-cancel">← Back</button>
+        <button type="button" id="wizard-submit" class="btn-primary">Create Business</button>
+      </div>
+    </div>
+
+    <!-- ── STEP 3: Success ────────────────────────────────────────────── -->
+    <div id="wizard-step-3" class="wizard__panel modal__body" hidden>
+      <div class="success-banner">
+        <span class="success-banner__icon">✓</span>
+        <div>
+          <div class="success-banner__title" id="success-biz-name"></div>
+          <div class="success-banner__sub">Business is live and ready to receive leads</div>
+        </div>
+      </div>
+
+      <div class="creds-box">
+        <div class="creds-box__row">
+          <span class="creds-box__label">Dashboard</span>
+          <code class="creds-box__value" id="success-dashboard-url"></code>
+        </div>
+        <div class="creds-box__row">
+          <span class="creds-box__label">Email</span>
+          <code class="creds-box__value" id="success-email"></code>
+        </div>
+        <div class="creds-box__row">
+          <span class="creds-box__label">Password</span>
+          <code class="creds-box__value" id="success-password"></code>
+        </div>
+        <div class="creds-box__row">
+          <span class="creds-box__label">Slug</span>
+          <code class="creds-box__value" id="success-slug"></code>
+        </div>
+      </div>
+
+      <div class="modal__actions">
+        <button type="button" id="wizard-done" class="btn-primary btn--full">Done</button>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 <script type="module" src="/admin/js/admin.js"></script>

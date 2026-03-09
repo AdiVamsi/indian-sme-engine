@@ -12,7 +12,9 @@ router.post('/login', ctrl.login);
 /* Protected — SUPERADMIN token required */
 router.get  ('/overview',                   authenticateSuperAdmin, ctrl.overview);
 router.get  ('/businesses',                 authenticateSuperAdmin, ctrl.businesses);
+router.post ('/businesses',                 authenticateSuperAdmin, ctrl.createBusiness);
 router.patch('/businesses/:id/stage',       authenticateSuperAdmin, ctrl.updateBusinessStage);
+router.get  ('/slugs/check',                authenticateSuperAdmin, ctrl.checkSlug);
 router.get  ('/leads',                      authenticateSuperAdmin, ctrl.leads);
 router.get  ('/logs',                       authenticateSuperAdmin, ctrl.logs);
 router.get  ('/analytics',                  authenticateSuperAdmin, ctrl.analytics);

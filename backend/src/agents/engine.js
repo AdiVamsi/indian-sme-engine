@@ -2,6 +2,7 @@
 
 const { PrismaClient }        = require('@prisma/client');
 const { applyPolicy }         = require('./policies/basicPolicy');
+const { classify }            = require('./classifier');
 const { runLeadAutomations }  = require('../services/leadAutomation.service');
 
 const prisma = new PrismaClient();
@@ -35,6 +36,7 @@ const DEFAULT_CONFIG = {
  * @returns {Promise<object>} structured result
  */
 async function run({ type, leadId, businessId }) {
+  console.log('[AgentEngine] run() entered — type:', type, 'leadId:', leadId); /* DEBUG */
   if (type !== 'LEAD_CREATED') {
     return { skipped: true, reason: `Unhandled event type: ${type}` };
   }
@@ -59,22 +61,28 @@ async function run({ type, leadId, businessId }) {
     });
   }
 
-  /* 3. Config-driven classification and priority scoring.
-   *    config.classificationRules and config.priorityRules are passed in
-   *    so the policy reads from DB, not from hardcoded values. */
-  const { priorityScore, tags } = applyPolicy(lead, config);
+  /* 3a. Priority scoring — keyword-weight sum; reads config.priorityRules. */
+  const { priorityScore } = applyPolicy(lead, config);
+
+  /* 3b. Intent classification — hybrid rule-first classifier.
+   *     Produces tags[] (same set applyPolicy classification would give),
+   *     bestCategory, confidenceLabel, confidenceScore, and via.
+   *     Any failure is caught inside classify(); lead creation is never blocked. */
+  const { bestCategory, confidenceLabel, confidenceScore, tags, via } =
+    await classify({ lead, config });
 
   /* 4. Schedule follow-up using config.followUpMinutes. */
   const followUpAt = new Date(Date.now() + config.followUpMinutes * 60 * 1000);
 
   /* 5. Write LeadActivity rows atomically — all scoped to this leadId. */
+  console.log('[AgentEngine] reaching $transaction — tags:', tags, 'score:', priorityScore, 'via:', via); /* DEBUG */
   await prisma.$transaction([
     prisma.leadActivity.create({
       data: {
-        leadId:   lead.id,
-        type:     'AGENT_CLASSIFIED',
-        message:  `Lead classified with tags: ${tags.length ? tags.join(', ') : 'none'}`,
-        metadata: { tags },
+        leadId:  lead.id,
+        type:    'AGENT_CLASSIFIED',
+        message: `Lead classified with tags: ${tags.length ? tags.join(', ') : 'none'}`,
+        metadata: { tags, bestCategory, confidenceLabel, confidenceScore, via },
       },
     }),
     prisma.leadActivity.create({

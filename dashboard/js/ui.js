@@ -236,7 +236,7 @@ export function DashUI(config) {
 
     const tags    = Array.isArray(lead.tags) ? lead.tags : [];
     const tagHtml = tags.length
-      ? `<div class="tag-chips">${tags.map((t) => `<span class="tag-chip">${esc(t)}</span>`).join('')}</div>`
+      ? `<div class="tag-chips">${tags.map((t) => `<span class="tag-chip tag-chip--${esc(t.toLowerCase().replace(/_/g, '-'))}">${esc(t)}</span>`).join('')}</div>`
       : '';
 
     tr.innerHTML = `
@@ -245,7 +245,7 @@ export function DashUI(config) {
       <td>${esc(lead.email || '—')}</td>
       <td>${buildStatusSelect(lead.id, lead.status, config.leadStatuses)}</td>
       <td>${buildPriorityBadge(lead.priority)}</td>
-      <td><span class="score-val">${esc(String(lead.priorityScore ?? 0))}</span>${tagHtml}</td>
+      <td><span class="score-val score-val--${(lead.priorityScore ?? 0) >= 40 ? 'high' : (lead.priorityScore ?? 0) >= 20 ? 'mid' : 'low'}">${esc(String(lead.priorityScore ?? 0))}</span>${tagHtml}</td>
       <td class="td-reltime" title="${esc(fmtDate(lead.createdAt))}">${esc(fmtRelativeDate(lead.createdAt))}</td>
       <td style="white-space:nowrap">
         <a class="btn-timeline" href="/dashboard/lead-activity.html?leadId=${esc(lead.id)}" title="View timeline">⏱</a>

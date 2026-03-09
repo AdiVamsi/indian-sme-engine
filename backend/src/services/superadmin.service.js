@@ -1,7 +1,35 @@
 'use strict';
 
+const bcrypt = require('bcrypt');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+
+/* ── Default AgentConfig rules — mirrors basicPolicy.js fallbacks ────────── */
+const DEFAULT_CLASSIFICATION_RULES = {
+  keywords: {
+    ADMISSION:        ['admission', 'enroll', 'admission open', 'join'],
+    DEMO_REQUEST:     ['demo', 'trial', 'demo class'],
+    FEE_ENQUIRY:      ['fee', 'fees', 'price', 'cost', 'charges'],
+    COURSE_INFO:      ['course', 'syllabus', 'curriculum'],
+    CALL_REQUEST:     ['call me', 'phone call', 'talk'],
+    WHATSAPP_REQUEST: ['whatsapp', 'send details'],
+    LOCATION_QUERY:   ['location', 'address', 'where are you'],
+    GENERAL_ENQUIRY:  ['info', 'details', 'information'],
+  },
+};
+
+const DEFAULT_PRIORITY_RULES = {
+  weights: {
+    urgent:      30,
+    immediately: 25,
+    today:       20,
+    admission:   25,
+    demo:        20,
+    call:        15,
+    price:       10,
+    fees:        10,
+  },
+};
 
 /**
  * getOverview
@@ -286,4 +314,104 @@ async function getAnalytics() {
   };
 }
 
-module.exports = { getOverview, getAllBusinesses, getAllLeads, getAutomationLogs, updateBusinessStage, getAnalytics };
+/**
+ * checkSlug
+ * Returns whether a slug is available (not taken by any existing business).
+ * Sanitizes the input the same way createBusiness does.
+ */
+async function checkSlug(slug) {
+  const sanitized = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, '');
+  if (!sanitized) return { available: false, slug: sanitized };
+  const existing = await prisma.business.findUnique({ where: { slug: sanitized } });
+  return { available: !existing, slug: sanitized };
+}
+
+/**
+ * createBusiness
+ * Creates a new tenant: Business + owner User + default AgentConfig in a
+ * single transaction. Slug is auto-generated from name if not supplied.
+ *
+ * Throws with err.code:
+ *   'SLUG_TAKEN'    — slug already exists
+ *   'INVALID_SLUG'  — slug could not be derived from name
+ */
+async function createBusiness({
+  name, slug, industry, phone, city, timezone, currency,
+  ownerName, ownerEmail, ownerPassword,
+  followUpMinutes, autoReplyEnabled,
+}) {
+  /* Derive slug ─────────────────────────────────────────────────────── */
+  const finalSlug = slug
+    ? slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, '')
+    : name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  if (!finalSlug) {
+    const err = new Error('Could not generate a valid slug from the business name');
+    err.code = 'INVALID_SLUG';
+    throw err;
+  }
+
+  /* Slug uniqueness check ────────────────────────────────────────────── */
+  const existing = await prisma.business.findUnique({ where: { slug: finalSlug } });
+  if (existing) {
+    const err = new Error(`Slug "${finalSlug}" is already taken`);
+    err.code = 'SLUG_TAKEN';
+    throw err;
+  }
+
+  /* Hash password before entering transaction ─────────────────────── */
+  const passwordHash = await bcrypt.hash(ownerPassword, 12);
+
+  /* Atomic create ─────────────────────────────────────────────────── */
+  const business = await prisma.$transaction(async (tx) => {
+    const biz = await tx.business.create({
+      data: {
+        name,
+        slug:     finalSlug,
+        industry: industry || null,
+        phone:    phone    || null,
+        city:     city     || null,
+        timezone: timezone || 'Asia/Kolkata',
+        currency: currency || 'INR',
+        stage:    'STARTING',
+      },
+    });
+
+    await tx.user.create({
+      data: {
+        businessId:   biz.id,
+        name:         ownerName,
+        email:        ownerEmail,
+        passwordHash,
+        role:         'OWNER',
+      },
+    });
+
+    await tx.agentConfig.create({
+      data: {
+        businessId:          biz.id,
+        toneStyle:           'professional',
+        followUpMinutes:     followUpMinutes ?? 30,
+        autoReplyEnabled:    autoReplyEnabled ?? false,
+        classificationRules: DEFAULT_CLASSIFICATION_RULES,
+        priorityRules:       DEFAULT_PRIORITY_RULES,
+      },
+    });
+
+    return biz;
+  });
+
+  return {
+    id:        business.id,
+    name:      business.name,
+    slug:      business.slug,
+    industry:  business.industry,
+    city:      business.city,
+    timezone:  business.timezone,
+    currency:  business.currency,
+    stage:     business.stage,
+    createdAt: business.createdAt,
+  };
+}
+
+module.exports = { getOverview, getAllBusinesses, getAllLeads, getAutomationLogs, updateBusinessStage, getAnalytics, checkSlug, createBusiness };

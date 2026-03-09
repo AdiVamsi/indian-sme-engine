@@ -123,4 +123,133 @@ describe('AgentEngine — Phase 1', () => {
     expect(config.toneStyle).toBe('professional');
     expect(config.autoReplyEnabled).toBe(false);
   });
+
+  /* ── Test 5: AGENT_CLASSIFIED metadata contains new classifier fields ── */
+  it('AGENT_CLASSIFIED metadata contains bestCategory, confidenceLabel, confidenceScore, via', async () => {
+    const res = await request(app)
+      .post('/api/leads')
+      .set(auth())
+      .send({ name: 'Metadata Shape Lead', phone: '+91 99999 00005', message: 'I need demo information' });
+
+    expect(res.status).toBe(201);
+
+    const classified = await prisma.leadActivity.findFirst({
+      where: { leadId: res.body.id, type: 'AGENT_CLASSIFIED' },
+    });
+
+    expect(classified).not.toBeNull();
+    const meta = classified.metadata;
+    expect(Array.isArray(meta.tags)).toBe(true);
+    expect(typeof meta.bestCategory).toBe('string');
+    expect(meta.bestCategory.length).toBeGreaterThan(0);
+    expect(['high', 'medium', 'low']).toContain(meta.confidenceLabel);
+    expect(typeof meta.confidenceScore).toBe('number');
+    expect(['rule', 'model', 'fallback']).toContain(meta.via);
+  });
+});
+
+/* ── scoreCategories parity ──────────────────────────────────────────────── */
+
+describe('scoreCategories — parity with applyPolicy', () => {
+  const {
+    applyPolicy,
+    resolveClassificationRules,
+    scoreCategories,
+  } = require('../agents/policies/basicPolicy');
+
+  /* null classificationRules → FALLBACK_CLASSIFICATION; same for priorityRules */
+  const FIXTURE_CONFIG = { classificationRules: null, priorityRules: null };
+
+  it('nonzero category keys equal applyPolicy tags[] for the same message and rules', () => {
+    const lead          = { message: 'I want a demo and fee details' };
+    const resolvedRules = resolveClassificationRules(FIXTURE_CONFIG.classificationRules);
+    const scores        = scoreCategories(lead.message, resolvedRules);
+    const scoreTags     = Object.entries(scores).filter(([, c]) => c > 0).map(([t]) => t).sort();
+    const { tags }      = applyPolicy(lead, FIXTURE_CONFIG);
+
+    expect(scoreTags).toEqual([...tags].sort());
+  });
+
+  it('returns all-zero scores for an empty message', () => {
+    const resolvedRules = resolveClassificationRules(null);
+    const scores        = scoreCategories('', resolvedRules);
+    expect(Object.values(scores).filter((c) => c > 0)).toHaveLength(0);
+  });
+
+  it('counts how many distinct keywords in a category array match', () => {
+    const resolvedRules = resolveClassificationRules({
+      keywords: { FOO: ['foo', 'bar'], BAZ: ['baz'] },
+    });
+    const scores = scoreCategories('foo bar baz', resolvedRules);
+    expect(scores.FOO).toBe(2);  /* 'foo' and 'bar' both match */
+    expect(scores.BAZ).toBe(1);  /* 'baz' matches */
+  });
+
+  it('is case-insensitive', () => {
+    const resolvedRules = resolveClassificationRules({
+      keywords: { UPPER: ['DEMO', 'TRIAL'] },
+    });
+    const scores = scoreCategories('I want a Demo Trial', resolvedRules);
+    expect(scores.UPPER).toBe(2);
+  });
+});
+
+/* ── classify unit (rule_only mode) ─────────────────────────────────────── */
+
+describe('classify — unit (rule_only mode)', () => {
+  const { classify } = require('../agents/classifier');
+
+  /* Null rules → fallback classification/priority rules from basicPolicy */
+  const MOCK_CONFIG = { classificationRules: null, priorityRules: null };
+
+  it('returns a valid result shape for a known-matching message', async () => {
+    const result = await classify({ lead: { message: 'I want a demo please' }, config: MOCK_CONFIG });
+    expect(result).toMatchObject({
+      bestCategory:    expect.any(String),
+      confidenceLabel: expect.stringMatching(/^(high|medium|low)$/),
+      confidenceScore: expect.any(Number),
+      tags:            expect.any(Array),
+      via:             expect.stringMatching(/^(rule|model|fallback)$/),
+    });
+  });
+
+  it('returns fallback shape for an empty message', async () => {
+    const result = await classify({ lead: { message: '' }, config: MOCK_CONFIG });
+    expect(result.via).toBe('fallback');
+    expect(result.confidenceScore).toBe(0.0);
+    expect(result.tags).toHaveLength(0);
+    expect(typeof result.bestCategory).toBe('string');
+    expect(result.bestCategory.length).toBeGreaterThan(0);
+  });
+
+  it('returns fallback shape for a null message', async () => {
+    const result = await classify({ lead: { message: null }, config: MOCK_CONFIG });
+    expect(result.via).toBe('fallback');
+    expect(result.tags).toHaveLength(0);
+  });
+
+  it('returns via: "rule" and correct bestCategory for a high-keyword-count match', async () => {
+    /* 'demo' and 'trial' both in DEMO_REQUEST keyword list → score 2 → medium confidence */
+    const result = await classify({
+      lead:   { message: 'need a demo and trial session' },
+      config: MOCK_CONFIG,
+    });
+    expect(result.via).toBe('rule');
+    expect(result.bestCategory).toBe('DEMO_REQUEST');
+    expect(result.tags).toContain('DEMO_REQUEST');
+    expect(result.confidenceScore).toBeGreaterThan(0);
+  });
+
+  it('tags[] matches nonzero scoreCategories keys for the same input', async () => {
+    const { resolveClassificationRules, scoreCategories } =
+      require('../agents/policies/basicPolicy');
+
+    const message       = 'I want admission info and a call me callback';
+    const resolvedRules = resolveClassificationRules(MOCK_CONFIG.classificationRules);
+    const scores        = scoreCategories(message, resolvedRules);
+    const expectedTags  = Object.entries(scores).filter(([, c]) => c > 0).map(([t]) => t).sort();
+
+    const result = await classify({ lead: { message }, config: MOCK_CONFIG });
+    expect([...result.tags].sort()).toEqual(expectedTags);
+  });
 });

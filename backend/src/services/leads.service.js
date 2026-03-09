@@ -17,7 +17,7 @@ const createLead = async (businessId, data) => {
     priorityScore = result.priorityScore ?? 0;
     tags          = result.tags          ?? [];
   } catch (err) {
-    console.error('[LeadsService] AgentEngine failed for lead', lead.id, '—', err.message);
+    console.error('[LeadsService] AgentEngine failed for lead', lead.id, '—', err.stack || err.message);
   }
 
   const priority = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';

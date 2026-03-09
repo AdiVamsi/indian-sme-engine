@@ -136,4 +136,28 @@ function applyPolicy(lead, config) {
   return { priorityScore, tags };
 }
 
-module.exports = { applyPolicy };
+/**
+ * scoreCategories
+ * Returns the keyword match count per category for a given message.
+ * Uses the same already-resolved rules and substring-match logic as applyPolicy().
+ *
+ * Parity guarantee: the set of keys with count > 0 equals the tags[] that
+ * applyPolicy() produces for the same message and rules.
+ *
+ * @param {string} message        — raw lead message (will be lowercased internally)
+ * @param {object} resolvedRules  — output of resolveClassificationRules()
+ * @returns {Record<string, number>} category → match count (0 when no keyword matched)
+ */
+function scoreCategories(message, resolvedRules) {
+  const lower = (message || '').toLowerCase();
+  const scores = {};
+  for (const [tag, keywords] of Object.entries(resolvedRules.keywords)) {
+    if (!Array.isArray(keywords)) { scores[tag] = 0; continue; }
+    scores[tag] = keywords.filter(
+      (kw) => typeof kw === 'string' && lower.includes(kw.toLowerCase())
+    ).length;
+  }
+  return scores;
+}
+
+module.exports = { applyPolicy, resolveClassificationRules, scoreCategories };

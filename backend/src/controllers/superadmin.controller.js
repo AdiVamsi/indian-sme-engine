@@ -125,4 +125,69 @@ const analytics = async (_req, res) => {
   }
 };
 
-module.exports = { login, overview, businesses, leads, logs, updateBusinessStage, analytics };
+/* ── GET /api/superadmin/slugs/check ────────────────────────────────────────
+   Checks whether a slug is available.
+   Query: ?slug=xxx
+   Returns: { available: boolean, slug: string }
+*/
+const checkSlug = async (req, res) => {
+  const { slug } = req.query;
+  if (!slug || typeof slug !== 'string') {
+    return res.status(400).json({ error: 'slug query param is required' });
+  }
+  try {
+    const result = await svc.checkSlug(slug);
+    return res.json(result);
+  } catch (err) {
+    console.error('[superadmin] checkSlug error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/* ── POST /api/superadmin/businesses ────────────────────────────────────────
+   Onboards a new tenant: creates Business + owner User + default AgentConfig.
+   Body: { name, slug?, industry?, phone?, city?, timezone?, currency?,
+           ownerName, ownerEmail, ownerPassword, followUpMinutes?, autoReplyEnabled? }
+*/
+const createBusiness = async (req, res) => {
+  const {
+    name, slug, industry, phone, city, timezone, currency,
+    ownerName, ownerEmail, ownerPassword,
+    followUpMinutes, autoReplyEnabled,
+  } = req.body ?? {};
+
+  if (!name?.trim())       return res.status(400).json({ error: 'name is required' });
+  if (!ownerName?.trim())  return res.status(400).json({ error: 'ownerName is required' });
+  if (!ownerEmail?.trim()) return res.status(400).json({ error: 'ownerEmail is required' });
+  if (!ownerPassword || ownerPassword.length < 8) {
+    return res.status(400).json({ error: 'ownerPassword must be at least 8 characters' });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
+    return res.status(400).json({ error: 'ownerEmail is not a valid email address' });
+  }
+
+  try {
+    const business = await svc.createBusiness({
+      name:             name.trim(),
+      slug:             slug?.trim()      || undefined,
+      industry:         industry?.trim()  || undefined,
+      phone:            phone?.trim()     || undefined,
+      city:             city?.trim()      || undefined,
+      timezone:         timezone?.trim()  || undefined,
+      currency:         currency?.trim()  || undefined,
+      ownerName:        ownerName.trim(),
+      ownerEmail:       ownerEmail.toLowerCase().trim(),
+      ownerPassword,
+      followUpMinutes:  followUpMinutes != null ? parseInt(followUpMinutes, 10) : undefined,
+      autoReplyEnabled: typeof autoReplyEnabled === 'boolean' ? autoReplyEnabled : undefined,
+    });
+    return res.status(201).json(business);
+  } catch (err) {
+    if (err.code === 'SLUG_TAKEN')   return res.status(409).json({ error: err.message });
+    if (err.code === 'INVALID_SLUG') return res.status(400).json({ error: err.message });
+    console.error('[superadmin] createBusiness error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+module.exports = { login, overview, businesses, leads, logs, updateBusinessStage, analytics, checkSlug, createBusiness };

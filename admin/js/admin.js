@@ -651,6 +651,223 @@ async function onStageChange(e) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
+/* ONBOARDING WIZARD                                                          */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+function slugify(str) {
+  return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/* ── Wizard state ──────────────────────────────────────────────────────── */
+let _slugManuallyEdited = false;
+let _slugCheckTimer     = null;
+let _lastCreated        = null; /* { name, slug, email, password } for step 3 */
+
+/* ── Step navigation ───────────────────────────────────────────────────── */
+function wizardGoTo(step) {
+  [1, 2, 3].forEach((n) => {
+    $(`wizard-step-${n}`).hidden = n !== step;
+    const dot = document.querySelector(`.wizard__step[data-step="${n}"]`);
+    if (dot) {
+      dot.classList.toggle('wizard__step--active',    n === step);
+      dot.classList.toggle('wizard__step--completed', n < step);
+    }
+  });
+}
+
+/* ── Open / close ──────────────────────────────────────────────────────── */
+function openCreateModal() {
+  _lastCreated        = null;
+  _slugManuallyEdited = false;
+  /* Reset all fields */
+  ['biz-name', 'biz-slug', 'biz-city',
+   'biz-owner-name', 'biz-owner-email', 'biz-owner-password'].forEach((id) => {
+    $$(id) && ($$(id).value = '');
+  });
+  $('biz-industry').value = '';
+  $('biz-timezone').value = 'Asia/Kolkata';
+  $('biz-currency').value = 'INR';
+  $('biz-followup').value = '30';
+  $('biz-autoreply').checked = false;
+  $('slug-status').textContent = '';
+  $('slug-status').className   = 'slug-status';
+  $('create-biz-error').textContent = '';
+  renderPwStrength('');
+  wizardGoTo(1);
+  $('create-biz-modal').hidden = false;
+  $('biz-name').focus();
+}
+
+function closeCreateModal() {
+  clearTimeout(_slugCheckTimer);
+  $('create-biz-modal').hidden = true;
+}
+
+function $$(id) { return document.getElementById(id); }
+
+$('open-create-biz').addEventListener('click', openCreateModal);
+$('close-create-biz').addEventListener('click', closeCreateModal);
+$('cancel-create-biz').addEventListener('click', closeCreateModal);
+
+/* Close on backdrop click */
+$('create-biz-modal').addEventListener('click', (e) => {
+  if (e.target === $('create-biz-modal')) closeCreateModal();
+});
+
+/* Close on Escape */
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('create-biz-modal').hidden) closeCreateModal();
+});
+
+/* ── Slug auto-fill + live availability check ──────────────────────────── */
+$('biz-slug').addEventListener('input', () => {
+  _slugManuallyEdited = true;
+  scheduleSlugCheck($('biz-slug').value);
+});
+
+$('biz-name').addEventListener('input', (e) => {
+  if (!_slugManuallyEdited) {
+    const s = slugify(e.target.value);
+    $('biz-slug').value = s;
+    scheduleSlugCheck(s);
+  }
+});
+
+/* Fade-swap the slug status badge: fade out → swap text+class → fade in */
+function setSlugStatus(text, cls) {
+  const el = $('slug-status');
+  el.style.opacity = '0';
+  setTimeout(() => {
+    el.textContent = text;
+    el.className   = cls;
+    el.style.opacity = '';
+  }, 90);
+}
+
+function scheduleSlugCheck(slug) {
+  clearTimeout(_slugCheckTimer);
+  if (!slug) { setSlugStatus('', 'slug-status'); return; }
+  setSlugStatus('…', 'slug-status slug-status--checking');
+  _slugCheckTimer = setTimeout(() => doSlugCheck(slug), 400);
+}
+
+async function doSlugCheck(slug) {
+  try {
+    const { available, slug: sanitized } = await api.checkSlug(slug);
+    if (available) {
+      setSlugStatus(`✓ ${sanitized} available`, 'slug-status slug-status--ok');
+    } else {
+      setSlugStatus(`✗ ${sanitized} taken`, 'slug-status slug-status--taken');
+    }
+  } catch {
+    setSlugStatus('', 'slug-status');
+  }
+}
+
+/* ── Password strength ──────────────────────────────────────────────────── */
+$('biz-owner-password').addEventListener('input', (e) => {
+  renderPwStrength(e.target.value);
+});
+
+function renderPwStrength(pw) {
+  const el = $('pw-strength');
+  if (!pw) { el.innerHTML = ''; return; }
+  let score = 0;
+  if (pw.length >= 8)              score++;
+  if (pw.length >= 12)             score++;
+  if (/[A-Z]/.test(pw))           score++;
+  if (/[0-9]/.test(pw))           score++;
+  if (/[^A-Za-z0-9]/.test(pw))   score++;
+  const level = score <= 2 ? 'weak' : score <= 3 ? 'fair' : 'strong';
+  el.innerHTML = `
+    <div class="pw-bar pw-bar--${level}">
+      <span class="pw-bar__fill" style="width:${(score / 5) * 100}%"></span>
+    </div>
+    <span class="pw-label pw-label--${level}">${level}</span>
+  `;
+}
+
+/* ── Step 1 → Step 2 ───────────────────────────────────────────────────── */
+$('wizard-next-1').addEventListener('click', () => {
+  const name = $('biz-name').value.trim();
+  if (!name) { $('biz-name').focus(); return; }
+  /* Warn if slug is marked taken but allow proceeding — server will confirm */
+  wizardGoTo(2);
+  $('biz-owner-name').focus();
+});
+
+/* ── Step 2 → Step 1 ───────────────────────────────────────────────────── */
+$('wizard-back-2').addEventListener('click', () => wizardGoTo(1));
+
+/* ── Step 2 submit ──────────────────────────────────────────────────────── */
+$('wizard-submit').addEventListener('click', async () => {
+  if (!requireAuth()) return;
+
+  const ownerName     = $('biz-owner-name').value.trim();
+  const ownerEmail    = $('biz-owner-email').value.trim();
+  const ownerPassword = $('biz-owner-password').value;
+  const errEl         = $('create-biz-error');
+  errEl.textContent   = '';
+
+  if (!ownerName)                      { $('biz-owner-name').focus();     errEl.textContent = 'Owner name is required.';     return; }
+  if (!ownerEmail)                     { $('biz-owner-email').focus();    errEl.textContent = 'Owner email is required.';    return; }
+  if (!ownerPassword || ownerPassword.length < 8) {
+    $('biz-owner-password').focus();
+    errEl.textContent = 'Password must be at least 8 characters.';
+    return;
+  }
+
+  const btn = $('wizard-submit');
+  btn.disabled    = true;
+  btn.textContent = 'Creating…';
+
+  const payload = {
+    name:             $('biz-name').value.trim(),
+    slug:             $('biz-slug').value.trim()     || undefined,
+    industry:         $('biz-industry').value        || undefined,
+    city:             $('biz-city').value.trim()     || undefined,
+    timezone:         $('biz-timezone').value        || undefined,
+    currency:         $('biz-currency').value        || undefined,
+    ownerName,
+    ownerEmail,
+    ownerPassword,
+    followUpMinutes:  parseInt($('biz-followup').value, 10),
+    autoReplyEnabled: $('biz-autoreply').checked,
+  };
+
+  try {
+    const biz = await api.createBusiness(payload);
+
+    /* Store for step-3 display */
+    _lastCreated = { name: biz.name, slug: biz.slug, email: ownerEmail, password: ownerPassword };
+
+    /* Populate success screen */
+    $('success-biz-name').textContent     = biz.name;
+    $('success-dashboard-url').textContent = `${location.origin}/dashboard`;
+    $('success-email').textContent        = ownerEmail;
+    $('success-password').textContent     = ownerPassword;
+    $('success-slug').textContent         = biz.slug;
+
+    wizardGoTo(3);
+
+    /* Invalidate businesses cache */
+    loadedSections.delete('businesses');
+    fetchAndRenderBusinesses();
+  } catch (err) {
+    errEl.textContent = err.message || 'Failed to create business';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Create Business';
+  }
+});
+
+/* ── Step 3 Done ────────────────────────────────────────────────────────── */
+$('wizard-done').addEventListener('click', () => {
+  closeCreateModal();
+  toast(`Business "${_lastCreated?.name}" is live`, 'success');
+});
+
+/* ══════════════════════════════════════════════════════════════════════════ */
 /* LEADS EXPLORER                                                             */
 /* ══════════════════════════════════════════════════════════════════════════ */
 

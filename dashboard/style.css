@@ -1990,3 +1990,56 @@ body[data-mood="retail"] {
   table    { font-size: 0.8125rem; }
   thead th, tbody td { padding: 0.5rem 0.75rem; }
 }
+
+/* ══════════════════════════════════════════════
+   TAG CHIP — TYPE-SPECIFIC COLOURS
+   Matches basicPolicy.js classification tags
+══════════════════════════════════════════════ */
+.tag-chip--admission        { background: rgba( 52, 211, 153, 0.08); color: #34d399; border-color: rgba( 52, 211, 153, 0.22); }
+.tag-chip--demo-request     { background: rgba( 56, 189, 248, 0.08); color: #38bdf8; border-color: rgba( 56, 189, 248, 0.22); }
+.tag-chip--fee-enquiry      { background: rgba(245, 179,   1, 0.10); color: var(--accent); border-color: rgba(245, 179,   1, 0.25); }
+.tag-chip--course-info      { background: rgba( 99, 102, 241, 0.10); color: #818cf8; border-color: rgba( 99, 102, 241, 0.22); }
+.tag-chip--call-request     { background: rgba(251, 146,  60, 0.10); color: #fb923c; border-color: rgba(251, 146,  60, 0.22); }
+.tag-chip--whatsapp-request { background: rgba( 74, 222, 128, 0.08); color: #4ade80; border-color: rgba( 74, 222, 128, 0.22); }
+.tag-chip--location-query   { background: rgba(148, 163, 184, 0.08); color: #94a3b8; border-color: rgba(148, 163, 184, 0.20); }
+.tag-chip--general-enquiry  { background: rgba(148, 163, 184, 0.06); color: #64748b; border-color: rgba(148, 163, 184, 0.16); }
+
+/* ══════════════════════════════════════════════
+   PRIORITY BADGE — HOT has stronger border, no shadow
+   (shadow at low opacity on dark bg is invisible noise)
+══════════════════════════════════════════════ */
+.badge--hot {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
+  border: 1px solid rgba(239, 68, 68, 0.38);
+}
+
+/* ══════════════════════════════════════════════
+   SCORE VALUE — colour by tier
+══════════════════════════════════════════════ */
+.score-val--high { color: var(--error); }
+.score-val--mid  { color: var(--accent); }
+.score-val--low  { color: var(--muted); }
+
+/* ══════════════════════════════════════════════
+   TABLE ROWS — hover background + inset left bar
+   Note: ::after on <tr> is broken in all browsers
+   (display:table-row ignores position:relative).
+   Use inset box-shadow on td:first-child instead.
+══════════════════════════════════════════════ */
+tbody tr { transition: background 0.12s; }
+
+tbody tr:hover { background: var(--panel-hover); }
+
+tbody tr:hover td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* ══════════════════════════════════════════════
+   SIDEBAR BRAND — amber SVG mark
+══════════════════════════════════════════════ */
+.sidebar__brand-mark {
+  background: var(--accent-10);
+  border: 1px solid rgba(245, 179, 1, 0.30);
+  box-shadow: 0 0 12px rgba(245, 179, 1, 0.10);
+}

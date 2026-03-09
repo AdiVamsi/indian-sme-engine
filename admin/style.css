@@ -991,3 +991,580 @@ a      { color: inherit; text-decoration: none; }
   /* Toolbar full-width */
   .toolbar__search { max-width: 100%; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Create Business Modal
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Section header with action button */
+.section-header--actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 1rem;
+}
+
+/* Modal card */
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border-2);
+  border-radius: 0.875rem;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.modal__close {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 0.375rem;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.modal__close:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+
+.modal__body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.modal__divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.25rem 0;
+}
+
+.modal__actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+}
+
+/* Cancel button */
+.btn-cancel {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-2);
+  color: var(--text-2);
+  border-radius: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-cancel:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+
+/* Select field inherits input styles */
+.field__select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239AA4B2' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+  cursor: pointer;
+}
+.field__select option { background: var(--panel-2); }
+
+/* Field hint text */
+.field__hint {
+  color: var(--text-2);
+  font-weight: 400;
+  font-size: 0.75rem;
+  margin-left: 0.25rem;
+}
+
+/* ── Analytics stat card — accent top-line + hover glow ─────────────────── */
+.analytics-stat--accent {
+  position: relative;
+  border-color: rgba(245, 179, 1, 0.18);
+}
+
+.analytics-stat--accent::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.analytics-stat--accent:hover {
+  border-color: rgba(245, 179, 1, 0.40);
+  /* No box-shadow — 8% opacity glow on dark bg is imperceptible */
+}
+
+/* ── Modal entrance animation ──────────────────────────────────────────────── */
+@keyframes adminModalIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal { animation: adminModalIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Modal overlay entrance ───────────────────────────────────────────────── */
+@keyframes adminOverlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal-overlay { animation: adminOverlayIn 0.18s ease both; }
+
+/* ── Table row hover — left accent bar ────────────────────────────────────── */
+.data-table tbody tr {
+  position: relative;
+  transition: background 0.12s;
+}
+
+.data-table tbody tr:hover {
+  background: rgba(245, 179, 1, 0.03);
+}
+
+.data-table tbody tr:hover td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* ── Cell-num — monospace, tabular nums ──────────────────────────────────── */
+.cell-num {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+/* ── Suggest-btn — more prominent call to action ─────────────────────────── */
+.suggest-btn {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.suggest-btn:hover {
+  background: rgba(245, 179, 1, 0.20);
+  /* box-shadow at 18% on dark bg is invisible — use stronger bg instead */
+}
+
+/* ── Lifecycle bar — subtle animation on load ─────────────────────────────── */
+.lifecycle-row__bar {
+  transform-origin: left center;
+  animation: barGrow 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes barGrow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ONBOARDING WIZARD
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Wider modal for wizard (two-column fields) */
+.modal.wizard { max-width: 560px; }
+
+/* ── Step indicator bar ─────────────────────────────────────────────────── */
+.wizard__steps {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem 0.75rem;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.wizard__step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.wizard__step-num {
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-2);
+  color: var(--text-2);
+  transition: background 0.25s cubic-bezier(0.22,1,0.36,1),
+              color 0.25s cubic-bezier(0.22,1,0.36,1),
+              border-color 0.25s cubic-bezier(0.22,1,0.36,1),
+              transform 0.2s cubic-bezier(0.22,1,0.36,1);
+}
+
+.wizard__step-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-2);
+  transition: color 0.2s;
+}
+
+.wizard__step--active .wizard__step-num {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0B0D10;
+  transform: scale(1.08);
+}
+.wizard__step--active .wizard__step-label { color: var(--text); }
+
+.wizard__step--completed .wizard__step-num {
+  background: rgba(52, 211, 153, 0.15);
+  border-color: var(--success);
+  color: var(--success);
+}
+.wizard__step--completed .wizard__step-num::after { content: '✓'; }
+.wizard__step--completed .wizard__step-num { font-size: 0; }
+.wizard__step--completed .wizard__step-num::after { font-size: 0.75rem; }
+
+.wizard__connector {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+  margin: 0 0.5rem;
+}
+
+/* ── Two-column field row ───────────────────────────────────────────────── */
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem;
+}
+
+/* ── Slug row (input + status badge inline) ─────────────────────────────── */
+.field__slug-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+.field__slug-row .field__input { flex: 1; min-width: 0; }
+
+.slug-status {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid transparent;
+  transition: opacity 0.1s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.slug-status--checking { color: var(--text-2); background: rgba(255,255,255,0.04); border-color: var(--border); }
+.slug-status--ok       { color: var(--success); background: rgba(52,211,153,0.08); border-color: rgba(52,211,153,0.25); }
+.slug-status--taken    { color: var(--danger);  background: rgba(248,113,113,0.08); border-color: rgba(248,113,113,0.25); }
+
+/* ── Password strength ──────────────────────────────────────────────────── */
+.pw-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.375rem;
+  min-height: 1.125rem;
+}
+
+.pw-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.pw-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.25s ease;
+}
+
+.pw-bar--weak   .pw-bar__fill { background: var(--danger);  }
+.pw-bar--fair   .pw-bar__fill { background: var(--accent);  }
+.pw-bar--strong .pw-bar__fill { background: var(--success); }
+
+.pw-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  text-transform: capitalize;
+}
+.pw-label--weak   { color: var(--danger);  }
+.pw-label--fair   { color: var(--accent);  }
+.pw-label--strong { color: var(--success); }
+
+/* ── Toggle switch (auto-reply) ─────────────────────────────────────────── */
+.field--toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle input { display: none; }
+
+.toggle__track {
+  width: 2.25rem;
+  height: 1.25rem;
+  border-radius: 0.625rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-2);
+  position: relative;
+  transition: background 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: transform 0.2s, background 0.2s;
+}
+
+.toggle input:checked + .toggle__track {
+  background: rgba(245, 179, 1, 0.20);
+  border-color: var(--accent);
+}
+
+.toggle input:checked + .toggle__track::after {
+  transform: translateX(1rem);
+  background: var(--accent);
+}
+
+.toggle__label-off,
+.toggle__label-on {
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  transition: color 0.15s;
+}
+
+.toggle input:checked ~ .toggle__label-off { display: none; }
+.toggle input:not(:checked) ~ .toggle__label-on { display: none; }
+.toggle input:checked ~ .toggle__label-on { color: var(--accent); }
+
+/* ── Success banner ─────────────────────────────────────────────────────── */
+.success-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 1rem;
+  background: rgba(52, 211, 153, 0.07);
+  border: 1px solid rgba(52, 211, 153, 0.20);
+  border-radius: 0.625rem;
+}
+
+.success-banner__icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(52, 211, 153, 0.15);
+  border: 1px solid var(--success);
+  color: var(--success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.success-banner__title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.success-banner__sub {
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  margin-top: 0.125rem;
+}
+
+/* ── Credentials box ────────────────────────────────────────────────────── */
+.creds-box {
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  overflow: hidden;
+}
+
+.creds-box__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+}
+.creds-box__row:last-child { border-bottom: none; }
+
+.creds-box__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+  width: 5.5rem;
+  flex-shrink: 0;
+}
+
+.creds-box__value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8125rem;
+  color: var(--text);
+  word-break: break-all;
+}
+
+/* ── Full-width button modifier ─────────────────────────────────────────── */
+.btn--full { width: 100%; justify-content: center; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   WIZARD BUG-FIX — [hidden] CSS specificity override
+   Root cause: `.modal-overlay { display: flex }` and `.modal__body { display: flex }`
+   both have specificity 0-1-0, which beats the UA stylesheet's `[hidden]`
+   at 0-0-1. Without this fix, hidden panels and the hidden modal itself
+   stay visible, causing both the Cancel bug and the success-state overlap.
+   ══════════════════════════════════════════════════════════════════════════ */
+.modal-overlay[hidden],
+.wizard__panel[hidden] { display: none !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   WIZARD ANIMATIONS & MICRO-INTERACTIONS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Shared utility keyframes */
+@keyframes wizardPanelIn {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+@keyframes wizardFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Step panel entrance (all steps) ───────────────────────────────────── */
+.wizard__panel:not([hidden]) {
+  animation: wizardPanelIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Step 3 success: panel fades in, children stagger up ───────────────── */
+#wizard-step-3:not([hidden]) {
+  animation: wizardFadeIn 0.18s ease both;
+}
+
+#wizard-step-3:not([hidden]) .success-banner {
+  animation: wizardPanelIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+}
+
+#wizard-step-3:not([hidden]) .creds-box {
+  animation: wizardPanelIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
+}
+
+#wizard-step-3:not([hidden]) .modal__actions {
+  animation: wizardPanelIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.26s both;
+}
+
+/* ── Connector turns green when preceding step is completed ─────────────── */
+.wizard__step--completed + .wizard__connector {
+  background: rgba(52, 211, 153, 0.28);
+  transition: background 0.4s ease;
+}
+
+/* ── Wizard header with subtitle ────────────────────────────────────────── */
+.wizard__header {
+  align-items: flex-start;
+  padding: 1.125rem 1.5rem 1rem;
+}
+
+.wizard__header-text { flex: 1; }
+
+.wizard__subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  margin: 0.175rem 0 0;
+  line-height: 1.4;
+}
+
+/* ── Field focus: subtle amber glow (overrides base `.field__input:focus`) ─ */
+.wizard .field__input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(245, 179, 1, 0.10);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+/* ── Button micro-interactions ──────────────────────────────────────────── */
+.btn-primary,
+.btn-cancel { transition: background 0.15s, color 0.15s, opacity 0.15s, transform 0.12s; }
+
+.btn-primary:active { transform: scale(0.97); }
+.btn-cancel:active  { transform: scale(0.97); }
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.btn-cancel:focus-visible {
+  outline: 2px solid var(--border-2);
+  outline-offset: 2px;
+}
+
+/* Close button active pulse */
+.modal__close {
+  transition: background 0.15s, color 0.15s, transform 0.12s;
+}
+.modal__close:active { transform: scale(0.88); }

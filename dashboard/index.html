@@ -97,6 +97,9 @@
 <!-- ─────────────────────────── DASHBOARD ─────────────────────────── -->
 <div id="dashboard-screen" class="hidden">
 
+  <!-- ── Sidebar mobile overlay ── -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
   <!-- ── Sidebar ── -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar__header">
@@ -162,6 +165,9 @@
 
     <header class="topbar">
       <div class="topbar__left">
+        <button class="topbar-hamburger" id="topbar-hamburger" aria-label="Open navigation menu">
+          <span></span><span></span><span></span>
+        </button>
         <img id="biz-logo" class="biz-logo" src="" alt="" style="display:none" />
         <div class="topbar__brand">
           <span id="biz-name" class="topbar__title"></span>

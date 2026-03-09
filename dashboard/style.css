@@ -968,7 +968,7 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 #section-leads .table-wrap {
@@ -1552,7 +1552,12 @@ td.empty { text-align: center; padding: 3rem 1rem; cursor: default; }
   padding: 0 1.375rem;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.drawer__tabs::-webkit-scrollbar { display: none; }
+.drawer__tab { white-space: nowrap; }
 
 .drawer__tab {
   padding: 0.625rem 0.875rem;
@@ -1967,11 +1972,51 @@ body[data-mood="retail"] {
 /* ══════════════════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════════════════ */
+
+/* ── Hamburger button (mobile sidebar trigger) ── */
+.topbar-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 0;
+}
+.topbar-hamburger span {
+  display: block;
+  width: 16px;
+  height: 1.5px;
+  background: var(--text-2);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.topbar-hamburger:hover span { background: var(--text); }
+
+/* ── Sidebar mobile overlay ── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 199;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.sidebar-overlay.is-visible { display: block; }
+
 @media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
     transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     width: var(--sidebar-w) !important;
+    z-index: 200;
   }
 
   .sidebar.is-mobile-open { transform: translateX(0); }
@@ -1982,13 +2027,43 @@ body[data-mood="retail"] {
   .topbar__center         { display: none; }
   .drawer__panel          { width: 100vw; }
   #section-leads .table-wrap { max-height: 50vh; }
+
+  /* Show hamburger, hide desktop-only logout button (accessible via sidebar) */
+  .topbar-hamburger { display: flex; }
+  .btn-logout       { display: none; }
+
+  /* Prevent biz-name brand from pushing the right side off-screen */
+  .topbar__left  { min-width: 0; flex: 1; overflow: hidden; }
+  .topbar__brand { min-width: 0; overflow: hidden; }
+  .topbar__title { max-width: 160px; }
+}
+
+/* ── Go Live card: stack URL + buttons on small screens ── */
+@media (max-width: 640px) {
+  .golive-card__row     { flex-direction: column; align-items: stretch; gap: 0.625rem; }
+  .golive-card__url     { word-break: break-all; font-size: 0.75rem; white-space: normal; }
+  .golive-card__actions { display: flex; gap: 0.5rem; }
+  .golive-card__btn     { flex: 1; text-align: center; justify-content: center; }
+
+  /* Leads toolbar: hide slash hint, remove dividers, let controls share space */
+  .search-slash-hint { display: none; }
+  .toolbar-divider   { display: none; }
+  .leads-search      { flex: 1 1 100%; }
+  .leads-filter      { flex: 1 1 0; min-width: 0; }
 }
 
 @media (max-width: 480px) {
   .stats   { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-  .topbar  { padding: 0 1rem; }
+  .topbar  { padding: 0 0.875rem; }
   table    { font-size: 0.8125rem; }
   thead th, tbody td { padding: 0.5rem 0.75rem; }
+
+  /* Activation overlay: tighter padding so card fits small viewports */
+  .activation-overlay { padding: 0.75rem; align-items: flex-start; padding-top: 1.25rem; }
+  .activation-card    { padding: 1.5rem 1.125rem; }
+
+  /* Form modal: reduce horizontal padding on narrow screens */
+  .modal-card { padding: 1.25rem 1rem; }
 }
 
 /* ══════════════════════════════════════════════
@@ -2060,6 +2135,8 @@ tbody tr:hover td:first-child {
 .activation-card {
   width: 100%;
   max-width: 440px;
+  max-height: 90dvh;
+  overflow-y: auto;
   padding: 2.5rem 2rem;
   background: var(--panel);
   border: 1px solid var(--border-md);
@@ -2405,7 +2482,8 @@ tbody tr:hover td:first-child {
 
 .ac-row__btn {
   flex-shrink: 0;
-  padding: 0.35rem 0.75rem;
+  padding: 0.5rem 0.875rem;
+  min-height: 44px;
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 600;

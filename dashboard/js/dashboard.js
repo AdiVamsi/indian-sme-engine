@@ -145,6 +145,22 @@ $('logout-btn').addEventListener('click', () => doLogout());
     localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('is-collapsed'));
   });
 
+  /* Mobile hamburger — opens sidebar on narrow screens */
+  function closeMobileSidebar() {
+    sidebar.classList.remove('is-mobile-open');
+    $('sidebar-overlay')?.classList.remove('is-visible');
+  }
+
+  $('topbar-hamburger')?.addEventListener('click', () => {
+    const isOpen = sidebar.classList.toggle('is-mobile-open');
+    $('sidebar-overlay')?.classList.toggle('is-visible', isOpen);
+  });
+
+  $('sidebar-overlay')?.addEventListener('click', () => closeMobileSidebar());
+
+  /* Expose closer for switchTab to call */
+  window._closeMobileSidebar = closeMobileSidebar;
+
   /* Sidebar nav items → switchTab */
   document.querySelectorAll('#sidebar-nav .sidebar__item[data-tab]').forEach((item) => {
     item.addEventListener('click', (e) => {
@@ -624,6 +640,9 @@ document.querySelectorAll('.tab').forEach((btn) => {
 async function switchTab(tab) {
   if (tab === activeTab) return;
   activeTab = tab;
+
+  /* Close mobile sidebar when navigating */
+  window._closeMobileSidebar?.();
 
   /* Hidden tab buttons (JS state signal) */
   document.querySelectorAll('.tab').forEach((b) =>

@@ -18,12 +18,17 @@ const PRESETS = {
     classificationRules: {
       keywords: {
         DEMO_REQUEST:        ['demo', 'demo class', 'trial class', 'free trial', 'trial session'],
-        ADMISSION:           ['admission', 'enroll', 'join', 'admission open', 'want to join'],
+        ADMISSION:           ['admission', 'enroll', 'join', 'admission open', 'want to join',
+                              'coaching', 'need coaching', 'coaching for',
+                              'my son', 'my daughter', 'my brother', 'my sister',
+                              'my child', 'my ward'],
         FEE_ENQUIRY:         ['fee', 'fees', 'price', 'cost', 'charges', 'fee structure'],
         CALL_REQUEST:        ['call me', 'phone call', 'callback', 'please call'],
         BATCH_TIMING:        ['batch timing', 'batch timings', 'timings', 'morning batch',
                               'evening batch', 'weekend batch', 'which batch', 'batch schedule',
-                              'what time', 'schedule'],
+                              'what time', 'schedule',
+                              'next week', 'next month', 'this week', 'this month',
+                              'from next', 'starting next', 'starting from'],
         WHATSAPP_REQUEST:    ['whatsapp', 'send on whatsapp', 'send details', 'message me',
                               'send brochure', 'ping me'],
         SCHOLARSHIP_ENQUIRY: ['scholarship', 'discount', 'concession', 'sibling',
@@ -38,6 +43,8 @@ const PRESETS = {
         admission: 25, demo: 20, fee: 10, fees: 10,
         'jee advanced': 30, iit: 20, 'class 12': 20, 'class 11': 15,
         drop: 20, batch: 10, whatsapp: 5,
+        coaching: 15, 'next week': 15, 'next month': 10, 'this week': 12,
+        'my son': 5, 'my daughter': 5, 'my brother': 5, 'my sister': 5, 'my ward': 5,
       },
     },
     /* Exercises ADMISSION, FEE_ENQUIRY, BATCH_TIMING, WHATSAPP_REQUEST + JEE weights */

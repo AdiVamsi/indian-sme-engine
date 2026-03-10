@@ -24,6 +24,11 @@ let activeTab      = 'overview';
 let loadedSections = new Set();
 let wsClient       = null;
 let expiryTimer    = null;
+let _leadsSort     = { col: null, dir: 'asc' };
+
+/* Maps tableColumns.leads index → sortable field (null = unsortable) */
+const LEAD_SORT_FIELDS = ['name', null, null, 'status', 'priority', 'score', 'createdAt'];
+const LEAD_PRIORITY_ORDER = { HIGH: 3, NORMAL: 2, LOW: 1 };
 
 const $ = (id) => document.getElementById(id);
 
@@ -595,6 +600,7 @@ async function bootDashboard() {
   ui.applyMood();
   ui.renderBizHeader();
   ui.renderColumns('leads-thead', cfg.tableColumns.leads);
+  _wireLeadSortHeaders();
 
   /* Populate status filter options from enum */
   const statusSelect = $('leads-status-filter');
@@ -751,6 +757,66 @@ function renderLeads(leads) {
   if (ui) ui.renderDonutChart(_allLeads);
 }
 
+function _sortLeads(rows) {
+  if (!_leadsSort.col) return rows;
+  const { col, dir } = _leadsSort;
+  const mul = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (col === 'priority') {
+      return mul * ((LEAD_PRIORITY_ORDER[a.priority] ?? 0) - (LEAD_PRIORITY_ORDER[b.priority] ?? 0));
+    }
+    if (col === 'score') {
+      return mul * ((a.priorityScore ?? a.score ?? 0) - (b.priorityScore ?? b.score ?? 0));
+    }
+    if (col === 'createdAt') {
+      return mul * (new Date(a.createdAt) - new Date(b.createdAt));
+    }
+    const av = (a[col] ?? '').toString().toLowerCase();
+    const bv = (b[col] ?? '').toString().toLowerCase();
+    return mul * av.localeCompare(bv);
+  });
+}
+
+function _updateLeadSortIndicators() {
+  const thead = $('leads-thead');
+  if (!thead) return;
+  thead.querySelectorAll('[data-sort]').forEach((th) => {
+    th.classList.remove('th-sorted--asc', 'th-sorted--desc');
+    const ind = th.querySelector('.sort-ind');
+    if (ind) ind.textContent = '';
+    if (th.dataset.sort === _leadsSort.col) {
+      th.classList.add(`th-sorted--${_leadsSort.dir}`);
+      if (ind) ind.textContent = _leadsSort.dir === 'asc' ? '↑' : '↓';
+    }
+  });
+}
+
+function _wireLeadSortHeaders() {
+  const thead = $('leads-thead');
+  if (!thead) return;
+  thead.querySelectorAll('th').forEach((th, i) => {
+    const field = LEAD_SORT_FIELDS[i];
+    if (!field) return;
+    th.dataset.sort = field;
+    th.style.cursor = 'pointer';
+    th.title = `Sort by ${th.textContent.trim()}`;
+    /* Append sort indicator span */
+    const ind = document.createElement('span');
+    ind.className = 'sort-ind';
+    th.appendChild(ind);
+    th.addEventListener('click', () => {
+      if (_leadsSort.col === field) {
+        _leadsSort.dir = _leadsSort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        _leadsSort.col = field;
+        _leadsSort.dir = 'asc';
+      }
+      _updateLeadSortIndicators();
+      _applyLeadFilters();
+    });
+  });
+}
+
 function _applyLeadFilters() {
   const search   = ($('leads-search')?.value   ?? '').toLowerCase().trim();
   const status   = $('leads-status-filter')?.value   ?? '';
@@ -763,7 +829,7 @@ function _applyLeadFilters() {
     return matchSearch && matchStatus && matchPriority;
   });
 
-  _renderFilteredLeads(filtered);
+  _renderFilteredLeads(_sortLeads(filtered));
 }
 
 function _renderFilteredLeads(leads) {

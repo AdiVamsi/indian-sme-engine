@@ -1002,6 +1002,12 @@ thead th {
 
 thead th:last-child { text-align: right; }
 
+thead th[data-sort] { user-select: none; }
+thead th[data-sort]:hover { color: var(--text-1); }
+.sort-ind { display: inline-block; width: 0.9em; margin-left: 0.2em; opacity: 0.5; }
+.th-sorted--asc .sort-ind,
+.th-sorted--desc .sort-ind { opacity: 1; color: var(--accent); }
+
 tbody tr {
   border-bottom: 1px solid var(--border);
   transition: background 0.12s;

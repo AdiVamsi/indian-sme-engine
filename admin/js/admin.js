@@ -13,8 +13,15 @@ let token        = localStorage.getItem('admin_token') ?? null;
 let api          = AdminAPI(token);
 let activeTab    = 'overview';
 let _pollTimer   = null;
-let _cachedBusinesses = [];
+let _cachedBusinesses    = [];
+let _allLeads            = [];
+let _searchListenerReady = false;
+let _sortHeadersReady    = false;
+let _leadsSort           = { col: null, dir: 'asc' };
 const loadedSections = new Set();
+
+/* Priority order for sorting (higher = more urgent) */
+const PRIORITY_ORDER = { HIGH: 3, NORMAL: 2, LOW: 1 };
 
 /* ── DOM helper ──────────────────────────────────────────────────────────── */
 const $ = (id) => document.getElementById(id);
@@ -139,6 +146,10 @@ window.addEventListener('hashchange', () => {
 
 /* ── Lazy section loading ────────────────────────────────────────────────── */
 async function loadSection(tab) {
+  /* Capture whether this is the first time visiting the tab BEFORE deleting.
+     Leads and logs always re-fetch; firstLoad controls whether skeleton shows. */
+  const firstLoad = !loadedSections.has(tab);
+
   /* Leads and logs always re-fetch on tab switch so status changes made in
      business dashboards are immediately visible. Overview uses polling;
      businesses manages its own cache via loadedSections.delete('businesses'). */
@@ -148,10 +159,10 @@ async function loadSection(tab) {
 
   try {
     switch (tab) {
-      case 'overview':   await fetchAndRenderOverview();   break;
-      case 'businesses': await fetchAndRenderBusinesses(); break;
-      case 'leads':      await fetchAndRenderLeads();      break;
-      case 'logs':       await fetchAndRenderLogs();       break;
+      case 'overview':   await fetchAndRenderOverview();          break;
+      case 'businesses': await fetchAndRenderBusinesses();        break;
+      case 'leads':      await fetchAndRenderLeads(firstLoad);    break;
+      case 'logs':       await fetchAndRenderLogs(firstLoad);     break;
     }
     loadedSections.add(tab);
   } catch (err) {
@@ -876,24 +887,90 @@ $('wizard-done').addEventListener('click', () => {
 /* LEADS EXPLORER                                                             */
 /* ══════════════════════════════════════════════════════════════════════════ */
 
-let _allLeads = [];
+function sortLeads(rows) {
+  if (!_leadsSort.col) return rows;
+  const { col, dir } = _leadsSort;
+  const mul = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (col === 'priority') {
+      return mul * ((PRIORITY_ORDER[a.priority] ?? 0) - (PRIORITY_ORDER[b.priority] ?? 0));
+    }
+    if (col === 'score') {
+      return mul * ((a.score ?? 0) - (b.score ?? 0));
+    }
+    if (col === 'createdAt') {
+      return mul * (new Date(a.createdAt) - new Date(b.createdAt));
+    }
+    const av = (a[col] ?? '').toString().toLowerCase();
+    const bv = (b[col] ?? '').toString().toLowerCase();
+    return mul * av.localeCompare(bv);
+  });
+}
 
-async function fetchAndRenderLeads() {
-  const tbody = $('leads-tbody');
-  tbody.innerHTML = skeletonRows(8, 6);
+function updateLeadSortIndicators() {
+  const thead = $('leads-table')?.querySelector('thead');
+  if (!thead) return;
+  thead.querySelectorAll('[data-sort]').forEach((th) => {
+    th.classList.remove('th-sorted--asc', 'th-sorted--desc');
+    const ind = th.querySelector('.sort-ind');
+    if (ind) ind.textContent = '';
+    if (th.dataset.sort === _leadsSort.col) {
+      th.classList.add(`th-sorted--${_leadsSort.dir}`);
+      if (ind) ind.textContent = _leadsSort.dir === 'asc' ? '↑' : '↓';
+    }
+  });
+}
 
-  _allLeads = await api.getLeads();
-  renderLeadsTable(_allLeads);
+function initLeadsSortHeaders() {
+  const thead = $('leads-table')?.querySelector('thead');
+  if (!thead) return;
+  thead.querySelectorAll('[data-sort]').forEach((th) => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (_leadsSort.col === col) {
+        _leadsSort.dir = _leadsSort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        _leadsSort.col = col;
+        _leadsSort.dir = 'asc';
+      }
+      updateLeadSortIndicators();
+      _applyLeadsFilter();
+    });
+  });
+}
 
-  $('leads-search').addEventListener('input', (e) => {
-    const q = e.target.value.toLowerCase();
-    renderLeadsTable(
-      q ? _allLeads.filter((l) =>
+function _applyLeadsFilter() {
+  const q = ($('leads-search')?.value ?? '').toLowerCase();
+  const filtered = q
+    ? _allLeads.filter((l) =>
         l.name?.toLowerCase().includes(q) ||
         l.businessName?.toLowerCase().includes(q)
-      ) : _allLeads
-    );
-  });
+      )
+    : _allLeads;
+  renderLeadsTable(sortLeads(filtered));
+}
+
+async function fetchAndRenderLeads(firstLoad = true) {
+  const tbody = $('leads-tbody');
+
+  /* Skeleton only on first visit — subsequent tab switches are silent */
+  if (firstLoad) {
+    tbody.innerHTML = skeletonRows(8, 6);
+    /* Wire sort headers once; they persist across silent re-fetches */
+    initLeadsSortHeaders();
+  }
+
+  _allLeads = await api.getLeads();
+
+  /* Wire search listener once — guard prevents accumulation */
+  if (!_searchListenerReady) {
+    _searchListenerReady = true;
+    $('leads-search').addEventListener('input', _applyLeadsFilter);
+  }
+
+  /* Re-apply current filter (preserves search query across silent refreshes) */
+  _applyLeadsFilter();
 }
 
 function renderLeadsTable(rows) {
@@ -928,9 +1005,9 @@ const LOG_ICONS = {
   FOLLOW_UP_SENT:      '📨',
 };
 
-async function fetchAndRenderLogs() {
+async function fetchAndRenderLogs(firstLoad = true) {
   const feed = $('logs-feed');
-  feed.innerHTML = skeletonFeed(8);
+  if (firstLoad) feed.innerHTML = skeletonFeed(8);
 
   const rows = await api.getLogs();
 

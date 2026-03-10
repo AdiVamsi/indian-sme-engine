@@ -183,15 +183,15 @@
         />
       </div>
       <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table" id="leads-table">
           <thead>
             <tr>
-              <th>Lead</th>
-              <th>Business</th>
-              <th>Status</th>
-              <th>Priority</th>
-              <th class="col-num">Score</th>
-              <th>Created</th>
+              <th class="th-sortable" data-sort="name">Lead</th>
+              <th class="th-sortable" data-sort="businessName">Business</th>
+              <th class="th-sortable" data-sort="status">Status</th>
+              <th class="th-sortable" data-sort="priority">Priority</th>
+              <th class="th-sortable col-num" data-sort="score">Score</th>
+              <th class="th-sortable" data-sort="createdAt">Created</th>
             </tr>
           </thead>
           <tbody id="leads-tbody"></tbody>

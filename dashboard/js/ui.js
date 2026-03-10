@@ -8,7 +8,7 @@
 export function DashUI(config) {
 
   /* ── Formatting helpers ── */
-  const tz  = config.business?.timezone ?? 'Asia/Kolkata';
+  const tz = config.business?.timezone ?? 'Asia/Kolkata';
   const cur = config.business?.currency ?? 'INR';
 
   const esc = (str) => {
@@ -19,26 +19,26 @@ export function DashUI(config) {
 
   const fmtDate = (iso) =>
     new Date(iso).toLocaleString('en-IN', {
-      timeZone:  tz,
+      timeZone: tz,
       dateStyle: 'medium',
       timeStyle: 'short',
     });
 
   /* ── Relative timestamp ── */
   const fmtRelativeDate = (iso) => {
-    const now     = Date.now();
-    const then    = new Date(iso).getTime();
-    const diff    = now - then;
+    const now = Date.now();
+    const then = new Date(iso).getTime();
+    const diff = now - then;
     const seconds = Math.floor(diff / 1000);
     const minutes = Math.floor(seconds / 60);
-    const hours   = Math.floor(minutes / 60);
-    const days    = Math.floor(hours / 24);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
 
-    if (seconds < 60)  return 'just now';
-    if (minutes < 60)  return `${minutes}m ago`;
-    if (hours < 24)    return `${hours}h ago`;
-    if (days === 1)    return 'Yesterday';
-    if (days < 7)      return `${days} days ago`;
+    if (seconds < 60) return 'just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days} days ago`;
 
     return new Date(iso).toLocaleString('en-IN', {
       timeZone: tz,
@@ -50,7 +50,7 @@ export function DashUI(config) {
     if (amount == null) return '—';
     try {
       return new Intl.NumberFormat('en-IN', {
-        style:    'currency',
+        style: 'currency',
         currency: cur,
         maximumFractionDigits: 0,
       }).format(amount);
@@ -64,12 +64,12 @@ export function DashUI(config) {
 
   /* ── Greeting ── */
   function buildGreeting() {
-    const biz  = config.business;
+    const biz = config.business;
     if (!biz) return '';
     const hour = new Date().toLocaleString('en-IN', { timeZone: tz, hour: 'numeric', hour12: false });
-    const h    = parseInt(hour, 10);
-    const tod  = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-    const loc  = biz.city ? ` (${biz.city})` : '';
+    const h = parseInt(hour, 10);
+    const tod = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    const loc = biz.city ? ` (${biz.city})` : '';
     return `${tod}, ${biz.name}${loc}`;
   }
 
@@ -95,8 +95,8 @@ export function DashUI(config) {
     const subEl = $('biz-name-sub');
     if (subEl) {
       const parts = [];
-      if (biz.city)     parts.push(biz.city);
-      if (biz.country)  parts.push(biz.country);
+      if (biz.city) parts.push(biz.city);
+      if (biz.country) parts.push(biz.country);
       if (biz.industry) parts.push(biz.industry.charAt(0).toUpperCase() + biz.industry.slice(1));
       subEl.textContent = parts.join(' · ');
     }
@@ -104,8 +104,8 @@ export function DashUI(config) {
     const logoEl = $('biz-logo');
     if (logoEl) {
       if (biz.logoUrl) {
-        logoEl.src           = biz.logoUrl;
-        logoEl.alt           = biz.name ?? 'Logo';
+        logoEl.src = biz.logoUrl;
+        logoEl.alt = biz.name ?? 'Logo';
         logoEl.style.display = 'inline-block';
       } else {
         logoEl.style.display = 'none';
@@ -132,11 +132,11 @@ export function DashUI(config) {
   /* ── Count-up animation ── */
   function countUp(el, target) {
     if (!el) return;
-    const from  = parseInt(el.textContent, 10) || 0;
-    const dur   = 400;
+    const from = parseInt(el.textContent, 10) || 0;
+    const dur = 400;
     const start = Date.now();
-    const tick  = () => {
-      const p    = Math.min((Date.now() - start) / dur, 1);
+    const tick = () => {
+      const p = Math.min((Date.now() - start) / dur, 1);
       const ease = 1 - Math.pow(1 - p, 3);
       el.textContent = Math.round(from + (target - from) * ease);
       if (p < 1) requestAnimationFrame(tick);
@@ -151,13 +151,13 @@ export function DashUI(config) {
     if (!window.matchMedia('(hover: hover)').matches) return;
 
     card.addEventListener('mousemove', (e) => {
-      const r  = card.getBoundingClientRect();
-      const dx = ((e.clientX - r.left)  / r.width  - 0.5) * 2;
-      const dy = ((e.clientY - r.top)   / r.height - 0.5) * 2;
+      const r = card.getBoundingClientRect();
+      const dx = ((e.clientX - r.left) / r.width - 0.5) * 2;
+      const dy = ((e.clientY - r.top) / r.height - 0.5) * 2;
       const rx = dy * -6;
-      const ry = dx *  6;
+      const ry = dx * 6;
       const sx = dx * -8;
-      const sy = dy *  8;
+      const sy = dy * 8;
       card.style.transform = `perspective(600px) rotateX(${rx}deg) rotateY(${ry}deg) translateZ(6px)`;
       card.style.boxShadow = `${sx}px ${sy}px 28px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,158,11,0.08)`;
     });
@@ -178,13 +178,13 @@ export function DashUI(config) {
       card.style.setProperty('--card-index', String(index));
 
       const lbl = document.createElement('span');
-      lbl.className   = 'stat-card__label';
+      lbl.className = 'stat-card__label';
       lbl.textContent = label;
 
       const val = document.createElement('span');
-      val.className    = 'stat-card__value';
+      val.className = 'stat-card__value';
       val.dataset.stat = key;
-      val.textContent  = '0';
+      val.textContent = '0';
 
       card.append(lbl, val);
       grid.appendChild(card);
@@ -213,7 +213,7 @@ export function DashUI(config) {
 
   /* ── Status select ── */
   function buildStatusSelect(id, currentStatus, statuses) {
-    const sc   = `status--${currentStatus.toLowerCase()}`;
+    const sc = `status--${currentStatus.toLowerCase()}`;
     const opts = statuses
       .map((s) => `<option value="${s}"${s === currentStatus ? ' selected' : ''}>${s}</option>`)
       .join('');
@@ -222,9 +222,9 @@ export function DashUI(config) {
 
   /* ── Priority badge ── */
   function buildPriorityBadge(priority) {
-    const cls = priority === 'HIGH'   ? 'badge--hot'
-              : priority === 'NORMAL' ? 'badge--warm'
-              :                         'badge--normal';
+    const cls = priority === 'HIGH' ? 'badge--hot'
+      : priority === 'NORMAL' ? 'badge--warm'
+        : 'badge--normal';
     return `<span class="priority-badge ${cls}">${esc(priority || 'LOW')}</span>`;
   }
 
@@ -234,13 +234,20 @@ export function DashUI(config) {
     tr.dataset.leadId = lead.id;
     if (isNew) tr.classList.add('row-enter');
 
-    const tags    = Array.isArray(lead.tags) ? lead.tags : [];
+    const tags = Array.isArray(lead.tags) ? lead.tags : [];
     const tagHtml = tags.length
       ? `<div class="tag-chips">${tags.map((t) => `<span class="tag-chip tag-chip--${esc(t.toLowerCase().replace(/_/g, '-'))}">${esc(t)}</span>`).join('')}</div>`
       : '';
 
+    const messagePreview = lead.message
+      ? `<div class="cell-sub" style="opacity:0.7;font-size:0.8em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;" title="${esc(lead.message)}">↳ ${esc(lead.message)}</div>`
+      : '';
+
     tr.innerHTML = `
-      <td><button class="lead-name-btn" data-lead-id="${esc(lead.id)}">${esc(lead.name)}</button></td>
+      <td>
+        <button class="lead-name-btn" data-lead-id="${esc(lead.id)}">${esc(lead.name)}</button>
+        ${messagePreview}
+      </td>
       <td>${esc(lead.phone)}</td>
       <td>${esc(lead.email || '—')}</td>
       <td>${buildStatusSelect(lead.id, lead.status, config.leadStatuses)}</td>
@@ -320,9 +327,9 @@ export function DashUI(config) {
       return;
     }
 
-    const max  = Math.max(...data.map((d) => d.count), 1);
-    const W    = 400;
-    const H    = 96;
+    const max = Math.max(...data.map((d) => d.count), 1);
+    const W = 400;
+    const H = 96;
     const padL = 6;
     const padR = 6;
     const padT = 16;
@@ -331,14 +338,14 @@ export function DashUI(config) {
 
     /* Compute SVG point coords */
     const pts = data.map((d, i) => ({
-      x:     padL + (data.length > 1 ? (i / (data.length - 1)) * plotW : plotW / 2),
-      y:     padT + plotH - (d.count / max) * plotH,
+      x: padL + (data.length > 1 ? (i / (data.length - 1)) * plotW : plotW / 2),
+      y: padT + plotH - (d.count / max) * plotH,
       count: d.count,
-      date:  d.date,
+      date: d.date,
     }));
 
-    const linePath  = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-    const areaPath  = `${linePath} L ${pts[pts.length - 1].x.toFixed(1)} ${H} L ${pts[0].x.toFixed(1)} ${H} Z`;
+    const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    const areaPath = `${linePath} L ${pts[pts.length - 1].x.toFixed(1)} ${H} L ${pts[0].x.toFixed(1)} ${H} Z`;
 
     const labels = pts.map((p) => {
       const label = new Date(p.date + 'T12:00:00').toLocaleDateString('en-IN', {
@@ -372,7 +379,7 @@ export function DashUI(config) {
       const line = container.querySelector('.chart-line');
       if (line) {
         const len = line.getTotalLength ? line.getTotalLength() : 1200;
-        line.style.strokeDasharray  = `${len}`;
+        line.style.strokeDasharray = `${len}`;
         line.style.strokeDashoffset = `${len}`;
         line.classList.add('chart-line--animate');
       }
@@ -386,11 +393,11 @@ export function DashUI(config) {
      SVG DONUT CHART — lead status distribution
   ───────────────────────────────────────────── */
   const DONUT_COLORS = {
-    NEW:       '#F59E0B',
+    NEW: '#F59E0B',
     CONTACTED: '#D97706',
     QUALIFIED: '#92400E',
-    WON:       '#22C55E',
-    LOST:      '#71717A',
+    WON: '#22C55E',
+    LOST: '#71717A',
   };
   const DONUT_DEFAULT = '#4B5563';
 
@@ -408,10 +415,10 @@ export function DashUI(config) {
     const counts = {};
     leads.forEach((l) => { counts[l.status] = (counts[l.status] || 0) + 1; });
 
-    const size         = 130;
-    const cx           = size / 2;
-    const cy           = size / 2;
-    const r            = 46;
+    const size = 130;
+    const cx = size / 2;
+    const cy = size / 2;
+    const r = 46;
     const circumference = 2 * Math.PI * r;
 
     /* Sort by count descending */
@@ -419,10 +426,10 @@ export function DashUI(config) {
 
     let offset = 0;
     const segments = entries.map(([status, count]) => {
-      const pct   = count / total;
-      const dash  = pct * circumference;
+      const pct = count / total;
+      const dash = pct * circumference;
       const color = DONUT_COLORS[status] ?? DONUT_DEFAULT;
-      const seg   = { status, count, dash, offset, color };
+      const seg = { status, count, dash, offset, color };
       offset += dash;
       return seg;
     });
@@ -476,8 +483,8 @@ export function DashUI(config) {
     if (!row) return;
     row.classList.add('row-exit');
     await wait(260);
-    row.style.maxHeight  = row.offsetHeight + 'px';
-    row.style.overflow   = 'hidden';
+    row.style.maxHeight = row.offsetHeight + 'px';
+    row.style.overflow = 'hidden';
     row.style.transition = 'max-height 0.22s ease, opacity 0.22s ease';
     requestAnimationFrame(() => { row.style.maxHeight = '0'; row.style.opacity = '0'; });
     await wait(240);
@@ -509,25 +516,25 @@ export function DashUI(config) {
   function showToast(msg, type = 'info') {
     const el = $('notif');
     el.textContent = msg;
-    el.className   = 'notif notif--show' + (type !== 'info' ? ` notif--${type}` : '');
+    el.className = 'notif notif--show' + (type !== 'info' ? ` notif--${type}` : '');
     clearTimeout(el._t);
     el._t = setTimeout(() => el.classList.remove('notif--show'), 3500);
   }
 
   /* ── Generic create / edit form modal ── */
   let _formHandler = null;
-  let _formFields  = [];
+  let _formFields = [];
 
   function showFormModal(title, fields, onSubmit, defaults = {}) {
     $('form-modal-title').textContent = title;
     _formHandler = onSubmit;
-    _formFields  = fields;
+    _formFields = fields;
 
     const container = $('form-modal-fields');
     container.innerHTML = fields.map((f) => {
-      const val   = String(defaults[f.name] ?? '');
+      const val = String(defaults[f.name] ?? '');
       const extra = (f.min !== undefined ? ` min="${f.min}"` : '')
-                  + (f.max !== undefined ? ` max="${f.max}"` : '');
+        + (f.max !== undefined ? ` max="${f.max}"` : '');
       const attrs = `id="fm-${f.name}" name="${f.name}"${extra}${f.required ? ' required' : ''}`;
       const input = f.type === 'textarea'
         ? `<textarea ${attrs}>${esc(val)}</textarea>`
@@ -545,7 +552,7 @@ export function DashUI(config) {
 
   $('form-modal-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const raw  = new FormData(e.target);
+    const raw = new FormData(e.target);
     const data = {};
 
     _formFields.forEach((f) => {
@@ -555,7 +562,7 @@ export function DashUI(config) {
     });
 
     const btn = $('form-modal-submit');
-    btn.disabled    = true;
+    btn.disabled = true;
     btn.textContent = 'Saving…';
 
     try {
@@ -566,7 +573,7 @@ export function DashUI(config) {
     } catch (err) {
       showToast(err.message || 'Could not save', 'error');
     } finally {
-      btn.disabled    = false;
+      btn.disabled = false;
       btn.textContent = 'Save';
     }
   });
@@ -632,15 +639,15 @@ export function DashUI(config) {
   if (!card || !window.matchMedia('(hover: hover)').matches) return;
 
   card.addEventListener('mousemove', (e) => {
-    const r  = card.getBoundingClientRect();
-    const dx = ((e.clientX - r.left)  / r.width  - 0.5) * 2;
-    const dy = ((e.clientY - r.top)   / r.height - 0.5) * 2;
+    const r = card.getBoundingClientRect();
+    const dx = ((e.clientX - r.left) / r.width - 0.5) * 2;
+    const dy = ((e.clientY - r.top) / r.height - 0.5) * 2;
     card.style.transform = `perspective(900px) rotateX(${dy * -6}deg) rotateY(${dx * 6}deg)`;
   });
 
   card.addEventListener('mouseleave', () => {
     card.style.transition = 'transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)';
-    card.style.transform  = '';
+    card.style.transform = '';
     setTimeout(() => { card.style.transition = ''; }, 620);
   });
 }());

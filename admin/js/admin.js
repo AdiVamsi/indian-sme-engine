@@ -182,16 +182,23 @@ async function bootAdmin() {
 function startPolling() {
   if (_pollTimer) clearInterval(_pollTimer);
   _pollTimer = setInterval(async () => {
-    if (activeTab !== 'overview') return;
     try {
-      const [stats, leads, logs] = await Promise.all([
-        api.getOverview(),
-        api.getLeads(),
-        api.getLogs(),
-      ]);
-      updateKPICounters(stats);
-      renderPlatformSignals(leads, _cachedBusinesses);
-      renderOverviewActivity(logs);
+      if (activeTab === 'overview') {
+        const [stats, leads, logs] = await Promise.all([
+          api.getOverview(),
+          api.getLeads(),
+          api.getLogs(),
+        ]);
+        updateKPICounters(stats);
+        renderPlatformSignals(leads, _cachedBusinesses);
+        renderOverviewActivity(logs);
+      }
+      else if (activeTab === 'leads') {
+        await fetchAndRenderLeads(false);
+      }
+      else if (activeTab === 'logs') {
+        await fetchAndRenderLogs(false);
+      }
     } catch (err) {
       if (err.status === 401) { handleUnauthorized(); }
     }

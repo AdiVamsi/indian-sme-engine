@@ -7,24 +7,24 @@
  * Zero fetch() calls (delegated to api).
  */
 
-import { DashAPI }         from './api.js';
-import { DashUI }          from './ui.js';
+import { DashAPI } from './api.js';
+import { DashUI } from './ui.js';
 import { connectRealtime } from './realtime.js';
-import { BUSINESS_SLUG }   from './config.js';
+import { BUSINESS_SLUG } from './config.js';
 
 /* Hide slug field when tenant is known from the domain */
 const slugRow = document.getElementById('slug')?.closest('.form-group');
 if (slugRow && BUSINESS_SLUG) slugRow.style.display = 'none';
 
 /* ── Module-level state ── */
-let api            = null;
-let ui             = null;
-let config         = null;
-let activeTab      = 'overview';
+let api = null;
+let ui = null;
+let config = null;
+let activeTab = 'overview';
 let loadedSections = new Set();
-let wsClient       = null;
-let expiryTimer    = null;
-let _leadsSort     = { col: null, dir: 'asc' };
+let wsClient = null;
+let expiryTimer = null;
+let _leadsSort = { col: null, dir: 'asc' };
 
 /* Maps tableColumns.leads index → sortable field (null = unsortable) */
 const LEAD_SORT_FIELDS = ['name', null, null, 'status', 'priority', 'score', 'createdAt'];
@@ -73,27 +73,27 @@ function doLogout(reason) {
   clearTimeout(expiryTimer);
   localStorage.removeItem('dash_token');
 
-  api            = null;
-  ui             = null;
-  config         = null;
-  wsClient       = null;
-  expiryTimer    = null;
-  activeTab      = 'overview';
+  api = null;
+  ui = null;
+  config = null;
+  wsClient = null;
+  expiryTimer = null;
+  activeTab = 'overview';
   loadedSections.clear();
 
   document.body.removeAttribute('data-mood');
 
   /* Clear all dynamic content */
-  $('stats-grid').innerHTML          = '';
-  $('leads-tbody').innerHTML         = '';
-  $('appt-tbody').innerHTML          = '';
-  $('services-tbody').innerHTML      = '';
-  $('testimonials-tbody').innerHTML  = '';
-  $('leads-thead').innerHTML         = '';
-  $('appt-thead').innerHTML          = '';
-  $('services-thead').innerHTML      = '';
-  $('testimonials-thead').innerHTML  = '';
-  $('biz-name').textContent          = '';
+  $('stats-grid').innerHTML = '';
+  $('leads-tbody').innerHTML = '';
+  $('appt-tbody').innerHTML = '';
+  $('services-tbody').innerHTML = '';
+  $('testimonials-tbody').innerHTML = '';
+  $('leads-thead').innerHTML = '';
+  $('appt-thead').innerHTML = '';
+  $('services-thead').innerHTML = '';
+  $('testimonials-thead').innerHTML = '';
+  $('biz-name').textContent = '';
 
   const greetEl = $('greeting');
   if (greetEl) greetEl.textContent = 'Overview';
@@ -188,12 +188,12 @@ $('login-form').addEventListener('submit', async (e) => {
   errEl.textContent = '';
 
   /* Loading state */
-  const loginBtn   = $('login-form').querySelector('.btn-login');
+  const loginBtn = $('login-form').querySelector('.btn-login');
   const loginLabel = loginBtn?.querySelector('.btn-login__label');
-  const loginIcon  = loginBtn?.querySelector('.btn-login__icon');
-  if (loginBtn)   loginBtn.disabled       = true;
-  if (loginLabel) loginLabel.textContent  = 'Signing in…';
-  if (loginIcon)  loginIcon.style.opacity = '0';
+  const loginIcon = loginBtn?.querySelector('.btn-login__icon');
+  if (loginBtn) loginBtn.disabled = true;
+  if (loginLabel) loginLabel.textContent = 'Signing in…';
+  if (loginIcon) loginIcon.style.opacity = '0';
 
   try {
     const tmpApi = DashAPI(null);
@@ -209,8 +209,8 @@ $('login-form').addEventListener('submit', async (e) => {
       const errMsg = typeof data.error === 'string'
         ? data.error
         : Object.values(data.error?.fieldErrors ?? {}).flat()[0]
-            ?? data.error?.formErrors?.[0]
-            ?? 'Invalid credentials. Please check your details.';
+        ?? data.error?.formErrors?.[0]
+        ?? 'Invalid credentials. Please check your details.';
       errEl.textContent = errMsg;
       return;
     }
@@ -256,9 +256,9 @@ $('login-form').addEventListener('submit', async (e) => {
     }
 
   } finally {
-    if (loginBtn)   loginBtn.disabled       = false;
-    if (loginLabel) loginLabel.textContent  = 'Sign In';
-    if (loginIcon)  loginIcon.style.opacity = '';
+    if (loginBtn) loginBtn.disabled = false;
+    if (loginLabel) loginLabel.textContent = 'Sign In';
+    if (loginIcon) loginIcon.style.opacity = '';
   }
 });
 
@@ -288,13 +288,13 @@ function wireGoLiveCard(cfg) {
   const slug = cfg?.business?.slug;
   if (!slug) return;
 
-  const formUrl  = `${window.location.origin}/form/${slug}`;
-  const urlEl    = $('golive-url');
-  const copyBtn  = $('golive-copy');
+  const formUrl = `${window.location.origin}/form/${slug}`;
+  const urlEl = $('golive-url');
+  const copyBtn = $('golive-copy');
   const openLink = $('golive-open');
 
-  if (urlEl)    urlEl.textContent = formUrl;
-  if (openLink) openLink.href     = formUrl;
+  if (urlEl) urlEl.textContent = formUrl;
+  if (openLink) openLink.href = formUrl;
 
   if (copyBtn) {
     copyBtn.addEventListener('click', async () => {
@@ -319,14 +319,14 @@ function wireGoLiveCard(cfg) {
 const AC_MS = { FOLLOWUP: 30 * 60 * 1000, STALE: 4 * 60 * 60 * 1000 };
 
 function computeActionItems() {
-  const now      = Date.now();
-  const urgent   = [];
+  const now = Date.now();
+  const urgent = [];
   const followup = [];
-  const stale    = [];
+  const stale = [];
 
   for (const lead of _allLeads) {
     if (lead.status !== 'NEW') continue;
-    const age      = now - new Date(lead.createdAt).getTime();
+    const age = now - new Date(lead.createdAt).getTime();
     const isUrgent = lead.priority === 'HIGH';
 
     if (isUrgent) {
@@ -349,16 +349,16 @@ function computeActionItems() {
 }
 
 function _fmtAge(iso) {
-  const ms  = Date.now() - new Date(iso).getTime();
+  const ms = Date.now() - new Date(iso).getTime();
   const min = Math.floor(ms / 60000);
   if (min < 60) return `${min}m ago`;
-  const hr  = Math.floor(min / 60);
-  if (hr  < 24) return `${hr}h ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
   return `${Math.floor(hr / 24)}d ago`;
 }
 
 function renderActionCenter() {
-  const body  = $('ac-body');
+  const body = $('ac-body');
   const badge = $('ac-badge');
   if (!body) return;
 
@@ -373,9 +373,9 @@ function renderActionCenter() {
   }
 
   const buckets = [
-    { key: 'urgent',   mod: 'urgent',   label: 'Urgent',        leads: urgent   },
+    { key: 'urgent', mod: 'urgent', label: 'Urgent', leads: urgent },
     { key: 'followup', mod: 'followup', label: 'Follow-up due', leads: followup },
-    { key: 'stale',    mod: 'stale',    label: 'Stale',         leads: stale    },
+    { key: 'stale', mod: 'stale', label: 'Stale', leads: stale },
   ];
 
   body.innerHTML = buckets
@@ -408,7 +408,7 @@ function renderActionCenter() {
 }
 
 function _buildAcRow(lead) {
-  const esc   = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const phone = lead.phone ? ` · ${esc(lead.phone)}` : '';
   return `
     <div class="ac-row" data-ac-lead="${lead.id}">
@@ -426,9 +426,9 @@ async function handleMarkContacted(leadId, btn) {
   const oldStatus = lead.status;
 
   /* Optimistic: mutate status in place — keep lead in _allLeads for other components */
-  btn.disabled    = true;
+  btn.disabled = true;
   btn.textContent = '…';
-  lead.status     = 'CONTACTED';
+  lead.status = 'CONTACTED';
 
   /* Refresh all affected surfaces */
   renderActionCenter();
@@ -473,12 +473,12 @@ async function handleMarkContacted(leadId, btn) {
    test lead or clicks "Skip for now".
 ───────────────────────────────────────────────── */
 function renderActivationResult(metadata) {
-  const body  = $('act-result-body');
-  const tags  = metadata?.tags ?? [];
+  const body = $('act-result-body');
+  const tags = metadata?.tags ?? [];
   const score = metadata?.priorityScore ?? 0;
   const label = score >= 30 ? 'HIGH' : score >= 10 ? 'NORMAL' : 'LOW';
-  const best  = metadata?.bestCategory  ?? '—';
-  const via   = metadata?.via           ?? '—';
+  const best = metadata?.bestCategory ?? '—';
+  const via = metadata?.via ?? '—';
 
   const tagsHtml = tags.length
     ? tags.map((t) => `<span class="act-tag">${t}</span>`).join('')
@@ -505,15 +505,15 @@ function renderActivationResult(metadata) {
 
 async function runActivationFlow() {
   return new Promise((resolve) => {
-    const overlay      = $('activation-overlay');
-    const formPanel    = $('act-form-panel');
-    const resultPanel  = $('act-result-panel');
-    const msgArea      = $('act-message');
-    const submitBtn    = $('act-submit');
-    const submitLabel  = $('act-submit-label');
-    const errorEl      = $('act-error');
-    const skipBtn      = $('act-skip');
-    const continueBtn  = $('act-continue');
+    const overlay = $('activation-overlay');
+    const formPanel = $('act-form-panel');
+    const resultPanel = $('act-result-panel');
+    const msgArea = $('act-message');
+    const submitBtn = $('act-submit');
+    const submitLabel = $('act-submit-label');
+    const errorEl = $('act-error');
+    const skipBtn = $('act-skip');
+    const continueBtn = $('act-continue');
 
     overlay.classList.remove('hidden');
 
@@ -538,28 +538,28 @@ async function runActivationFlow() {
       const message = msgArea.value.trim();
       if (!message) return;
 
-      submitBtn.disabled    = true;
+      submitBtn.disabled = true;
       submitLabel.textContent = 'Processing…';
-      errorEl.textContent   = '';
+      errorEl.textContent = '';
 
       try {
-        const lead     = await api.createLead({ name: '[Test] Lead', phone: '+91 00000 00000', message });
+        const lead = await api.createLead({ name: '[Test] Lead', phone: '+91 00000 00000', message });
         const activity = await api.getLeadActivity(lead.id);
 
         const classified = activity?.activities?.find((a) => a.type === 'AGENT_CLASSIFIED');
         const prioritized = activity?.activities?.find((a) => a.type === 'AGENT_PRIORITIZED');
 
         renderActivationResult({
-          ...(classified?.metadata  ?? {}),
+          ...(classified?.metadata ?? {}),
           priorityScore: prioritized?.metadata?.priorityScore ?? 0,
         });
 
         formPanel.classList.add('hidden');
         resultPanel.classList.remove('hidden');
       } catch {
-        submitBtn.disabled    = false;
+        submitBtn.disabled = false;
         submitLabel.textContent = 'Submit';
-        errorEl.textContent   = 'Something went wrong. Please try again.';
+        errorEl.textContent = 'Something went wrong. Please try again.';
       }
     });
 
@@ -571,7 +571,7 @@ async function runActivationFlow() {
 
     /* Skip — upserts config server-side, stage stays STARTING */
     skipBtn.addEventListener('click', async () => {
-      skipBtn.disabled    = true;
+      skipBtn.disabled = true;
       skipBtn.textContent = 'Skipping…';
       try { await api.activateSkip(); } catch { /* ignore */ }
       overlay.classList.add('hidden');
@@ -667,6 +667,11 @@ async function switchTab(tab) {
 
   await loadSection(tab);
 
+  /* Force re-render of leads table if it grew/changed in background via websocket */
+  if (tab === 'leads' && ui) {
+    _applyLeadsFilter();
+  }
+
   /* When returning to Overview, always refresh derived displays.
      loadSection early-returns for already-loaded sections, so we do it here. */
   if (tab === 'overview' && ui) {
@@ -707,7 +712,7 @@ async function loadSection(tab) {
 /* Leads empty state — with copy-to-clipboard enquiry link */
 function buildLeadsEmptyState(tbody, colSpan) {
   const slug = config.business?.slug ?? '';
-  const url  = `https://indian-sme-engine.onrender.com/api/public/${slug}/leads`;
+  const url = `https://indian-sme-engine.onrender.com/api/public/${slug}/leads`;
 
   tbody.innerHTML = `
     <tr class="empty-row">
@@ -818,13 +823,13 @@ function _wireLeadSortHeaders() {
 }
 
 function _applyLeadFilters() {
-  const search   = ($('leads-search')?.value   ?? '').toLowerCase().trim();
-  const status   = $('leads-status-filter')?.value   ?? '';
+  const search = ($('leads-search')?.value ?? '').toLowerCase().trim();
+  const status = $('leads-status-filter')?.value ?? '';
   const priority = $('leads-priority-filter')?.value ?? '';
 
   const filtered = _allLeads.filter((l) => {
-    const matchSearch   = !search   || (l.name?.toLowerCase().includes(search) || l.phone?.includes(search));
-    const matchStatus   = !status   || l.status   === status;
+    const matchSearch = !search || (l.name?.toLowerCase().includes(search) || l.phone?.includes(search));
+    const matchStatus = !status || l.status === status;
     const matchPriority = !priority || l.priority === priority;
     return matchSearch && matchStatus && matchPriority;
   });
@@ -833,7 +838,7 @@ function _applyLeadFilters() {
 }
 
 function _renderFilteredLeads(leads) {
-  const tbody   = $('leads-tbody');
+  const tbody = $('leads-tbody');
   const colSpan = (config.tableColumns.leads?.length ?? 5) + 1;
   tbody.innerHTML = '';
 
@@ -864,7 +869,7 @@ function _renderFilteredLeads(leads) {
 
 /* Wire search/filter inputs */
 (function initLeadToolbar() {
-  $('leads-search')?.addEventListener('input',  _applyLeadFilters);
+  $('leads-search')?.addEventListener('input', _applyLeadFilters);
   $('leads-status-filter')?.addEventListener('change', _applyLeadFilters);
   $('leads-priority-filter')?.addEventListener('change', _applyLeadFilters);
 }());
@@ -924,10 +929,10 @@ function wireLeadRow(row) {
 }
 
 async function onLeadStatusChange(e) {
-  const select    = e.target;
-  const id        = select.dataset.id;
+  const select = e.target;
+  const id = select.dataset.id;
   const newStatus = select.value;
-  const oldClass  = [...select.classList].find((c) => c.startsWith('status--'));
+  const oldClass = [...select.classList].find((c) => c.startsWith('status--'));
   const oldStatus = oldClass?.replace('status--', '').toUpperCase() ?? null;
 
   select.disabled = true;
@@ -961,7 +966,7 @@ async function onLeadStatusChange(e) {
 }
 
 async function doDeleteLead(id) {
-  const row    = document.querySelector(`tr[data-lead-id="${id}"]`);
+  const row = document.querySelector(`tr[data-lead-id="${id}"]`);
   const wasNew = row?.querySelector('.status-select')?.value === 'NEW';
 
   await ui.animateRowOut(row);
@@ -971,7 +976,7 @@ async function doDeleteLead(id) {
     if (row) row.remove();
 
     /* Show leads-specific empty state if now empty */
-    const tbody   = $('leads-tbody');
+    const tbody = $('leads-tbody');
     const colSpan = (config.tableColumns.leads?.length ?? 5) + 1;
     if (!tbody.querySelector('tr:not(.empty-row)')) {
       buildLeadsEmptyState(tbody, colSpan);
@@ -991,7 +996,7 @@ async function doDeleteLead(id) {
    APPOINTMENTS
 ───────────────────────────────────────────────── */
 function renderAppointments(appts) {
-  const tbody   = $('appt-tbody');
+  const tbody = $('appt-tbody');
   const colSpan = (config.tableColumns.appointments?.length ?? 5) + 1;
   tbody.innerHTML = '';
 
@@ -1018,10 +1023,10 @@ function wireApptRow(row) {
 }
 
 async function onApptStatusChange(e) {
-  const select    = e.target;
-  const id        = select.dataset.id;
+  const select = e.target;
+  const id = select.dataset.id;
   const newStatus = select.value;
-  const oldClass  = [...select.classList].find((c) => c.startsWith('status--'));
+  const oldClass = [...select.classList].find((c) => c.startsWith('status--'));
   const oldStatus = oldClass?.replace('status--', '').toUpperCase() ?? null;
 
   select.disabled = true;
@@ -1041,7 +1046,7 @@ async function onApptStatusChange(e) {
 }
 
 async function doDeleteAppt(id) {
-  const row    = document.querySelector(`tr[data-appt-id="${id}"]`);
+  const row = document.querySelector(`tr[data-appt-id="${id}"]`);
   const status = row?.querySelector('.status-select')?.value;
   await ui.animateRowOut(row);
 
@@ -1062,15 +1067,15 @@ async function doDeleteAppt(id) {
 
 $('btn-new-appointment').addEventListener('click', () => {
   ui.showFormModal('New Appointment', [
-    { name: 'customerName', label: 'Customer Name', type: 'text',           required: true  },
-    { name: 'phone',        label: 'Phone',          type: 'tel',            required: true  },
-    { name: 'scheduledAt',  label: 'Date & Time',    type: 'datetime-local', required: true  },
-    { name: 'notes',        label: 'Notes',          type: 'text',           required: false },
+    { name: 'customerName', label: 'Customer Name', type: 'text', required: true },
+    { name: 'phone', label: 'Phone', type: 'tel', required: true },
+    { name: 'scheduledAt', label: 'Date & Time', type: 'datetime-local', required: true },
+    { name: 'notes', label: 'Notes', type: 'text', required: false },
   ], async (data) => {
     try {
       if (data.scheduledAt) data.scheduledAt = new Date(data.scheduledAt).toISOString();
       const appt = await api.createAppt(data);
-      const row  = ui.buildApptRow(appt);
+      const row = ui.buildApptRow(appt);
       wireApptRow(row);
       ui.prependRow('appt-tbody', row);
       ui.updateStat('totalAppointments', ui.getStat('totalAppointments') + 1);
@@ -1086,7 +1091,7 @@ $('btn-new-appointment').addEventListener('click', () => {
    SERVICES
 ───────────────────────────────────────────────── */
 function renderServices(svcs) {
-  const tbody   = $('services-tbody');
+  const tbody = $('services-tbody');
   const colSpan = (config.tableColumns.services?.length ?? 4) + 1;
   tbody.innerHTML = '';
 
@@ -1104,27 +1109,27 @@ function renderServices(svcs) {
 }
 
 function wireServiceRow(row, svc) {
-  const ed  = row.querySelector('.btn-edit');
+  const ed = row.querySelector('.btn-edit');
   const del = row.querySelector('.btn-delete');
-  if (ed)  ed.addEventListener('click',  () => onEditService(svc));
+  if (ed) ed.addEventListener('click', () => onEditService(svc));
   if (del) del.addEventListener('click', (e) =>
     ui.showDeleteModal(e.currentTarget.dataset.id, doDeleteService, 'service')
   );
 }
 
 const SERVICE_FIELDS = [
-  { name: 'title',       label: 'Title',       type: 'text',     required: true  },
+  { name: 'title', label: 'Title', type: 'text', required: true },
   { name: 'description', label: 'Description', type: 'textarea', required: false },
-  { name: 'priceInr',   label: 'Price (₹)',   type: 'number',   required: false, min: 0 },
+  { name: 'priceInr', label: 'Price (₹)', type: 'number', required: false, min: 0 },
 ];
 
 function onEditService(svc) {
   ui.showFormModal('Edit Service', SERVICE_FIELDS, async (data) => {
     try {
       const updated = await api.updateService(svc.id, data);
-      const merged  = { ...svc, ...updated };
-      const oldRow  = document.querySelector(`tr[data-service-id="${svc.id}"]`);
-      const newRow  = ui.buildServiceRow(merged);
+      const merged = { ...svc, ...updated };
+      const oldRow = document.querySelector(`tr[data-service-id="${svc.id}"]`);
+      const newRow = ui.buildServiceRow(merged);
       wireServiceRow(newRow, merged);
       if (oldRow) oldRow.parentNode.replaceChild(newRow, oldRow);
       ui.showToast('Service updated', 'success');
@@ -1133,9 +1138,9 @@ function onEditService(svc) {
       throw err;
     }
   }, {
-    title:       svc.title,
+    title: svc.title,
     description: svc.description ?? '',
-    priceInr:    svc.priceInr    ?? '',
+    priceInr: svc.priceInr ?? '',
   });
 }
 
@@ -1176,7 +1181,7 @@ async function doDeleteService(id) {
    TESTIMONIALS
 ───────────────────────────────────────────────── */
 function renderTestimonials(testimonials) {
-  const tbody   = $('testimonials-tbody');
+  const tbody = $('testimonials-tbody');
   const colSpan = (config.tableColumns.testimonials?.length ?? 4) + 1;
   tbody.innerHTML = '';
 
@@ -1202,12 +1207,12 @@ function wireTestimonialRow(row) {
 
 $('btn-new-testimonial').addEventListener('click', () => {
   ui.showFormModal('New Testimonial', [
-    { name: 'customerName', label: 'Customer Name',  type: 'text',     required: true  },
-    { name: 'text',         label: 'Testimonial',    type: 'textarea', required: true  },
-    { name: 'rating',       label: 'Rating (1–5)',   type: 'number',   required: false, min: 1, max: 5 },
+    { name: 'customerName', label: 'Customer Name', type: 'text', required: true },
+    { name: 'text', label: 'Testimonial', type: 'textarea', required: true },
+    { name: 'rating', label: 'Rating (1–5)', type: 'number', required: false, min: 1, max: 5 },
   ], async (data) => {
     try {
-      const t   = await api.createTestimonial(data);
+      const t = await api.createTestimonial(data);
       const row = ui.buildTestimonialRow(t);
       wireTestimonialRow(row);
       ui.prependRow('testimonials-tbody', row);
@@ -1289,8 +1294,8 @@ function renderOverviewActivity(leads) {
    AUTOMATIONS FEED — synthetic events from lead data
 ───────────────────────────────────────────────── */
 const AUTO_EVENT_CFG = {
-  LEAD_CREATED:      { icon: '📋', label: 'New enquiry received' },
-  AGENT_CLASSIFIED:  { icon: '🏷️',  label: 'Lead classified' },
+  LEAD_CREATED: { icon: '📋', label: 'New enquiry received' },
+  AGENT_CLASSIFIED: { icon: '🏷️', label: 'Lead classified' },
   AGENT_PRIORITIZED: { icon: '⚡', label: 'Priority scored' },
 };
 
@@ -1303,8 +1308,8 @@ function renderAutomations(leads) {
 ───────────────────────────────────────────────── */
 function startRealtime(token) {
   wsClient = connectRealtime(token, {
-    'lead:new':            onNewLead,
-    'lead:deleted':        ({ id }) => doDeleteLead(id),
+    'lead:new': onNewLead,
+    'lead:deleted': ({ id }) => doDeleteLead(id),
     'lead:status_changed': onRemoteLeadStatusChange,
   });
 }
@@ -1317,11 +1322,10 @@ function onNewLead(lead) {
   /* Keep cache in sync */
   _allLeads.unshift(lead);
 
-  const row = ui.buildLeadRow(lead, true);
-  wireLeadRow(row);
-  void row.offsetWidth;
-  row.classList.add('lead-new--visible');
-  ui.prependRow('leads-tbody', row);
+  /* If looking at leads tab, natively re-render (preserves sort/filters) */
+  if (activeTab === 'leads') {
+    _applyLeadsFilter();
+  }
 
   const name = lead.name ? `: ${lead.name}` : '';
   const toastMsg = lead.priority === 'HIGH'
@@ -1344,7 +1348,7 @@ function onRemoteLeadStatusChange({ id, status }) {
   const select = document.querySelector(`.status-select[data-id="${id}"]`);
 
   if (select) {
-    const oldClass  = [...select.classList].find((c) => c.startsWith('status--'));
+    const oldClass = [...select.classList].find((c) => c.startsWith('status--'));
     const oldStatus = oldClass?.replace('status--', '').toUpperCase() ?? null;
 
     if (oldClass) select.classList.remove(oldClass);
@@ -1370,15 +1374,15 @@ function onRemoteLeadStatusChange({ id, status }) {
    LEAD DRAWER
 ───────────────────────────────────────────────── */
 const DRAWER_ACTIVITY_MAP = {
-  LEAD_CREATED:        { label: 'Lead created',        icon: '📋', dot: 'dtl-dot--created'    },
-  AGENT_CLASSIFIED:    { label: 'Lead classified',     icon: '🏷️',  dot: 'dtl-dot--classified' },
-  AGENT_PRIORITIZED:   { label: 'Priority score set',  icon: '⚡',  dot: 'dtl-dot--prioritized'},
-  FOLLOW_UP_SCHEDULED: { label: 'Follow-up scheduled', icon: '📅', dot: 'dtl-dot--followup'   },
-  STATUS_CHANGED:      { label: 'Status updated',      icon: '🔄', dot: 'dtl-dot--default'    },
+  LEAD_CREATED: { label: 'Lead created', icon: '📋', dot: 'dtl-dot--created' },
+  AGENT_CLASSIFIED: { label: 'Lead classified', icon: '🏷️', dot: 'dtl-dot--classified' },
+  AGENT_PRIORITIZED: { label: 'Priority score set', icon: '⚡', dot: 'dtl-dot--prioritized' },
+  FOLLOW_UP_SCHEDULED: { label: 'Follow-up scheduled', icon: '📅', dot: 'dtl-dot--followup' },
+  STATUS_CHANGED: { label: 'Status updated', icon: '🔄', dot: 'dtl-dot--default' },
 };
 
 function _escDrawer(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function _fmtDrawerTime(iso) {
@@ -1393,7 +1397,7 @@ async function openLeadDrawer(leadId) {
 
   /* Populate header from cached lead while we fetch */
   const cached = _allLeads.find((l) => l.id === leadId);
-  $('drawer-name').textContent  = cached?.name  ?? '—';
+  $('drawer-name').textContent = cached?.name ?? '—';
   $('drawer-phone').textContent = cached?.phone ?? '';
   if (cached) {
     $('drawer-meta').innerHTML = `
@@ -1477,7 +1481,7 @@ function _renderDrawerTimeline(data) {
   const { lead, activities } = data;
 
   /* Update header with authoritative data */
-  $('drawer-name').textContent  = lead?.name  ?? '—';
+  $('drawer-name').textContent = lead?.name ?? '—';
   $('drawer-phone').textContent = lead?.phone ?? '';
 
   if (!activities.length) {
@@ -1488,7 +1492,7 @@ function _renderDrawerTimeline(data) {
   const sorted = [...activities].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
   const html = sorted.map((act, i) => {
-    const cfg  = DRAWER_ACTIVITY_MAP[act.type] ?? {
+    const cfg = DRAWER_ACTIVITY_MAP[act.type] ?? {
       label: act.type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()),
       icon: '●',
       dot: 'dtl-dot--default',
@@ -1526,14 +1530,18 @@ function _renderDrawerOverview(lead) {
       <div><span style="color:var(--text-2);font-weight:500;">Name</span><br><strong>${esc(lead.name ?? '—')}</strong></div>
       <div><span style="color:var(--text-2);font-weight:500;">Phone</span><br><strong>${esc(lead.phone ?? '—')}</strong></div>
       ${lead.email ? `<div><span style="color:var(--text-2);font-weight:500;">Email</span><br><strong>${esc(lead.email)}</strong></div>` : ''}
-      ${lead.message ? `<div><span style="color:var(--text-2);font-weight:500;">Message</span><br><span style="color:var(--text-2)">${esc(lead.message)}</span></div>` : ''}
-    </div>`;
+    </div>
+    ${lead.message ? `
+    <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border);">
+      <span style="color:var(--text-2);font-weight:500;display:block;margin-bottom:0.4rem;">Original Message</span>
+      <div style="background:var(--bg-2);padding:1rem;border-radius:0.4rem;font-size:0.95rem;line-height:1.5;color:var(--text);white-space:pre-wrap;">${esc(lead.message)}</div>
+    </div>` : ''}
 }
 
 const NBA_ICONS = {
-  CALL_NOW:               '⚡',
-  SEND_DEMO_LINK:         '🔗',
-  FOLLOW_UP:              '📩',
+  CALL_NOW: '⚡',
+  SEND_DEMO_LINK: '🔗',
+  FOLLOW_UP: '📩',
   SEND_ADMISSION_DETAILS: '📋',
 };
 
@@ -1550,7 +1558,7 @@ function _renderDrawerSuggestions(suggestions) {
   }
 
   el.innerHTML = suggestions.map((s, i) => {
-    const pct  = Math.round((s.confidence ?? 0) * 100);
+    const pct = Math.round((s.confidence ?? 0) * 100);
     const icon = NBA_ICONS[s.action] ?? '💡';
     return `
       <div class="nba-card" style="--i:${i}">
@@ -1570,11 +1578,11 @@ function _renderDrawerSuggestions(suggestions) {
 }
 
 const OUTREACH_TYPE_LABELS = {
-  DEMO_REPLY:       'Demo enquiry reply',
-  ADMISSION_REPLY:  'Admission enquiry reply',
-  URGENT_REPLY:     'Urgent reply',
-  FOLLOW_UP:        'Follow-up',
-  GENERAL_REPLY:    'General reply',
+  DEMO_REPLY: 'Demo enquiry reply',
+  ADMISSION_REPLY: 'Admission enquiry reply',
+  URGENT_REPLY: 'Urgent reply',
+  FOLLOW_UP: 'Follow-up',
+  GENERAL_REPLY: 'General reply',
 };
 
 function _renderDrawerOutreach(draft) {
@@ -1586,9 +1594,9 @@ function _renderDrawerOutreach(draft) {
     return;
   }
 
-  const pct   = Math.round((draft.confidence ?? 0) * 100);
+  const pct = Math.round((draft.confidence ?? 0) * 100);
   const label = OUTREACH_TYPE_LABELS[draft.type] ?? draft.type;
-  const id    = 'outreach-textarea';
+  const id = 'outreach-textarea';
 
   el.innerHTML = `
     <div class="outreach-card">
@@ -1619,7 +1627,7 @@ function _renderDrawerOutreach(draft) {
   });
 
   $('outreach-edit-btn').addEventListener('click', () => {
-    const ta  = document.getElementById(id);
+    const ta = document.getElementById(id);
     const btn = $('outreach-edit-btn');
     const editing = ta.readOnly;
     ta.readOnly = !editing;
@@ -1642,10 +1650,10 @@ document.querySelectorAll('.drawer__tab').forEach((tab) => {
     document.querySelectorAll('.drawer__tab').forEach((t) =>
       t.classList.toggle('is-active', t.dataset.drawerTab === target)
     );
-    $('drawer-pane-activity').classList.toggle('drawer__pane--hidden',    target !== 'activity');
-    $('drawer-pane-overview').classList.toggle('drawer__pane--hidden',    target !== 'overview');
+    $('drawer-pane-activity').classList.toggle('drawer__pane--hidden', target !== 'activity');
+    $('drawer-pane-overview').classList.toggle('drawer__pane--hidden', target !== 'overview');
     $('drawer-pane-suggestions').classList.toggle('drawer__pane--hidden', target !== 'suggestions');
-    $('drawer-pane-outreach').classList.toggle('drawer__pane--hidden',    target !== 'outreach');
+    $('drawer-pane-outreach').classList.toggle('drawer__pane--hidden', target !== 'outreach');
   });
 });
 

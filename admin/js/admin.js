@@ -139,6 +139,11 @@ window.addEventListener('hashchange', () => {
 
 /* ── Lazy section loading ────────────────────────────────────────────────── */
 async function loadSection(tab) {
+  /* Leads and logs always re-fetch on tab switch so status changes made in
+     business dashboards are immediately visible. Overview uses polling;
+     businesses manages its own cache via loadedSections.delete('businesses'). */
+  if (tab === 'leads' || tab === 'logs') loadedSections.delete(tab);
+
   if (loadedSections.has(tab)) return;
 
   try {

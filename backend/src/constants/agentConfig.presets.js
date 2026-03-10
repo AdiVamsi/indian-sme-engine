@@ -17,20 +17,31 @@ const PRESETS = {
     autoReplyEnabled: false,
     classificationRules: {
       keywords: {
-        DEMO_REQUEST: ['demo', 'demo class', 'trial class'],
-        ADMISSION:    ['admission', 'enroll', 'join', 'admission open'],
-        FEE_ENQUIRY:  ['fee', 'fees', 'price', 'cost', 'charges'],
-        CALL_REQUEST: ['call me', 'phone call', 'callback'],
+        DEMO_REQUEST:        ['demo', 'demo class', 'trial class', 'free trial', 'trial session'],
+        ADMISSION:           ['admission', 'enroll', 'join', 'admission open', 'want to join'],
+        FEE_ENQUIRY:         ['fee', 'fees', 'price', 'cost', 'charges', 'fee structure'],
+        CALL_REQUEST:        ['call me', 'phone call', 'callback', 'please call'],
+        BATCH_TIMING:        ['batch timing', 'batch timings', 'timings', 'morning batch',
+                              'evening batch', 'weekend batch', 'which batch', 'batch schedule',
+                              'what time', 'schedule'],
+        WHATSAPP_REQUEST:    ['whatsapp', 'send on whatsapp', 'send details', 'message me',
+                              'send brochure', 'ping me'],
+        SCHOLARSHIP_ENQUIRY: ['scholarship', 'discount', 'concession', 'sibling',
+                              'financial aid', 'merit'],
+        COURSE_INFO:         ['syllabus', 'study material', 'curriculum', 'which chapters',
+                              'study plan'],
       },
     },
     priorityRules: {
       weights: {
         urgent: 30, immediately: 25, today: 20,
         admission: 25, demo: 20, fee: 10, fees: 10,
+        'jee advanced': 30, iit: 20, 'class 12': 20, 'class 11': 15,
+        drop: 20, batch: 10, whatsapp: 5,
       },
     },
-    /* 'admission' → ADMISSION, 'fee' → FEE_ENQUIRY */
-    testMessage: 'I want admission details and fee information',
+    /* Exercises ADMISSION, FEE_ENQUIRY, BATCH_TIMING, WHATSAPP_REQUEST + JEE weights */
+    testMessage: 'My son is in Class 12 and wants to join JEE Advanced batch. Please WhatsApp the fee and batch timing details.',
   },
 
   gym: {

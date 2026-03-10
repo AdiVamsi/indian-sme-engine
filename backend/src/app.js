@@ -63,11 +63,17 @@ app.use('/api/superadmin', superadminRoutes);
 app.use('/admin',     express.static(path.join(__dirname, '../../admin')));
 app.use('/dashboard', express.static(path.join(__dirname, '../../dashboard')));
 
+/* ── Full business website (Sharma JEE Academy reference implementation) ──
+   Clean canonical URL: /site  e.g. http://localhost:3000/site
+   The same assets also remain accessible under /form/* (see below) for
+   backward-compatibility with any saved links. */
+app.use('/site', express.static(path.join(__dirname, '../../frontend')));
+
 /* ── Public lead form (slug-aware, server-side rendered) ── */
-/* Order matters: route handler first, then static assets, then existing frontend fallback. */
-app.use('/form', formRoutes);                                                      /* GET /form/:slug → server-rendered page */
+/* Order matters: route handler first, then static assets, then frontend fallback. */
+app.use('/form', formRoutes);                                                      /* GET /form/:slug → server-rendered per-business enquiry form */
 app.use('/form', express.static(path.join(__dirname, '../../form')));              /* form.js, form.css */
-app.use('/form', express.static(path.join(__dirname, '../../frontend')));          /* existing frontend assets (unchanged) */
+app.use('/form', express.static(path.join(__dirname, '../../frontend')));          /* frontend assets for the full website (also at /site) */
 app.use('/',          express.static(path.join(__dirname, '../../landing')));
 
 /* ── Global error handler (must be last) ── */

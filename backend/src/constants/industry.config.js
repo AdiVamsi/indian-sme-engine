@@ -55,6 +55,14 @@ const INDUSTRY = {
     notifText: {
       newLead: 'New admission enquiry',
     },
+    formCopy: {
+      industryLabel: 'Coaching Centre',
+      sub:           'Our academic counsellor will call you within 24 hours.',
+      placeholder:   'e.g. JEE Advanced batch for Class 12, what are the timings and fees?',
+      submitLabel:   'Request a Callback',
+      successSub:    'will call you within 24 hours.',
+      callStep:      'Our counsellor calls you within 24 hours',
+    },
   },
 
   salon: {
@@ -166,6 +174,14 @@ const FALLBACK = {
   },
   notifText: {
     newLead: 'New lead arrived',
+  },
+  formCopy: {
+    industryLabel: null,
+    sub:           'Fill in your details and we\'ll get back to you as soon as possible.',
+    placeholder:   'Tell us what you\'re looking for\u2026',
+    submitLabel:   'Send enquiry',
+    successSub:    'will be in touch with you shortly.',
+    callStep:      'We get back to you as soon as possible',
   },
 };
 

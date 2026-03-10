@@ -12,6 +12,7 @@
 
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
+const { getAgentConfigPreset } = require('../src/constants/agentConfig.presets');
 
 const prisma = new PrismaClient();
 
@@ -69,6 +70,38 @@ const MESSAGES = [
   'Can you share the schedule for next month?',
   'I want to join today itself if possible.',
   'Please contact me ASAP, very urgent.',
+];
+
+/* Realistic coaching-centre enquiry messages.
+   Deliberately exercise the expanded academy preset tags:
+   ADMISSION, FEE_ENQUIRY, DEMO_REQUEST, BATCH_TIMING,
+   WHATSAPP_REQUEST, SCHOLARSHIP_ENQUIRY, COURSE_INFO. */
+const ACADEMY_MESSAGES = [
+  'My son is in Class 12, targeting JEE Advanced 2026. What are the batch timings and fees?',
+  'Please WhatsApp me the fee structure and batch schedule for JEE Main.',
+  'Looking for IIT coaching for my daughter. She is aiming for JEE Advanced next year.',
+  'What are the morning batch timings? My son can only attend before 9 AM.',
+  'Is there a scholarship or concession available for merit students?',
+  'We want a demo class before enrolling. When is the next one scheduled?',
+  'My daughter scored 96% in Class 10 boards. Which batch should she join?',
+  'Urgent — need to enroll before March end. What is the admission process?',
+  'Can you send the syllabus and study material details on WhatsApp?',
+  'What is the batch size? We prefer small groups with individual attention.',
+  'My son is a dropper, targeting JEE 2026. Do you have a dedicated drop-year batch?',
+  'How many students cleared IIT from your academy last year? Please share results.',
+  'Is there an evening or weekend batch for students still attending school?',
+  'Please call me. I want to understand the JEE Advanced programme in detail.',
+  'What is the fee for the JEE Advanced 2-year programme? Is there a sibling discount?',
+  'I heard about your 99 percentile results. Want to know more about the programme.',
+  'Want to book a free trial class. What are the upcoming dates?',
+  'My son needs coaching urgently, Class 12 boards are approaching fast.',
+  'Can I speak with one of the faculty members before making a decision?',
+  'Please send your brochure on WhatsApp. We are comparing two institutes.',
+  'My son finished Class 11 and wants to start intensive preparation. What batch fits?',
+  'Is there a crash course option for students already in Class 12?',
+  'We are three siblings interested in joining. Any concession for siblings?',
+  'Looking for a demo session before I commit to a full-year programme.',
+  'What chapters does the JEE Main batch cover in the first 3 months?',
 ];
 
 const TAGS_POOL = [
@@ -329,6 +362,13 @@ async function main() {
     },
   });
 
+  /* Seed AgentConfig for primary business so expanded preset is active from first login */
+  await prisma.agentConfig.upsert({
+    where:  { businessId: primaryBiz.id },
+    update: getAgentConfigPreset('academy'),
+    create: { businessId: primaryBiz.id, ...getAgentConfigPreset('academy') },
+  });
+
   const demoAcademy = await prisma.business.upsert({
     where: { slug: 'demo-academy' },
     update: {
@@ -353,6 +393,13 @@ async function main() {
       name: 'Demo Owner', email: 'demo@smeengine.com',
       passwordHash: demoPwHash, role: 'OWNER',
     },
+  });
+
+  /* Seed AgentConfig for demo academy too */
+  await prisma.agentConfig.upsert({
+    where:  { businessId: demoAcademy.id },
+    update: getAgentConfigPreset('academy'),
+    create: { businessId: demoAcademy.id, ...getAgentConfigPreset('academy') },
   });
 
   /* ── 2. Wipe and recreate 10 demo businesses ─────────────────────────── */
@@ -406,13 +453,15 @@ async function main() {
       const status    = randomStatus();
       const leadDate  = randDate(1, 29);
 
+      const msgPool = biz.industry === 'academy' ? ACADEMY_MESSAGES : MESSAGES;
+
       const lead = await prisma.lead.create({
         data: {
           businessId: business.id,
           name:       `${firstName} ${lastName}`,
           phone:      randomPhone(),
           email:      `${firstName.toLowerCase()}.${lastName.toLowerCase()}${rand(10, 99)}@gmail.com`,
-          message:    pick(MESSAGES),
+          message:    pick(msgPool),
           status,
           createdAt:  leadDate,
         },

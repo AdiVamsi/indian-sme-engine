@@ -2,6 +2,7 @@
 
 const { Router } = require('express');
 const { findBusinessBySlug } = require('../services/auth.service');
+const { getIndustryConfig }  = require('../constants/industry.config');
 
 const router = Router();
 
@@ -38,14 +39,17 @@ router.get('/:slug', async (req, res, next) => {
     return res.status(404).send(renderNotFound());
   }
 
-  return res.send(renderForm(business.name, slug));
+  return res.send(renderForm(business.name, slug, business.industry));
 });
 
 /* ── HTML helpers ── */
 
-function renderForm(businessName, slug) {
-  const name = escHtml(businessName);
-  const s    = escHtml(slug);
+function renderForm(businessName, slug, industry) {
+  const name    = escHtml(businessName);
+  const s       = escHtml(slug);
+  const copy    = getIndustryConfig(industry).formCopy;
+  const label   = copy.industryLabel ? `<p class="form-brand">${escHtml(copy.industryLabel)}</p>` : '';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -59,9 +63,9 @@ function renderForm(businessName, slug) {
 </head>
 <body>
   <div class="form-card">
-    <p class="form-brand">${name}</p>
-    <h1 class="form-heading">Send an enquiry</h1>
-    <p class="form-sub">Fill in your details and we'll get back to you as soon as possible.</p>
+    ${label}
+    <h1 class="form-heading">${name}</h1>
+    <p class="form-sub">${escHtml(copy.sub)}</p>
 
     <div id="form-wrap">
       <form id="enquiry-form" data-slug="${s}" novalidate>
@@ -79,7 +83,7 @@ function renderForm(businessName, slug) {
         </div>
         <div class="field">
           <label for="f-message">Message <span class="field__optional">(optional)</span></label>
-          <textarea id="f-message" name="message" placeholder="Tell us what you're looking for…"></textarea>
+          <textarea id="f-message" name="message" placeholder="${escHtml(copy.placeholder)}"></textarea>
         </div>
 
         <!-- honeypot: hidden from real users, visible to bots -->
@@ -89,14 +93,20 @@ function renderForm(businessName, slug) {
         </div>
 
         <p id="form-error" class="form-error" role="alert"></p>
-        <button type="submit" id="submit-btn" class="btn-submit">Send enquiry</button>
+        <button type="submit" id="submit-btn" class="btn-submit">${escHtml(copy.submitLabel)}</button>
       </form>
+
+      <ol class="form-steps" aria-label="What happens next">
+        <li>We receive your enquiry</li>
+        <li>Our team reviews your message</li>
+        <li>${escHtml(copy.callStep)}</li>
+      </ol>
     </div>
 
     <div id="success-state" class="success-state">
       <div class="success-icon">✓</div>
       <h2 class="success-heading">Enquiry received</h2>
-      <p class="success-sub">Thank you. ${name} will be in touch with you shortly.</p>
+      <p class="success-sub">Thank you. ${name} ${escHtml(copy.successSub)}</p>
       <button id="btn-another" class="btn-another">Submit another enquiry</button>
     </div>
   </div>

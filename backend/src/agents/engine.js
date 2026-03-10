@@ -1,33 +1,13 @@
 'use strict';
 
-const { PrismaClient }        = require('@prisma/client');
-const { applyPolicy }         = require('./policies/basicPolicy');
-const { classify }            = require('./classifier');
-const { runLeadAutomations }  = require('../services/leadAutomation.service');
+const { PrismaClient } = require('@prisma/client');
+const { analyzeMessage } = require('./intelligence');
+const { classifyWithModel } = require('./modelClassifier');
+const { runLeadAutomations } = require('../services/leadAutomation.service');
+const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
 
 const prisma = new PrismaClient();
-
-/*
- * DEFAULT_CONFIG — used when no AgentConfig row exists for a business yet.
- * JSONB fields match the exact shapes expected by applyPolicy.
- */
-const DEFAULT_CONFIG = {
-  toneStyle:    'professional',
-  priorityRules: {
-    weights: {
-      urgent: 30,
-      price:  10,
-    },
-  },
-  classificationRules: {
-    keywords: {
-      DEMO_REQUEST: ['demo'],
-      ADMISSION:    ['admission'],
-    },
-  },
-  followUpMinutes:  30,
-  autoReplyEnabled: false,
-};
+const CLASSIFIER_MODE = (process.env.CLASSIFIER_MODE || 'rule_only').toLowerCase();
 
 /**
  * run — stateless entry point for AgentEngine.
@@ -49,26 +29,52 @@ async function run({ type, leadId, businessId }) {
     throw new Error(`[AgentEngine] Lead ${leadId} not found for business ${businessId}`);
   }
 
-  /* 2. Fetch AgentConfig; create default if none exists. */
+  /* 2. Fetch AgentConfig; create industry-aware default if none exists. */
   let config = await prisma.agentConfig.findUnique({
     where: { businessId },
   });
 
   if (!config) {
+    const biz = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { industry: true },
+    });
+    const preset = getAgentConfigPreset(biz?.industry || 'other');
     config = await prisma.agentConfig.create({
-      data: { businessId, ...DEFAULT_CONFIG },
+      data: { businessId, ...preset },
     });
   }
 
-  /* 3a. Priority scoring — keyword-weight sum; reads config.priorityRules. */
-  const { priorityScore } = applyPolicy(lead, config);
+  /* 3. Local Intelligence Engine */
+  const intelligence = analyzeMessage(lead.message || '', config);
 
-  /* 3b. Intent classification — hybrid rule-first classifier.
-   *     Produces tags[] (same set applyPolicy classification would give),
-   *     bestCategory, confidenceLabel, confidenceScore, and via.
-   *     Any failure is caught inside classify(); lead creation is never blocked. */
-  const { bestCategory, confidenceLabel, confidenceScore, tags, via } =
-    await classify({ lead, config });
+  let bestCategory = intelligence.tags[0] || 'GENERAL_ENQUIRY';
+  let confidenceLabel = intelligence.confidence;
+  let confidenceScore = intelligence.confidenceScore;
+  let priorityScore = intelligence.priorityScore;
+  let tags = intelligence.tags;
+  let via = 'local_intelligence';
+
+  /* 3b. Optional LLM Fallback (Hybrid Mode) */
+  if (intelligence.shouldUseLLMFallback && CLASSIFIER_MODE === 'hybrid') {
+    try {
+      const allowedCategories = config.classificationRules ? Object.keys(config.classificationRules.keywords) : [];
+      if (allowedCategories.length > 0) {
+        const modelResult = await classifyWithModel({
+          message: lead.message || '',
+          categories: allowedCategories,
+        });
+        if (modelResult) {
+          bestCategory = modelResult.bestCategory;
+          confidenceLabel = modelResult.confidenceLabel;
+          confidenceScore = modelResult.confidenceScore;
+          via = 'hybrid_fallback';
+        }
+      }
+    } catch (err) {
+      console.error(`[AgentEngine] LLM fallback failed for lead ${lead.id}:`, err.message);
+    }
+  }
 
   /* 4. Schedule follow-up using config.followUpMinutes. */
   const followUpAt = new Date(Date.now() + config.followUpMinutes * 60 * 1000);
@@ -77,27 +83,32 @@ async function run({ type, leadId, businessId }) {
   await prisma.$transaction([
     prisma.leadActivity.create({
       data: {
-        leadId:  lead.id,
-        type:    'AGENT_CLASSIFIED',
-        message: `Lead classified with tags: ${tags.length ? tags.join(', ') : 'none'}`,
-        metadata: { tags, bestCategory, confidenceLabel, confidenceScore, via },
-      },
-    }),
-    prisma.leadActivity.create({
-      data: {
-        leadId:   lead.id,
-        type:     'AGENT_PRIORITIZED',
-        message:  `Priority score assigned: ${priorityScore}`,
-        metadata: { priorityScore },
-      },
-    }),
-    prisma.leadActivity.create({
-      data: {
-        leadId:   lead.id,
-        type:     'FOLLOW_UP_SCHEDULED',
-        message:  `Follow-up scheduled in ${config.followUpMinutes} minutes`,
+        leadId: lead.id,
+        type: 'AGENT_CLASSIFIED',
+        message: `Lead classified with tags: ${tags.length ? tags.join(', ') : 'none'} (Disposition: ${intelligence.leadDisposition})`,
         metadata: {
-          followUpAt:      followUpAt.toISOString(),
+          tags, bestCategory, confidenceLabel, confidenceScore, via,
+          intentPolarity: intelligence.intentPolarity,
+          leadDisposition: intelligence.leadDisposition,
+          explanation: intelligence.explanation
+        },
+      },
+    }),
+    prisma.leadActivity.create({
+      data: {
+        leadId: lead.id,
+        type: 'AGENT_PRIORITIZED',
+        message: `Priority score assigned: ${priorityScore} (${intelligence.priority})`,
+        metadata: { priorityScore, priorityLabel: intelligence.priority },
+      },
+    }),
+    prisma.leadActivity.create({
+      data: {
+        leadId: lead.id,
+        type: 'FOLLOW_UP_SCHEDULED',
+        message: `Follow-up scheduled in ${config.followUpMinutes} minutes`,
+        metadata: {
+          followUpAt: followUpAt.toISOString(),
           followUpMinutes: config.followUpMinutes,
         },
       },
@@ -108,7 +119,7 @@ async function run({ type, leadId, businessId }) {
   let automationsTriggered = 0;
   try {
     const automationResult = await runLeadAutomations(lead.id, { tags, priorityScore });
-    automationsTriggered   = automationResult.triggered;
+    automationsTriggered = automationResult.triggered;
     console.log(`[AgentEngine] Automations triggered for lead ${lead.id}: ${automationsTriggered}`);
   } catch (err) {
     console.error(`[AgentEngine] runLeadAutomations failed for lead ${lead.id} —`, err.message);
@@ -116,12 +127,14 @@ async function run({ type, leadId, businessId }) {
 
   /* 7. Return structured result — Lead table is NOT mutated. */
   return {
-    leadId:               lead.id,
+    leadId: lead.id,
     businessId,
     priorityScore,
+    priority: intelligence.priority,
     tags,
-    followUpAt:           followUpAt.toISOString(),
-    activitiesCreated:    3,
+    leadDisposition: intelligence.leadDisposition,
+    followUpAt: followUpAt.toISOString(),
+    activitiesCreated: 3,
     automationsTriggered,
   };
 }

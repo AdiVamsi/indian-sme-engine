@@ -2,34 +2,8 @@
 
 const bcrypt = require('bcrypt');
 const { PrismaClient } = require('@prisma/client');
+const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
 const prisma = new PrismaClient();
-
-/* ── Default AgentConfig rules — mirrors basicPolicy.js fallbacks ────────── */
-const DEFAULT_CLASSIFICATION_RULES = {
-  keywords: {
-    ADMISSION:        ['admission', 'enroll', 'admission open', 'join'],
-    DEMO_REQUEST:     ['demo', 'trial', 'demo class'],
-    FEE_ENQUIRY:      ['fee', 'fees', 'price', 'cost', 'charges'],
-    COURSE_INFO:      ['course', 'syllabus', 'curriculum'],
-    CALL_REQUEST:     ['call me', 'phone call', 'talk'],
-    WHATSAPP_REQUEST: ['whatsapp', 'send details'],
-    LOCATION_QUERY:   ['location', 'address', 'where are you'],
-    GENERAL_ENQUIRY:  ['info', 'details', 'information'],
-  },
-};
-
-const DEFAULT_PRIORITY_RULES = {
-  weights: {
-    urgent:      30,
-    immediately: 25,
-    today:       20,
-    admission:   25,
-    demo:        20,
-    call:        15,
-    price:       10,
-    fees:        10,
-  },
-};
 
 /**
  * getOverview
@@ -57,13 +31,13 @@ async function getAllBusinesses() {
   const rows = await prisma.business.findMany({
     orderBy: { createdAt: 'desc' },
     select: {
-      id:        true,
-      name:      true,
-      slug:      true,
-      industry:  true,
-      stage:     true,
-      city:      true,
-      country:   true,
+      id: true,
+      name: true,
+      slug: true,
+      industry: true,
+      stage: true,
+      city: true,
+      country: true,
       createdAt: true,
       _count: {
         select: { leads: true },
@@ -80,18 +54,18 @@ async function getAllBusinesses() {
   const bizIds = rows.map((r) => r.id);
   const agentLeads = bizIds.length > 0
     ? await prisma.lead.findMany({
-        where: { businessId: { in: bizIds } },
-        select: {
-          businessId: true,
-          _count: {
-            select: {
-              activities: {
-                where: { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
-              },
+      where: { businessId: { in: bizIds } },
+      select: {
+        businessId: true,
+        _count: {
+          select: {
+            activities: {
+              where: { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
             },
           },
         },
-      })
+      },
+    })
     : [];
 
   const bizAutoCounts = {};
@@ -100,17 +74,17 @@ async function getAllBusinesses() {
   }
 
   return rows.map((b) => ({
-    id:                   b.id,
-    name:                 b.name,
-    slug:                 b.slug,
-    industry:             b.industry,
-    stage:                b.stage,
-    city:                 b.city,
-    country:              b.country,
-    createdAt:            b.createdAt,
-    leadCount:            b._count.leads,
+    id: b.id,
+    name: b.name,
+    slug: b.slug,
+    industry: b.industry,
+    stage: b.stage,
+    city: b.city,
+    country: b.country,
+    createdAt: b.createdAt,
+    leadCount: b._count.leads,
     automationEventCount: bizAutoCounts[b.id] ?? 0,
-    lastActivity:         b.leads[0]?.createdAt ?? null,
+    lastActivity: b.leads[0]?.createdAt ?? null,
   }));
 }
 
@@ -124,34 +98,34 @@ async function getAllLeads() {
     orderBy: { createdAt: 'desc' },
     take: 100,
     include: {
-      business:   { select: { id: true, name: true } },
+      business: { select: { id: true, name: true } },
       activities: {
-        where:   { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
+        where: { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
         orderBy: { createdAt: 'desc' },
       },
     },
   });
 
   return leads.map(({ activities, ...l }) => {
-    const prioAct  = activities.find((a) => a.type === 'AGENT_PRIORITIZED');
+    const prioAct = activities.find((a) => a.type === 'AGENT_PRIORITIZED');
     const classAct = activities.find((a) => a.type === 'AGENT_CLASSIFIED');
 
     const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
-    const tags          = classAct?.metadata?.tags          ?? [];
-    const priority      = priorityScore >= 30 ? 'HIGH'
-                        : priorityScore >= 10 ? 'NORMAL'
-                        :                       'LOW';
+    const tags = classAct?.metadata?.tags ?? [];
+    const priority = priorityScore >= 30 ? 'HIGH'
+      : priorityScore >= 10 ? 'NORMAL'
+        : 'LOW';
 
     return {
-      id:           l.id,
-      name:         l.name,
-      phone:        l.phone,
-      status:       l.status,
-      score:        priorityScore,
+      id: l.id,
+      name: l.name,
+      phone: l.phone,
+      status: l.status,
+      score: priorityScore,
       priority,
       tags,
       businessName: l.business?.name ?? 'Unknown',
-      createdAt:    l.createdAt,
+      createdAt: l.createdAt,
     };
   });
 }
@@ -174,14 +148,14 @@ async function getAutomationLogs() {
   });
 
   return rows.map((a) => ({
-    type:         a.type,
-    note:         a.note ?? null,
-    createdAt:    a.createdAt,
+    type: a.type,
+    note: a.note ?? null,
+    createdAt: a.createdAt,
     lead: {
-      id:   a.lead?.id,
+      id: a.lead?.id,
       name: a.lead?.name,
       business: {
-        id:   a.lead?.business?.id,
+        id: a.lead?.business?.id,
         name: a.lead?.business?.name,
       },
     },
@@ -199,7 +173,7 @@ async function updateBusinessStage(id, stage) {
 
   return prisma.business.update({
     where: { id },
-    data:  { stage },
+    data: { stage },
     select: { id: true, name: true, slug: true, stage: true },
   });
 }
@@ -210,7 +184,7 @@ async function updateBusinessStage(id, stage) {
  * metrics, and lead conversion signals.
  */
 async function getAnalytics() {
-  const WEB_STAGES  = new Set(['WEBSITE_LIVE', 'LEADS_ACTIVE', 'AUTOMATION_ACTIVE', 'SCALING']);
+  const WEB_STAGES = new Set(['WEBSITE_LIVE', 'LEADS_ACTIVE', 'AUTOMATION_ACTIVE', 'SCALING']);
   const LEAD_STAGES = new Set(['LEADS_ACTIVE', 'AUTOMATION_ACTIVE', 'SCALING']);
   const AUTO_STAGES = new Set(['AUTOMATION_ACTIVE', 'SCALING']);
 
@@ -225,15 +199,15 @@ async function getAnalytics() {
     }),
     /* Priority scores from agent activities */
     prisma.leadActivity.findMany({
-      where:  { type: 'AGENT_PRIORITIZED' },
+      where: { type: 'AGENT_PRIORITIZED' },
       select: { metadata: true },
     }),
     /* First STATUS_CHANGED per lead for time-to-contact */
     prisma.leadActivity.findMany({
-      where:   { type: 'STATUS_CHANGED' },
+      where: { type: 'STATUS_CHANGED' },
       orderBy: { createdAt: 'asc' },
       select: {
-        leadId:    true,
+        leadId: true,
         createdAt: true,
         lead: { select: { createdAt: true } },
       },
@@ -242,17 +216,17 @@ async function getAnalytics() {
 
   /* ── Stage distribution + average duration ──────────────────────────── */
   const now = Date.now();
-  const stageDistribution  = {};
-  const stageDurationSums  = {};
+  const stageDistribution = {};
+  const stageDurationSums = {};
   const stageDurationCount = {};
 
   for (const b of businesses) {
-    stageDistribution[b.stage]  = (stageDistribution[b.stage]  ?? 0) + 1;
+    stageDistribution[b.stage] = (stageDistribution[b.stage] ?? 0) + 1;
     /* For STARTING use createdAt; for all others use updatedAt (when stage was last set) */
-    const ref  = b.stage === 'STARTING' ? b.createdAt : b.updatedAt;
+    const ref = b.stage === 'STARTING' ? b.createdAt : b.updatedAt;
     const days = (now - new Date(ref).getTime()) / 86_400_000;
-    stageDurationSums[b.stage]   = (stageDurationSums[b.stage]  ?? 0) + days;
-    stageDurationCount[b.stage]  = (stageDurationCount[b.stage] ?? 0) + 1;
+    stageDurationSums[b.stage] = (stageDurationSums[b.stage] ?? 0) + days;
+    stageDurationCount[b.stage] = (stageDurationCount[b.stage] ?? 0) + 1;
   }
 
   const avgStageDuration = {};
@@ -261,16 +235,16 @@ async function getAnalytics() {
   }
 
   /* ── Growth metrics ─────────────────────────────────────────────────── */
-  const total          = businesses.length;
-  const withWebsite    = businesses.filter((b) => WEB_STAGES.has(b.stage)).length;
+  const total = businesses.length;
+  const withWebsite = businesses.filter((b) => WEB_STAGES.has(b.stage)).length;
   const generatingLeads = businesses.filter((b) => LEAD_STAGES.has(b.stage)).length;
   const usingAutomation = businesses.filter((b) => AUTO_STAGES.has(b.stage)).length;
-  const scaling         = businesses.filter((b) => b.stage === 'SCALING').length;
-  const activationRate  = total > 0 ? Math.round((generatingLeads / total) * 100) : 0;
+  const scaling = businesses.filter((b) => b.stage === 'SCALING').length;
+  const activationRate = total > 0 ? Math.round((generatingLeads / total) * 100) : 0;
 
   /* ── Lead signals ───────────────────────────────────────────────────── */
-  const totalLeads     = allLeads.length;
-  const contacted      = allLeads.filter((l) =>
+  const totalLeads = allLeads.length;
+  const contacted = allLeads.filter((l) =>
     ['CONTACTED', 'QUALIFIED', 'CLOSED_WON'].includes(l.status)
   ).length;
   const qualifiedOrWon = allLeads.filter((l) =>
@@ -287,7 +261,7 @@ async function getAnalytics() {
 
   /* Average hours to first contact (de-dup: first STATUS_CHANGED per lead) */
   const seenLeads = new Set();
-  const hours     = [];
+  const hours = [];
   for (const a of contactActs) {
     if (seenLeads.has(a.leadId)) continue;
     seenLeads.add(a.leadId);
@@ -307,7 +281,7 @@ async function getAnalytics() {
     leadSignals: {
       totalLeads,
       avgPriorityScore,
-      pctContacted:      totalLeads > 0 ? Math.round((contacted      / totalLeads) * 100) : 0,
+      pctContacted: totalLeads > 0 ? Math.round((contacted / totalLeads) * 100) : 0,
       pctQualifiedOrWon: totalLeads > 0 ? Math.round((qualifiedOrWon / totalLeads) * 100) : 0,
       avgHoursToFirstContact,
     },
@@ -367,34 +341,33 @@ async function createBusiness({
     const biz = await tx.business.create({
       data: {
         name,
-        slug:     finalSlug,
+        slug: finalSlug,
         industry: industry || null,
-        phone:    phone    || null,
-        city:     city     || null,
+        phone: phone || null,
+        city: city || null,
         timezone: timezone || 'Asia/Kolkata',
         currency: currency || 'INR',
-        stage:    'STARTING',
+        stage: 'STARTING',
       },
     });
 
     await tx.user.create({
       data: {
-        businessId:   biz.id,
-        name:         ownerName,
-        email:        ownerEmail,
+        businessId: biz.id,
+        name: ownerName,
+        email: ownerEmail,
         passwordHash,
-        role:         'OWNER',
+        role: 'OWNER',
       },
     });
 
+    const preset = getAgentConfigPreset(industry || 'other');
     await tx.agentConfig.create({
       data: {
-        businessId:          biz.id,
-        toneStyle:           'professional',
-        followUpMinutes:     followUpMinutes ?? 30,
-        autoReplyEnabled:    autoReplyEnabled ?? false,
-        classificationRules: DEFAULT_CLASSIFICATION_RULES,
-        priorityRules:       DEFAULT_PRIORITY_RULES,
+        businessId: biz.id,
+        ...preset,
+        followUpMinutes: followUpMinutes ?? preset.followUpMinutes,
+        autoReplyEnabled: autoReplyEnabled ?? preset.autoReplyEnabled,
       },
     });
 
@@ -402,14 +375,14 @@ async function createBusiness({
   });
 
   return {
-    id:        business.id,
-    name:      business.name,
-    slug:      business.slug,
-    industry:  business.industry,
-    city:      business.city,
-    timezone:  business.timezone,
-    currency:  business.currency,
-    stage:     business.stage,
+    id: business.id,
+    name: business.name,
+    slug: business.slug,
+    industry: business.industry,
+    city: business.city,
+    timezone: business.timezone,
+    currency: business.currency,
+    stage: business.stage,
     createdAt: business.createdAt,
   };
 }

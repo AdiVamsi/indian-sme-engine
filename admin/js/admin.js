@@ -9,15 +9,15 @@
 import { AdminAPI } from './admin-api.js';
 
 /* ── State ───────────────────────────────────────────────────────────────── */
-let token        = localStorage.getItem('admin_token') ?? null;
-let api          = AdminAPI(token);
-let activeTab    = 'overview';
-let _pollTimer   = null;
-let _cachedBusinesses    = [];
-let _allLeads            = [];
+let token = localStorage.getItem('admin_token') ?? null;
+let api = AdminAPI(token);
+let activeTab = 'overview';
+let _pollTimer = null;
+let _cachedBusinesses = [];
+let _allLeads = [];
 let _searchListenerReady = false;
-let _sortHeadersReady    = false;
-let _leadsSort           = { col: null, dir: 'asc' };
+let _sortHeadersReady = false;
+let _leadsSort = { col: null, dir: 'asc' };
 const loadedSections = new Set();
 
 /* Priority order for sorting (higher = more urgent) */
@@ -140,7 +140,7 @@ document.querySelectorAll('.sidebar__link').forEach((el) => {
 window.addEventListener('hashchange', () => {
   if (!token) return;
   const hash = window.location.hash.slice(1);
-  const tab  = ALL_TABS.includes(hash) ? hash : 'overview';
+  const tab = ALL_TABS.includes(hash) ? hash : 'overview';
   if (tab !== activeTab) switchTab(tab);
 });
 
@@ -159,10 +159,10 @@ async function loadSection(tab) {
 
   try {
     switch (tab) {
-      case 'overview':   await fetchAndRenderOverview();          break;
-      case 'businesses': await fetchAndRenderBusinesses();        break;
-      case 'leads':      await fetchAndRenderLeads(firstLoad);    break;
-      case 'logs':       await fetchAndRenderLogs(firstLoad);     break;
+      case 'overview': await fetchAndRenderOverview(); break;
+      case 'businesses': await fetchAndRenderBusinesses(); break;
+      case 'leads': await fetchAndRenderLeads(firstLoad); break;
+      case 'logs': await fetchAndRenderLogs(firstLoad); break;
     }
     loadedSections.add(tab);
   } catch (err) {
@@ -173,7 +173,7 @@ async function loadSection(tab) {
 
 /* ── Boot + 30-second poll ───────────────────────────────────────────────── */
 async function bootAdmin() {
-  const hash     = window.location.hash.slice(1);
+  const hash = window.location.hash.slice(1);
   const startTab = ALL_TABS.includes(hash) ? hash : 'overview';
   switchTab(startTab);
   startPolling();
@@ -208,13 +208,13 @@ function stopPolling() {
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 async function fetchAndRenderOverview() {
-  $('overview-stats').innerHTML      = skeletonCards(4);
-  $('leads-chart').innerHTML         = skeletonBlock(120);
-  $('platform-signals').innerHTML    = skeletonSignals();
-  $('overview-activity').innerHTML   = skeletonFeed(7);
-  $('lifecycle-chart').innerHTML     = skeletonBlock(180);
-  $('growth-metrics').innerHTML      = skeletonBlock(120);
-  $('lead-signals').innerHTML        = skeletonBlock(100);
+  $('overview-stats').innerHTML = skeletonCards(4);
+  $('leads-chart').innerHTML = skeletonBlock(120);
+  $('platform-signals').innerHTML = skeletonSignals();
+  $('overview-activity').innerHTML = skeletonFeed(7);
+  $('lifecycle-chart').innerHTML = skeletonBlock(180);
+  $('growth-metrics').innerHTML = skeletonBlock(120);
+  $('lead-signals').innerHTML = skeletonBlock(100);
 
   /* Parallel fetch for fast load */
   const [stats, leads, businesses, logs, analytics] = await Promise.all([
@@ -259,18 +259,18 @@ function renderKPICards(data) {
 
   /* Stagger counter animations */
   setTimeout(() => animateCounter($('stat-businesses'), 0, data.businesses), 0);
-  setTimeout(() => animateCounter($('stat-leads'),      0, data.leads),       80);
-  setTimeout(() => animateCounter($('stat-users'),      0, data.users),       160);
-  setTimeout(() => animateCounter($('stat-logs-today'), 0, data.logsToday),   240);
+  setTimeout(() => animateCounter($('stat-leads'), 0, data.leads), 80);
+  setTimeout(() => animateCounter($('stat-users'), 0, data.users), 160);
+  setTimeout(() => animateCounter($('stat-logs-today'), 0, data.logsToday), 240);
 }
 
 /* Animate from current displayed value → new value (used by polling) */
 function updateKPICounters(data) {
   const map = {
     businesses: 'stat-businesses',
-    leads:      'stat-leads',
-    users:      'stat-users',
-    logsToday:  'stat-logs-today',
+    leads: 'stat-leads',
+    users: 'stat-users',
+    logsToday: 'stat-logs-today',
   };
   for (const [field, id] of Object.entries(map)) {
     const el = $(id);
@@ -291,7 +291,7 @@ function renderLeadsChart(leads) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     days.push({
-      date:  d.toISOString().slice(0, 10),
+      date: d.toISOString().slice(0, 10),
       label: d.toLocaleDateString('en-IN', { weekday: 'short' }),
       count: 0,
     });
@@ -303,22 +303,22 @@ function renderLeadsChart(leads) {
   });
 
   const CHART_H = 110;
-  const BAR_W   = 28;
-  const GAP     = 14;
-  const PAD     = 10;
+  const BAR_W = 28;
+  const GAP = 14;
+  const PAD = 10;
   const LABEL_H = 22;
-  const maxVal  = Math.max(...days.map((d) => d.count), 1);
-  const totalW  = PAD * 2 + days.length * (BAR_W + GAP) - GAP;
+  const maxVal = Math.max(...days.map((d) => d.count), 1);
+  const totalW = PAD * 2 + days.length * (BAR_W + GAP) - GAP;
 
   const svgBars = days.map((d, i) => {
-    const x    = PAD + i * (BAR_W + GAP);
+    const x = PAD + i * (BAR_W + GAP);
     const barH = Math.round((d.count / maxVal) * CHART_H);
     const barY = CHART_H - barH;
     return `
       <g>
         ${d.count > 0
-          ? `<text x="${x + BAR_W / 2}" y="${barY - 5}" text-anchor="middle" class="bar-count">${d.count}</text>`
-          : ''}
+        ? `<text x="${x + BAR_W / 2}" y="${barY - 5}" text-anchor="middle" class="bar-count">${d.count}</text>`
+        : ''}
         <rect class="bar"
           x="${x}" y="${CHART_H}" width="${BAR_W}" height="0" rx="4"
           data-y="${barY}" data-h="${barH}"
@@ -371,13 +371,13 @@ function renderPlatformSignals(leads, businesses) {
   const el = $('platform-signals');
   if (!el) return;
 
-  const todayStr     = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toISOString().slice(0, 10);
   const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000);
 
   /* Signal 1 — Top lead source today */
   const todayLeads = leads.filter((l) => l.createdAt?.slice(0, 10) === todayStr);
-  const bizTally   = {};
+  const bizTally = {};
   todayLeads.forEach((l) => { bizTally[l.businessName] = (bizTally[l.businessName] ?? 0) + 1; });
   const topEntry = Object.entries(bizTally).sort((a, b) => b[1] - a[1])[0];
   const s1 = topEntry
@@ -400,8 +400,8 @@ function renderPlatformSignals(leads, businesses) {
 
   /* Signal 4 — Lead spike: today > 2× yesterday */
   const todayCount = todayLeads.length;
-  const yestCount  = leads.filter((l) => l.createdAt?.slice(0, 10) === yesterdayStr).length;
-  const isSpike    = yestCount > 0 && todayCount > yestCount * 2;
+  const yestCount = leads.filter((l) => l.createdAt?.slice(0, 10) === yesterdayStr).length;
+  const isSpike = yestCount > 0 && todayCount > yestCount * 2;
   const s4 = isSpike
     ? { icon: '📈', text: `Lead spike detected — ${todayCount} today vs ${yestCount} yesterday`, alert: true }
     : { icon: '→', text: 'No lead spike detected today', alert: false };
@@ -420,9 +420,9 @@ function renderLifecycleChart(analytics) {
   const el = $('lifecycle-chart');
   if (!el) return;
 
-  const dist     = analytics.stageDistribution ?? {};
-  const duration = analytics.avgStageDuration  ?? {};
-  const total    = Object.values(dist).reduce((s, n) => s + n, 0);
+  const dist = analytics.stageDistribution ?? {};
+  const duration = analytics.avgStageDuration ?? {};
+  const total = Object.values(dist).reduce((s, n) => s + n, 0);
 
   if (total === 0) {
     el.innerHTML = '<p style="color:var(--muted);font-size:0.8125rem;padding:0.5rem 0">No business data yet.</p>';
@@ -433,8 +433,8 @@ function renderLifecycleChart(analytics) {
 
   el.innerHTML = BUSINESS_STAGES.map((stage, i) => {
     const count = dist[stage] ?? 0;
-    const pct   = Math.round((count / maxCount) * 100);
-    const days  = duration[stage];
+    const pct = Math.round((count / maxCount) * 100);
+    const days = duration[stage];
     return `
       <div class="lifecycle-row" style="animation-delay:${i * 55}ms">
         <div class="lifecycle-row__label">${esc(STAGE_LABELS[stage])}</div>
@@ -490,12 +490,12 @@ function renderGrowthMetrics(analytics) {
       </div>
     </div>`;
 
-  setTimeout(() => animateCounter($('ag-total'),     0, g.total           ?? 0),   0);
-  setTimeout(() => animateCounter($('ag-website'),   0, g.withWebsite     ?? 0),  60);
+  setTimeout(() => animateCounter($('ag-total'), 0, g.total ?? 0), 0);
+  setTimeout(() => animateCounter($('ag-website'), 0, g.withWebsite ?? 0), 60);
   setTimeout(() => animateCounter($('ag-gen-leads'), 0, g.generatingLeads ?? 0), 120);
-  setTimeout(() => animateCounter($('ag-automation'),0, g.usingAutomation ?? 0), 180);
-  setTimeout(() => animateCounter($('ag-scaling'),   0, g.scaling         ?? 0), 240);
-  setTimeout(() => animateCounter($('ag-rate'),      0, g.activationRate  ?? 0), 300);
+  setTimeout(() => animateCounter($('ag-automation'), 0, g.usingAutomation ?? 0), 180);
+  setTimeout(() => animateCounter($('ag-scaling'), 0, g.scaling ?? 0), 240);
+  setTimeout(() => animateCounter($('ag-rate'), 0, g.activationRate ?? 0), 300);
 }
 
 /* ── Lead Conversion Signals ─────────────────────────────────────────────── */
@@ -527,9 +527,9 @@ function renderLeadSignals(analytics) {
       </div>
     </div>`;
 
-  setTimeout(() => animateCounter($('ls-score'),    0, s.avgPriorityScore  ?? 0),  0);
-  setTimeout(() => animateCounter($('ls-contacted'),0, s.pctContacted      ?? 0), 60);
-  setTimeout(() => animateCounter($('ls-qualified'),0, s.pctQualifiedOrWon ?? 0), 120);
+  setTimeout(() => animateCounter($('ls-score'), 0, s.avgPriorityScore ?? 0), 0);
+  setTimeout(() => animateCounter($('ls-contacted'), 0, s.pctContacted ?? 0), 60);
+  setTimeout(() => animateCounter($('ls-qualified'), 0, s.pctQualifiedOrWon ?? 0), 120);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
@@ -546,12 +546,12 @@ const BUSINESS_STAGES = [
 ];
 
 const STAGE_LABELS = {
-  STARTING:          'Starting',
-  WEBSITE_DESIGN:    'Website Design',
-  WEBSITE_LIVE:      'Website Live',
-  LEADS_ACTIVE:      'Leads Active',
+  STARTING: 'Starting',
+  WEBSITE_DESIGN: 'Website Design',
+  WEBSITE_LIVE: 'Website Live',
+  LEADS_ACTIVE: 'Leads Active',
   AUTOMATION_ACTIVE: 'Automation Active',
-  SCALING:           'Scaling',
+  SCALING: 'Scaling',
 };
 
 /**
@@ -559,9 +559,9 @@ const STAGE_LABELS = {
  * signals, or null if no suggestion applies.
  */
 function getSuggestedStage(b) {
-  if (b.stage === 'WEBSITE_LIVE'      && b.leadCount            > 10)  return 'LEADS_ACTIVE';
-  if (b.stage === 'LEADS_ACTIVE'      && b.automationEventCount > 20)  return 'AUTOMATION_ACTIVE';
-  if (b.stage === 'AUTOMATION_ACTIVE' && b.leadCount            > 200) return 'SCALING';
+  if (b.stage === 'WEBSITE_LIVE' && b.leadCount > 10) return 'LEADS_ACTIVE';
+  if (b.stage === 'LEADS_ACTIVE' && b.automationEventCount > 20) return 'AUTOMATION_ACTIVE';
+  if (b.stage === 'AUTOMATION_ACTIVE' && b.leadCount > 200) return 'SCALING';
   return null;
 }
 
@@ -626,7 +626,7 @@ async function fetchAndRenderBusinesses() {
     const stage = btn.dataset.stage;
     const label = STAGE_LABELS[stage];
 
-    btn.disabled    = true;
+    btn.disabled = true;
     btn.textContent = '…';
 
     try {
@@ -636,7 +636,7 @@ async function fetchAndRenderBusinesses() {
       loadedSections.delete('businesses');
       await fetchAndRenderBusinesses();
     } catch (err) {
-      btn.disabled    = false;
+      btn.disabled = false;
       btn.textContent = `↑ ${label}`;
       toast(err.message || 'Could not update stage', 'error');
     }
@@ -644,10 +644,10 @@ async function fetchAndRenderBusinesses() {
 }
 
 async function onStageChange(e) {
-  const sel      = e.target;
-  const bizId    = sel.dataset.bizId;
+  const sel = e.target;
+  const bizId = sel.dataset.bizId;
   const newStage = sel.value;
-  const prev     = sel.dataset.current;
+  const prev = sel.dataset.current;
 
   sel.disabled = true;
   sel.className = 'stage-select stage-select--loading';
@@ -658,7 +658,7 @@ async function onStageChange(e) {
     sel.className = `stage-select stage-select--${newStage.toLowerCase()}`;
     toast(`Stage → ${STAGE_LABELS[newStage]}`, 'success');
   } catch (err) {
-    sel.value     = prev;
+    sel.value = prev;
     sel.className = `stage-select stage-select--${prev.toLowerCase()}`;
     toast(err.message || 'Could not update stage', 'error');
   } finally {
@@ -676,8 +676,8 @@ function slugify(str) {
 
 /* ── Wizard state ──────────────────────────────────────────────────────── */
 let _slugManuallyEdited = false;
-let _slugCheckTimer     = null;
-let _lastCreated        = null; /* { name, slug, email, password } for step 3 */
+let _slugCheckTimer = null;
+let _lastCreated = null; /* { name, slug, email, password } for step 3 */
 
 /* ── Step navigation ───────────────────────────────────────────────────── */
 function wizardGoTo(step) {
@@ -685,7 +685,7 @@ function wizardGoTo(step) {
     $(`wizard-step-${n}`).hidden = n !== step;
     const dot = document.querySelector(`.wizard__step[data-step="${n}"]`);
     if (dot) {
-      dot.classList.toggle('wizard__step--active',    n === step);
+      dot.classList.toggle('wizard__step--active', n === step);
       dot.classList.toggle('wizard__step--completed', n < step);
     }
   });
@@ -693,20 +693,20 @@ function wizardGoTo(step) {
 
 /* ── Open / close ──────────────────────────────────────────────────────── */
 function openCreateModal() {
-  _lastCreated        = null;
+  _lastCreated = null;
   _slugManuallyEdited = false;
   /* Reset all fields */
   ['biz-name', 'biz-slug', 'biz-city',
-   'biz-owner-name', 'biz-owner-email', 'biz-owner-password'].forEach((id) => {
-    $$(id) && ($$(id).value = '');
-  });
+    'biz-owner-name', 'biz-owner-email', 'biz-owner-password'].forEach((id) => {
+      $$(id) && ($$(id).value = '');
+    });
   $('biz-industry').value = '';
   $('biz-timezone').value = 'Asia/Kolkata';
   $('biz-currency').value = 'INR';
   $('biz-followup').value = '30';
   $('biz-autoreply').checked = false;
   $('slug-status').textContent = '';
-  $('slug-status').className   = 'slug-status';
+  $('slug-status').className = 'slug-status';
   $('create-biz-error').textContent = '';
   renderPwStrength('');
   wizardGoTo(1);
@@ -755,7 +755,7 @@ function setSlugStatus(text, cls) {
   el.style.opacity = '0';
   setTimeout(() => {
     el.textContent = text;
-    el.className   = cls;
+    el.className = cls;
     el.style.opacity = '';
   }, 90);
 }
@@ -789,11 +789,11 @@ function renderPwStrength(pw) {
   const el = $('pw-strength');
   if (!pw) { el.innerHTML = ''; return; }
   let score = 0;
-  if (pw.length >= 8)              score++;
-  if (pw.length >= 12)             score++;
-  if (/[A-Z]/.test(pw))           score++;
-  if (/[0-9]/.test(pw))           score++;
-  if (/[^A-Za-z0-9]/.test(pw))   score++;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
   const level = score <= 2 ? 'weak' : score <= 3 ? 'fair' : 'strong';
   el.innerHTML = `
     <div class="pw-bar pw-bar--${level}">
@@ -819,14 +819,14 @@ $('wizard-back-2').addEventListener('click', () => wizardGoTo(1));
 $('wizard-submit').addEventListener('click', async () => {
   if (!requireAuth()) return;
 
-  const ownerName     = $('biz-owner-name').value.trim();
-  const ownerEmail    = $('biz-owner-email').value.trim();
+  const ownerName = $('biz-owner-name').value.trim();
+  const ownerEmail = $('biz-owner-email').value.trim();
   const ownerPassword = $('biz-owner-password').value;
-  const errEl         = $('create-biz-error');
-  errEl.textContent   = '';
+  const errEl = $('create-biz-error');
+  errEl.textContent = '';
 
-  if (!ownerName)                      { $('biz-owner-name').focus();     errEl.textContent = 'Owner name is required.';     return; }
-  if (!ownerEmail)                     { $('biz-owner-email').focus();    errEl.textContent = 'Owner email is required.';    return; }
+  if (!ownerName) { $('biz-owner-name').focus(); errEl.textContent = 'Owner name is required.'; return; }
+  if (!ownerEmail) { $('biz-owner-email').focus(); errEl.textContent = 'Owner email is required.'; return; }
   if (!ownerPassword || ownerPassword.length < 8) {
     $('biz-owner-password').focus();
     errEl.textContent = 'Password must be at least 8 characters.';
@@ -834,20 +834,20 @@ $('wizard-submit').addEventListener('click', async () => {
   }
 
   const btn = $('wizard-submit');
-  btn.disabled    = true;
+  btn.disabled = true;
   btn.textContent = 'Creating…';
 
   const payload = {
-    name:             $('biz-name').value.trim(),
-    slug:             $('biz-slug').value.trim()     || undefined,
-    industry:         $('biz-industry').value        || undefined,
-    city:             $('biz-city').value.trim()     || undefined,
-    timezone:         $('biz-timezone').value        || undefined,
-    currency:         $('biz-currency').value        || undefined,
+    name: $('biz-name').value.trim(),
+    slug: $('biz-slug').value.trim() || undefined,
+    industry: $('biz-industry').value || undefined,
+    city: $('biz-city').value.trim() || undefined,
+    timezone: $('biz-timezone').value || undefined,
+    currency: $('biz-currency').value || undefined,
     ownerName,
     ownerEmail,
     ownerPassword,
-    followUpMinutes:  parseInt($('biz-followup').value, 10),
+    followUpMinutes: parseInt($('biz-followup').value, 10),
     autoReplyEnabled: $('biz-autoreply').checked,
   };
 
@@ -858,11 +858,11 @@ $('wizard-submit').addEventListener('click', async () => {
     _lastCreated = { name: biz.name, slug: biz.slug, email: ownerEmail, password: ownerPassword };
 
     /* Populate success screen */
-    $('success-biz-name').textContent     = biz.name;
+    $('success-biz-name').textContent = biz.name;
     $('success-dashboard-url').textContent = `${location.origin}/dashboard`;
-    $('success-email').textContent        = ownerEmail;
-    $('success-password').textContent     = ownerPassword;
-    $('success-slug').textContent         = biz.slug;
+    $('success-email').textContent = ownerEmail;
+    $('success-password').textContent = ownerPassword;
+    $('success-slug').textContent = biz.slug;
 
     wizardGoTo(3);
 
@@ -872,7 +872,7 @@ $('wizard-submit').addEventListener('click', async () => {
   } catch (err) {
     errEl.textContent = err.message || 'Failed to create business';
   } finally {
-    btn.disabled    = false;
+    btn.disabled = false;
     btn.textContent = 'Create Business';
   }
 });
@@ -922,10 +922,16 @@ function updateLeadSortIndicators() {
 }
 
 function initLeadsSortHeaders() {
+  if (_sortHeadersReady) return;
   const thead = $('leads-table')?.querySelector('thead');
   if (!thead) return;
+  _sortHeadersReady = true;
   thead.querySelectorAll('[data-sort]').forEach((th) => {
     th.style.cursor = 'pointer';
+    /* Append sort indicator span (matches dashboard pattern) */
+    const ind = document.createElement('span');
+    ind.className = 'sort-ind';
+    th.appendChild(ind);
     th.addEventListener('click', () => {
       const col = th.dataset.sort;
       if (_leadsSort.col === col) {
@@ -944,9 +950,9 @@ function _applyLeadsFilter() {
   const q = ($('leads-search')?.value ?? '').toLowerCase();
   const filtered = q
     ? _allLeads.filter((l) =>
-        l.name?.toLowerCase().includes(q) ||
-        l.businessName?.toLowerCase().includes(q)
-      )
+      l.name?.toLowerCase().includes(q) ||
+      l.businessName?.toLowerCase().includes(q)
+    )
     : _allLeads;
   renderLeadsTable(sortLeads(filtered));
 }
@@ -999,10 +1005,10 @@ function renderLeadsTable(rows) {
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 const LOG_ICONS = {
-  AGENT_CLASSIFIED:    '🏷️',
-  AGENT_PRIORITIZED:   '⚡',
+  AGENT_CLASSIFIED: '🏷️',
+  AGENT_PRIORITIZED: '⚡',
   FOLLOW_UP_SCHEDULED: '🕐',
-  FOLLOW_UP_SENT:      '📨',
+  FOLLOW_UP_SENT: '📨',
 };
 
 async function fetchAndRenderLogs(firstLoad = true) {
@@ -1100,10 +1106,10 @@ function fmtDate(iso) {
 function fmtRelative(iso) {
   if (!iso) return '—';
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (mins < 1)  return 'just now';
+  if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return `${hrs}h ago`;
+  if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
@@ -1130,7 +1136,7 @@ function animateBar(bar, startY, endY, endH, duration) {
   function step(now) {
     const t = Math.min((now - start) / duration, 1);
     const e = 1 - Math.pow(1 - t, 3);
-    bar.setAttribute('y',      startY + (endY - startY) * e);
+    bar.setAttribute('y', startY + (endY - startY) * e);
     bar.setAttribute('height', endH * e);
     if (t < 1) requestAnimationFrame(step);
   }

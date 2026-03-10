@@ -1,27 +1,24 @@
 'use strict';
 
 const { PrismaClient } = require('@prisma/client');
+const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
 
 const prisma = new PrismaClient();
 
-/* Mirrors DEFAULT_CONFIG in engine.js — source of truth for new rows. */
-const DEFAULT_CONFIG = {
-  toneStyle:           'professional',
-  priorityRules:       { weights: { urgent: 30, price: 10 } },
-  classificationRules: { keywords: { DEMO_REQUEST: ['demo'], ADMISSION: ['admission'] } },
-  followUpMinutes:     30,
-  autoReplyEnabled:    false,
-};
-
 /**
- * Fetch AgentConfig for a business. Creates one with defaults if missing.
- * Always scoped by businessId.
+ * Fetch AgentConfig for a business. Creates one with industry-aware defaults
+ * if missing. Always scoped by businessId.
  */
 const getOrCreate = async (businessId) => {
   let config = await prisma.agentConfig.findUnique({ where: { businessId } });
   if (!config) {
+    const biz = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { industry: true },
+    });
+    const preset = getAgentConfigPreset(biz?.industry || 'other');
     config = await prisma.agentConfig.create({
-      data: { businessId, ...DEFAULT_CONFIG },
+      data: { businessId, ...preset },
     });
   }
   return config;
@@ -33,9 +30,14 @@ const getOrCreate = async (businessId) => {
  * Always scoped by businessId.
  */
 const update = async (businessId, { followUpMinutes, classificationRules, priorityRules }) => {
+  const biz = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { industry: true },
+  });
+  const preset = getAgentConfigPreset(biz?.industry || 'other');
   return prisma.agentConfig.upsert({
-    where:  { businessId },
-    create: { businessId, ...DEFAULT_CONFIG, followUpMinutes, classificationRules, priorityRules },
+    where: { businessId },
+    create: { businessId, ...preset, followUpMinutes, classificationRules, priorityRules },
     update: { followUpMinutes, classificationRules, priorityRules },
   });
 };

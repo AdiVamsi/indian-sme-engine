@@ -15,6 +15,20 @@ const bcrypt = require('bcrypt');
 const { getAgentConfigPreset } = require('../src/constants/agentConfig.presets');
 
 const prisma = new PrismaClient();
+const SHARMA_SHOWCASE = {
+  name: 'Sharma JEE Academy',
+  slug: 'sharma-jee-academy-delhi',
+  phone: '+91 98765 43210',
+  email: 'admin@sharmajeeacademy.in',
+  address: 'Connaught Place, New Delhi',
+  industry: 'academy',
+  city: 'Delhi',
+  country: 'India',
+  timezone: 'Asia/Kolkata',
+  currency: 'INR',
+  ownerEmail: 'owner@sharmajeeacademy.in',
+  ownerName: 'Owner',
+};
 
 /* ── Deterministic helpers ──────────────────────────────────────────────── */
 function pick(arr)         { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -336,36 +350,87 @@ async function main() {
   /* ── 1. Preserve existing primary + demo businesses ──────────────────── */
   console.log('Upserting primary businesses...');
 
-  const primaryBiz = await prisma.business.upsert({
-    where: { slug: 'sharma-jee-academy-delhi' },
-    update: {
-      name: 'Sharma JEE Academy',
-      phone: '+91 98765 43210',
-      email: 'admin@sharmajeeacademy.in',
-      address: 'Connaught Place, New Delhi',
-      industry: 'academy', city: 'Delhi', country: 'India',
-      timezone: 'Asia/Kolkata', currency: 'INR',
-    },
-    create: {
-      name: 'Sharma JEE Academy', slug: 'sharma-jee-academy-delhi',
-      phone: '+91 98765 43210', email: 'admin@sharmajeeacademy.in',
-      address: 'Connaught Place, New Delhi',
-      industry: 'academy', city: 'Delhi', country: 'India',
-      timezone: 'Asia/Kolkata', currency: 'INR',
-    },
+  const canonicalSharma = await prisma.business.findUnique({
+    where: { slug: SHARMA_SHOWCASE.slug },
   });
+
+  const legacySharmaMatches = canonicalSharma ? [] : await prisma.business.findMany({
+    where: {
+      OR: [
+        { name: SHARMA_SHOWCASE.name },
+        { email: SHARMA_SHOWCASE.email },
+      ],
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (legacySharmaMatches.length > 1) {
+    console.warn(
+      `[seed] Multiple legacy Sharma showcase businesses found: ${legacySharmaMatches.map((biz) => biz.slug).join(', ')}`
+    );
+  }
+
+  let primaryBiz;
+  if (canonicalSharma) {
+    primaryBiz = await prisma.business.update({
+      where: { id: canonicalSharma.id },
+      data: {
+        name: SHARMA_SHOWCASE.name,
+        slug: SHARMA_SHOWCASE.slug,
+        phone: SHARMA_SHOWCASE.phone,
+        email: SHARMA_SHOWCASE.email,
+        address: SHARMA_SHOWCASE.address,
+        industry: SHARMA_SHOWCASE.industry,
+        city: SHARMA_SHOWCASE.city,
+        country: SHARMA_SHOWCASE.country,
+        timezone: SHARMA_SHOWCASE.timezone,
+        currency: SHARMA_SHOWCASE.currency,
+      },
+    });
+  } else if (legacySharmaMatches[0]) {
+    primaryBiz = await prisma.business.update({
+      where: { id: legacySharmaMatches[0].id },
+      data: {
+        name: SHARMA_SHOWCASE.name,
+        slug: SHARMA_SHOWCASE.slug,
+        phone: SHARMA_SHOWCASE.phone,
+        email: SHARMA_SHOWCASE.email,
+        address: SHARMA_SHOWCASE.address,
+        industry: SHARMA_SHOWCASE.industry,
+        city: SHARMA_SHOWCASE.city,
+        country: SHARMA_SHOWCASE.country,
+        timezone: SHARMA_SHOWCASE.timezone,
+        currency: SHARMA_SHOWCASE.currency,
+      },
+    });
+  } else {
+    primaryBiz = await prisma.business.create({
+      data: {
+        name: SHARMA_SHOWCASE.name,
+        slug: SHARMA_SHOWCASE.slug,
+        phone: SHARMA_SHOWCASE.phone,
+        email: SHARMA_SHOWCASE.email,
+        address: SHARMA_SHOWCASE.address,
+        industry: SHARMA_SHOWCASE.industry,
+        city: SHARMA_SHOWCASE.city,
+        country: SHARMA_SHOWCASE.country,
+        timezone: SHARMA_SHOWCASE.timezone,
+        currency: SHARMA_SHOWCASE.currency,
+      },
+    });
+  }
 
   const primaryPwHash = await bcrypt.hash('Admin@12345', 12);
   await prisma.user.upsert({
-    where:  { businessId_email: { businessId: primaryBiz.id, email: 'owner@sharmajeeacademy.in' } },
+    where:  { businessId_email: { businessId: primaryBiz.id, email: SHARMA_SHOWCASE.ownerEmail } },
     update: {
-      name: 'Owner',
+      name: SHARMA_SHOWCASE.ownerName,
       passwordHash: primaryPwHash,
       role: 'OWNER',
     },
     create: {
       businessId: primaryBiz.id,
-      name: 'Owner', email: 'owner@sharmajeeacademy.in',
+      name: SHARMA_SHOWCASE.ownerName, email: SHARMA_SHOWCASE.ownerEmail,
       passwordHash: primaryPwHash, role: 'OWNER',
     },
   });

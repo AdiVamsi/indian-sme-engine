@@ -7,11 +7,13 @@ const http = require('node:http');
 
 const { PORT, NODE_ENV } = require('./config/env');
 const app = require('./app');
+const { prisma } = require('./lib/prisma');
 const { disconnectPrisma } = require('./lib/prisma');
 const { logger } = require('./lib/logger');
 const { initRealtime, closeRealtime } = require('./realtime/socket');
 
 const server = http.createServer(app);
+const SHARMA_SHOWCASE_SLUG = 'sharma-jee-academy-delhi';
 
 server.listen(PORT, () => {
   logger.info({
@@ -19,6 +21,30 @@ server.listen(PORT, () => {
     port: PORT,
   }, 'Server started');
 });
+
+void (async () => {
+  try {
+    const showcaseBusiness = await prisma.business.findUnique({
+      where: { slug: SHARMA_SHOWCASE_SLUG },
+      select: { id: true, slug: true, name: true },
+    });
+
+    if (showcaseBusiness) {
+      logger.info(
+        { slug: showcaseBusiness.slug, businessId: showcaseBusiness.id, name: showcaseBusiness.name },
+        'Showcase demo business is available'
+      );
+      return;
+    }
+
+    logger.warn(
+      { slug: SHARMA_SHOWCASE_SLUG },
+      'Showcase demo business slug is missing; /form/sharma-jee-academy-delhi and public demo lead capture will fail until the database is reseeded'
+    );
+  } catch (err) {
+    logger.warn({ err, slug: SHARMA_SHOWCASE_SLUG }, 'Unable to verify showcase demo business slug at startup');
+  }
+})();
 
 initRealtime(server);
 

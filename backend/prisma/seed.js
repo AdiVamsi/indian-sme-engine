@@ -339,6 +339,10 @@ async function main() {
   const primaryBiz = await prisma.business.upsert({
     where: { slug: 'sharma-jee-academy-delhi' },
     update: {
+      name: 'Sharma JEE Academy',
+      phone: '+91 98765 43210',
+      email: 'admin@sharmajeeacademy.in',
+      address: 'Connaught Place, New Delhi',
       industry: 'academy', city: 'Delhi', country: 'India',
       timezone: 'Asia/Kolkata', currency: 'INR',
     },
@@ -354,7 +358,11 @@ async function main() {
   const primaryPwHash = await bcrypt.hash('Admin@12345', 12);
   await prisma.user.upsert({
     where:  { businessId_email: { businessId: primaryBiz.id, email: 'owner@sharmajeeacademy.in' } },
-    update: {},
+    update: {
+      name: 'Owner',
+      passwordHash: primaryPwHash,
+      role: 'OWNER',
+    },
     create: {
       businessId: primaryBiz.id,
       name: 'Owner', email: 'owner@sharmajeeacademy.in',

@@ -27,7 +27,7 @@
     </div>
 
     <h1 class="login-heading">Welcome back</h1>
-    <p class="login-sub">Sign in to your admin dashboard</p>
+    <p class="login-sub">Sign in to your business dashboard</p>
 
     <form id="login-form" novalidate>
       <div class="form-group">
@@ -107,7 +107,7 @@
         <span class="sidebar__brand-mark">⚡</span>
         <span class="sidebar__brand-name">SME Engine</span>
       </div>
-      <button class="sidebar__toggle" id="sidebar-toggle" title="Toggle sidebar"></button>
+      <button type="button" class="sidebar__toggle" id="sidebar-toggle" title="Toggle sidebar"></button>
     </div>
 
     <nav class="sidebar__nav" id="sidebar-nav">
@@ -153,7 +153,7 @@
     </nav>
 
     <div class="sidebar__footer">
-      <button class="sidebar__item" id="sidebar-logout">
+      <button type="button" class="sidebar__item" id="sidebar-logout">
         <span class="sidebar__item-icon">→</span>
         <span class="sidebar__item-label">Sign out</span>
       </button>
@@ -165,7 +165,7 @@
 
     <header class="topbar">
       <div class="topbar__left">
-        <button class="topbar-hamburger" id="topbar-hamburger" aria-label="Open navigation menu">
+        <button type="button" class="topbar-hamburger" id="topbar-hamburger" aria-label="Open navigation menu">
           <span></span><span></span><span></span>
         </button>
         <img id="biz-logo" class="biz-logo" src="" alt="" style="display:none" />
@@ -176,7 +176,7 @@
       </div>
 
       <div class="topbar__center">
-        <button class="topbar-search-btn" id="topbar-search-btn" title="Search leads (⌘K)">
+        <button type="button" class="topbar-search-btn" id="topbar-search-btn" title="Search leads (⌘K)">
           <svg class="topbar-search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
             <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/>
             <path d="M10 10L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -187,7 +187,7 @@
       </div>
 
       <div class="topbar__right">
-        <button id="logout-btn" class="btn-logout">Sign out</button>
+        <button type="button" id="logout-btn" class="btn-logout">Sign out</button>
       </div>
     </header>
 
@@ -221,7 +221,7 @@
           <div class="golive-card__row">
             <span class="golive-card__url" id="golive-url"></span>
             <div class="golive-card__actions">
-              <button class="golive-card__btn" id="golive-copy">Copy link</button>
+              <button type="button" class="golive-card__btn" id="golive-copy">Copy link</button>
               <a class="golive-card__btn golive-card__btn--open" id="golive-open" href="#" target="_blank" rel="noopener noreferrer">Open form</a>
             </div>
           </div>
@@ -291,7 +291,7 @@
             <h2 class="section-title">Appointments</h2>
             <p class="section-sub">Scheduled sessions</p>
           </div>
-          <button class="btn-create" id="btn-new-appointment">+ New</button>
+          <button type="button" class="btn-create" id="btn-new-appointment">+ New</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -308,7 +308,7 @@
             <h2 class="section-title">Services</h2>
             <p class="section-sub">Your offered services</p>
           </div>
-          <button class="btn-create" id="btn-new-service">+ New</button>
+          <button type="button" class="btn-create" id="btn-new-service">+ New</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -325,7 +325,7 @@
             <h2 class="section-title">Testimonials</h2>
             <p class="section-sub">Customer reviews</p>
           </div>
-          <button class="btn-create" id="btn-new-testimonial">+ New</button>
+          <button type="button" class="btn-create" id="btn-new-testimonial">+ New</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -352,13 +352,13 @@
 
       <!-- Hidden nav tabs kept for JS compatibility -->
       <nav class="tabs" role="tablist" aria-hidden="true">
-        <button class="tab" data-tab="overview"      role="tab">Overview</button>
-        <button class="tab" data-tab="leads"         role="tab">Leads</button>
-        <button class="tab" data-tab="automations"   role="tab">Automations</button>
-        <button class="tab" data-tab="appointments"  role="tab">Appointments</button>
-        <button class="tab" data-tab="services"      role="tab">Services</button>
-        <button class="tab" data-tab="testimonials"  role="tab">Testimonials</button>
-        <button class="tab" data-tab="settings"      role="tab">Settings</button>
+        <button type="button" class="tab" data-tab="overview"      role="tab">Overview</button>
+        <button type="button" class="tab" data-tab="leads"         role="tab">Leads</button>
+        <button type="button" class="tab" data-tab="automations"   role="tab">Automations</button>
+        <button type="button" class="tab" data-tab="appointments"  role="tab">Appointments</button>
+        <button type="button" class="tab" data-tab="services"      role="tab">Services</button>
+        <button type="button" class="tab" data-tab="testimonials"  role="tab">Testimonials</button>
+        <button type="button" class="tab" data-tab="settings"      role="tab">Settings</button>
       </nav>
 
     </main>
@@ -376,16 +376,16 @@
         <h2 class="drawer__name"  id="drawer-name">—</h2>
         <p  class="drawer__phone" id="drawer-phone"></p>
       </div>
-      <button class="drawer__close" id="drawer-close" title="Close">✕</button>
+      <button type="button" class="drawer__close" id="drawer-close" title="Close">✕</button>
     </div>
 
     <div class="drawer__meta" id="drawer-meta"></div>
 
     <div class="drawer__tabs">
-      <button class="drawer__tab is-active" data-drawer-tab="activity">Activity</button>
-      <button class="drawer__tab"           data-drawer-tab="overview">Overview</button>
-      <button class="drawer__tab"           data-drawer-tab="suggestions">Next Action</button>
-      <button class="drawer__tab"           data-drawer-tab="outreach">Outreach</button>
+      <button type="button" class="drawer__tab is-active" data-drawer-tab="activity">Activity</button>
+      <button type="button" class="drawer__tab"           data-drawer-tab="overview">Overview</button>
+      <button type="button" class="drawer__tab"           data-drawer-tab="suggestions">Next Action</button>
+      <button type="button" class="drawer__tab"           data-drawer-tab="outreach">Outreach</button>
     </div>
 
     <div class="drawer__body">
@@ -412,8 +412,8 @@
     <h3>Confirm Delete</h3>
     <p id="delete-modal-msg">This action cannot be undone.</p>
     <div class="modal-actions">
-      <button id="modal-cancel"  class="btn-cancel">Cancel</button>
-      <button id="modal-confirm" class="btn-danger">Delete</button>
+      <button type="button" id="modal-cancel"  class="btn-cancel">Cancel</button>
+      <button type="button" id="modal-confirm" class="btn-danger">Delete</button>
     </div>
   </div>
 </div>

@@ -3,6 +3,9 @@
 const SP = require('./dictionaries/signalPatterns');
 const HI = require('./dictionaries/hinglish');
 
+const CLAUSE_BREAK_RE = /[.!?;]+|\b(?:but|however|though|lekin|magar|par)\b/gi;
+const FILLER_WORDS = ['a', 'an', 'the', 'to', 'for'];
+
 /**
  * Layer 2 — Extract structured signals from normalized text.
  *
@@ -78,20 +81,20 @@ function matchAll(text, patterns, out) {
     /* Sort longest-first (stable) */
     const sorted = [...patterns].sort((a, b) => b.p.length - a.p.length);
 
-    for (const { p, s } of sorted) {
-        const phrase = p.toLowerCase();
-        let idx = text.indexOf(phrase);
-        while (idx !== -1) {
-            const before = idx > 0 ? text[idx - 1] : ' ';
-            const after = idx + phrase.length < text.length ? text[idx + phrase.length] : ' ';
+    for (const clause of splitClauses(text)) {
+        for (const { p, s } of sorted) {
+            const regex = buildPatternRegex(p);
+            if (!regex) continue;
 
-            const isWordStart = /[\s,.;!?"'()[\]{}]/.test(before);
-            const isWordEnd = /[\s,.;!?"'()[\]{}]/.test(after);
-
-            if (isWordStart && isWordEnd) {
-                out.push({ signal: s, phrase: p, position: idx });
+            let match = regex.exec(clause.text);
+            while (match) {
+                out.push({
+                    signal: s,
+                    phrase: p,
+                    position: clause.start + match.index,
+                });
+                match = regex.exec(clause.text);
             }
-            idx = text.indexOf(phrase, idx + phrase.length);
         }
     }
 }
@@ -109,6 +112,49 @@ function dedup(matches) {
 
 function emptySignals() {
     return { positive: [], negative: [], junk: [], guardian: [], urgency: [], channel: [], wrongFit: [], vague: [] };
+}
+
+function splitClauses(text) {
+    const clauses = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = CLAUSE_BREAK_RE.exec(text)) !== null) {
+        pushClause(clauses, text, lastIndex, match.index);
+        lastIndex = match.index + match[0].length;
+    }
+
+    pushClause(clauses, text, lastIndex, text.length);
+    return clauses;
+}
+
+function pushClause(clauses, text, start, end) {
+    const slice = text.slice(start, end);
+    const trimmed = slice.trim();
+    if (!trimmed) return;
+
+    const leadingWs = slice.search(/\S/);
+    clauses.push({
+        text: trimmed,
+        start: start + (leadingWs === -1 ? 0 : leadingWs),
+    });
+}
+
+function buildPatternRegex(phrase) {
+    const tokens = String(phrase ?? '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (!tokens.length) return null;
+
+    const fillerGroup = FILLER_WORDS.map(escapeRegex).join('|');
+    const joiner = tokens.length > 1
+        ? `(?:\\s+(?:${fillerGroup}))*\\s+`
+        : '';
+    const pattern = tokens.map(escapeRegex).join(joiner);
+
+    return new RegExp(`\\b${pattern}\\b`, 'gi');
+}
+
+function escapeRegex(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 module.exports = { extractSignals };

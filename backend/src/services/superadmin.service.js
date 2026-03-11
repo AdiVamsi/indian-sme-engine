@@ -120,6 +120,7 @@ async function getAllLeads() {
       id: l.id,
       name: l.name,
       phone: l.phone,
+      message: l.message,
       status: l.status,
       score: priorityScore,
       priority,

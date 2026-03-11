@@ -13,6 +13,26 @@
  * @returns {object} Final intelligence payload
  */
 function resolveFinal(resolved, confidence, config) {
+    const BUILT_IN_URGENCY_WEIGHTS = {
+        IMMEDIATELY: 25,
+        RIGHT_NOW: 25,
+        ASAP: 25,
+        URGENT: 30,
+        TODAY: 20,
+        TOMORROW: 20,
+        THIS_WEEK: 12,
+        NEXT_WEEK: 15,
+        NEXT_MONTH: 10,
+        FROM_NEXT: 10,
+        NOW_HI: 25,
+        IMMEDIATELY_HI: 25,
+        QUICK_HI: 15,
+        TOMORROW_HI: 20,
+        THIS_WEEK_HI: 12,
+        NEXT_WEEK_HI: 15,
+        NEXT_MONTH_HI: 10,
+    };
+
     /* 1. Extract final tags, mapping internal verbs into business outcomes */
     const INTERNAL_SIGNALS = new Set([
         'COACHING_NEED', 'ENROLLMENT', 'NEED_WANT', 'WANT_TO_TAKE',
@@ -47,6 +67,16 @@ function resolveFinal(resolved, confidence, config) {
         if (matchingPhrases.has(key.toLowerCase()) && typeof weight === 'number') {
             priorityScore += weight;
         }
+    }
+
+    const appliedUrgencySignals = new Set();
+    for (const match of resolved.urgency) {
+        const configuredWeight = weights[match.phrase.toLowerCase()];
+        const builtInWeight = BUILT_IN_URGENCY_WEIGHTS[match.signal];
+        if (typeof configuredWeight === 'number' || typeof builtInWeight !== 'number') continue;
+        if (appliedUrgencySignals.has(match.signal)) continue;
+        priorityScore += builtInWeight;
+        appliedUrgencySignals.add(match.signal);
     }
 
     /* Baseline logic — mimicking applyPolicy */

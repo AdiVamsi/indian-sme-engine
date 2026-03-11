@@ -1,13 +1,11 @@
 'use strict';
 
 const { PrismaClient } = require('@prisma/client');
-const { analyzeMessage } = require('./intelligence');
-const { classifyWithModel } = require('./modelClassifier');
+const { classify } = require('./classifier');
 const { runLeadAutomations } = require('../services/leadAutomation.service');
 const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
 
 const prisma = new PrismaClient();
-const CLASSIFIER_MODE = (process.env.CLASSIFIER_MODE || 'rule_only').toLowerCase();
 
 /**
  * run — stateless entry point for AgentEngine.
@@ -33,48 +31,33 @@ async function run({ type, leadId, businessId }) {
   let config = await prisma.agentConfig.findUnique({
     where: { businessId },
   });
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { name: true, industry: true },
+  });
 
   if (!config) {
-    const biz = await prisma.business.findUnique({
-      where: { id: businessId },
-      select: { industry: true },
-    });
-    const preset = getAgentConfigPreset(biz?.industry || 'other');
+    const preset = getAgentConfigPreset(business?.industry || 'other');
     config = await prisma.agentConfig.create({
       data: { businessId, ...preset },
     });
   }
 
-  /* 3. Local Intelligence Engine */
-  const intelligence = analyzeMessage(lead.message || '', config);
+  /* 3. LLM classification */
+  const intelligence = await classify({
+    lead,
+    business: {
+      name: business?.name || 'Unknown business',
+      industry: business?.industry || 'other',
+    },
+  });
 
-  let bestCategory = intelligence.tags[0] || 'GENERAL_ENQUIRY';
-  let confidenceLabel = intelligence.confidence;
-  let confidenceScore = intelligence.confidenceScore;
-  let priorityScore = intelligence.priorityScore;
-  let tags = intelligence.tags;
-  let via = 'local_intelligence';
-
-  /* 3b. Optional LLM Fallback (Hybrid Mode) */
-  if (intelligence.shouldUseLLMFallback && CLASSIFIER_MODE === 'hybrid') {
-    try {
-      const allowedCategories = config.classificationRules ? Object.keys(config.classificationRules.keywords) : [];
-      if (allowedCategories.length > 0) {
-        const modelResult = await classifyWithModel({
-          message: lead.message || '',
-          categories: allowedCategories,
-        });
-        if (modelResult) {
-          bestCategory = modelResult.bestCategory;
-          confidenceLabel = modelResult.confidenceLabel;
-          confidenceScore = modelResult.confidenceScore;
-          via = 'hybrid_fallback';
-        }
-      }
-    } catch (err) {
-      console.error(`[AgentEngine] LLM fallback failed for lead ${lead.id}:`, err.message);
-    }
-  }
+  const bestCategory = intelligence.bestCategory || 'GENERAL_ENQUIRY';
+  const confidenceLabel = intelligence.confidenceLabel;
+  const confidenceScore = intelligence.confidenceScore;
+  const priorityScore = intelligence.priorityScore;
+  const tags = intelligence.tags;
+  const via = intelligence.via;
 
   /* 4. Schedule follow-up using config.followUpMinutes. */
   const followUpAt = new Date(Date.now() + config.followUpMinutes * 60 * 1000);
@@ -85,12 +68,20 @@ async function run({ type, leadId, businessId }) {
       data: {
         leadId: lead.id,
         type: 'AGENT_CLASSIFIED',
-        message: `Lead classified with tags: ${tags.length ? tags.join(', ') : 'none'} (Disposition: ${intelligence.leadDisposition})`,
+        message: `Lead classified as ${bestCategory} with tags: ${tags.length ? tags.join(', ') : 'none'} (Disposition: ${intelligence.disposition})`,
         metadata: {
           tags, bestCategory, confidenceLabel, confidenceScore, via,
-          intentPolarity: intelligence.intentPolarity,
-          leadDisposition: intelligence.leadDisposition,
-          explanation: intelligence.explanation
+          leadDisposition: intelligence.disposition,
+          languageMode: intelligence.languageMode,
+          suggestedNextAction: intelligence.suggestedNextAction,
+          explanation: intelligence.reasoning,
+          provider: intelligence.provider,
+          model: intelligence.model,
+          vertical: intelligence.vertical,
+          promptKey: intelligence.promptKey,
+          schemaVersion: intelligence.schemaVersion,
+          rawOutput: intelligence.rawOutput,
+          correction: null,
         },
       },
     }),
@@ -99,7 +90,12 @@ async function run({ type, leadId, businessId }) {
         leadId: lead.id,
         type: 'AGENT_PRIORITIZED',
         message: `Priority score assigned: ${priorityScore} (${intelligence.priority})`,
-        metadata: { priorityScore, priorityLabel: intelligence.priority },
+        metadata: {
+          priorityScore,
+          priorityLabel: intelligence.priority,
+          confidenceScore,
+          leadDisposition: intelligence.disposition,
+        },
       },
     }),
     prisma.leadActivity.create({
@@ -132,7 +128,7 @@ async function run({ type, leadId, businessId }) {
     priorityScore,
     priority: intelligence.priority,
     tags,
-    leadDisposition: intelligence.leadDisposition,
+    leadDisposition: intelligence.disposition,
     followUpAt: followUpAt.toISOString(),
     activitiesCreated: 3,
     automationsTriggered,

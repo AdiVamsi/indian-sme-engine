@@ -18,7 +18,9 @@ const login = async (req, res) => {
     return res.status(400).json({ error: result.error.flatten() });
   }
 
-  const { businessSlug, email, password } = result.data;
+  const businessSlug = result.data.businessSlug.trim().toLowerCase();
+  const email = result.data.email.trim().toLowerCase();
+  const { password } = result.data;
 
   try {
     const business = await findBusinessBySlug(businessSlug);

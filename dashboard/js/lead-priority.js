@@ -1,16 +1,9 @@
 /**
  * lead-priority.js — AI Lead Priority visualization page.
  *
- * Strategy:
- *   priorityScore and tags are NOT fields on the Lead model — they live
- *   in LeadActivity rows written by AgentEngine. Rather than adding a new
- *   backend endpoint, we fetch:
- *     1. GET /api/agent/config   — classification + priority rules
- *     2. GET /api/admin/leads    — all leads for the business (with message)
- *   then re-derive scores client-side using the same basicPolicy logic.
- *   This is deterministic and matches exactly what AgentEngine stored.
- *
- *   Leads are then sorted by priorityScore descending and rendered as cards.
+ * Priority score and tags come from the stored AgentEngine output.
+ * This page must never re-score leads locally, otherwise it diverges
+ * from the backend LLM classifier.
  */
 
 import { API_BASE_URL } from './config.js';
@@ -39,77 +32,6 @@ async function apiFetch(path) {
     throw new Error(data.error || `HTTP ${res.status} — ${path}`);
   }
   return res.json();
-}
-
-/* ── basicPolicy — mirrors backend/src/agents/policies/basicPolicy.js ───── */
-
-const FALLBACK_CLASSIFICATION = {
-  keywords: {
-    DEMO_REQUEST: ['demo'],
-    ADMISSION:    ['admission'],
-  },
-};
-
-const FALLBACK_PRIORITY = {
-  weights: {
-    urgent: 30,
-    price:  10,
-  },
-};
-
-function isValidObject(val) {
-  return val !== null && typeof val === 'object' && !Array.isArray(val);
-}
-
-function resolveClassRules(raw) {
-  return isValidObject(raw) && isValidObject(raw.keywords) ? raw : FALLBACK_CLASSIFICATION;
-}
-
-function resolvePrioRules(raw) {
-  return isValidObject(raw) && isValidObject(raw.weights) ? raw : FALLBACK_PRIORITY;
-}
-
-/**
- * Deterministic re-implementation of applyPolicy from basicPolicy.js.
- *
- * Classification: for each tag in classificationRules.keywords, if any
- *   trigger keyword is found in lead.message → tag is assigned.
- *
- * Priority scoring: for each keyword in priorityRules.weights, if found
- *   in lead.message → add its score. +5 bonus for messages > 100 chars.
- *
- * @param {{ message?: string }} lead
- * @param {object} agentConfig
- * @returns {{ priorityScore: number, tags: string[] }}
- */
-function applyPolicy(lead, agentConfig) {
-  const message    = (lead.message || '').toLowerCase();
-  const classRules = resolveClassRules(agentConfig.classificationRules);
-  const prioRules  = resolvePrioRules(agentConfig.priorityRules);
-
-  /* Classification */
-  const tags = [];
-  for (const [tag, keywords] of Object.entries(classRules.keywords)) {
-    if (
-      Array.isArray(keywords) &&
-      keywords.some((kw) => typeof kw === 'string' && message.includes(kw.toLowerCase()))
-    ) {
-      tags.push(tag);
-    }
-  }
-
-  /* Priority scoring */
-  let priorityScore = 0;
-  for (const [keyword, weight] of Object.entries(prioRules.weights)) {
-    if (typeof weight === 'number' && message.includes(keyword.toLowerCase())) {
-      priorityScore += weight;
-    }
-  }
-
-  /* Universal: detailed message signals serious enquiry */
-  if (message.length > 100) priorityScore += 5;
-
-  return { priorityScore, tags };
 }
 
 /* ── Badge helpers ───────────────────────────────────────────────────────── */
@@ -163,16 +85,12 @@ async function init() {
   const subtitleEl = document.getElementById('subtitle');
 
   try {
-    /* Fetch agent config and leads in parallel */
-    const [agentConfig, leads] = await Promise.all([
-      apiFetch('/api/agent'),
-      apiFetch('/api/admin/leads'),
-    ]);
+    const leads = await apiFetch('/api/admin/leads');
 
-    /* Score every lead using the live agent config */
     const scored = leads.map((lead) => ({
       ...lead,
-      ...applyPolicy(lead, agentConfig),
+      priorityScore: Number(lead.priorityScore ?? 0),
+      tags: Array.isArray(lead.tags) ? lead.tags : [],
     }));
 
     /* Sort by priorityScore descending — highest priority at the top */

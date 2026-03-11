@@ -2,14 +2,16 @@
 
 const request = require('supertest');
 const app = require('../app');
-const { createTestContext } = require('./_testHelpers');
+const { createTestContext, installLlmFetchMock } = require('./_testHelpers');
 
 describe('Leads', () => {
   let ctx;
   let token;
   let leadId;
+  let restoreFetch;
 
   beforeAll(async () => {
+    restoreFetch = installLlmFetchMock();
     ctx = await createTestContext();
 
     const res = await request(app)
@@ -20,6 +22,7 @@ describe('Leads', () => {
   }, 15000);
 
   afterAll(async () => {
+    restoreFetch();
     await ctx.cleanup();
   });
 

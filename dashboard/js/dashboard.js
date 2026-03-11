@@ -34,6 +34,11 @@ const $ = (id) => document.getElementById(id);
 
 const ALL_SECTIONS = ['overview', 'leads', 'automations', 'appointments', 'services', 'testimonials', 'settings'];
 
+function getRequestedTab() {
+  const hash = window.location.hash.slice(1);
+  return ALL_SECTIONS.includes(hash) ? hash : 'overview';
+}
+
 /* ─────────────────────────────────────────────────
    JWT UTILITIES
 ───────────────────────────────────────────────── */
@@ -233,6 +238,10 @@ $('login-form').addEventListener('submit', async (e) => {
     /* Persist token for agent.html (separate page, same session) */
     localStorage.setItem('dash_token', data.token);
 
+    /* Fresh login always lands on Overview, regardless of any stale hash. */
+    activeTab = 'overview';
+    history.replaceState(null, '', '#overview');
+
     /* Schedule auto-logout at token expiry */
     checkTokenAndSchedule(data.token);
 
@@ -431,9 +440,7 @@ async function handleMarkContacted(leadId, btn) {
   lead.status = 'CONTACTED';
 
   /* Refresh all affected surfaces */
-  renderActionCenter();
-  ui?.renderDonutChart(_allLeads);
-  if (activeTab === 'overview') renderOverviewActivity(_allLeads);
+  syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
 
   /* Keep the leads table row in sync if visible */
   const sel = document.querySelector(`.status-select[data-id="${leadId}"]`);
@@ -453,9 +460,7 @@ async function handleMarkContacted(leadId, btn) {
     console.error('[ActionCenter] markContacted failed:', err);
     /* Rollback: restore status in place — no re-insert needed */
     lead.status = oldStatus;
-    renderActionCenter();
-    ui?.renderDonutChart(_allLeads);
-    if (activeTab === 'overview') renderOverviewActivity(_allLeads);
+    syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
     if (sel) {
       const revertClass = [...sel.classList].find((c) => c.startsWith('status--'));
       if (revertClass) sel.classList.remove(revertClass);
@@ -629,9 +634,13 @@ async function bootDashboard() {
   ui.renderDonutChart(_allLeads);
   renderOverviewActivity(_allLeads);
   renderActionCenter();
+  renderAutomations(_allLeads);
 
   /* Go Live card — fills URL and wires copy button */
   wireGoLiveCard(cfg);
+
+  const startTab = getRequestedTab();
+  if (startTab !== 'overview') await switchTab(startTab);
 
   console.log('[Dashboard] Boot completed');
 }
@@ -643,9 +652,15 @@ document.querySelectorAll('.tab').forEach((btn) => {
   btn.addEventListener('click', () => switchTab(btn.dataset.tab));
 });
 
+window.addEventListener('hashchange', () => {
+  const tab = getRequestedTab();
+  if (tab !== activeTab) switchTab(tab);
+});
+
 async function switchTab(tab) {
   if (tab === activeTab) return;
   activeTab = tab;
+  history.replaceState(null, '', `#${tab}`);
 
   /* Close mobile sidebar when navigating */
   window._closeMobileSidebar?.();
@@ -669,7 +684,7 @@ async function switchTab(tab) {
 
   /* Force re-render of leads table if it grew/changed in background via websocket */
   if (tab === 'leads' && ui) {
-    _applyLeadsFilter();
+    _applyLeadFilters();
   }
 
   /* When returning to Overview, always refresh derived displays.
@@ -678,6 +693,10 @@ async function switchTab(tab) {
     ui.renderDonutChart(_allLeads);
     renderOverviewActivity(_allLeads);
     renderActionCenter();
+  }
+
+  if (tab === 'automations' && ui) {
+    renderAutomations(_allLeads);
   }
 }
 
@@ -759,7 +778,15 @@ let _allLeads = [];
 function renderLeads(leads) {
   _allLeads = leads ?? [];
   _applyLeadFilters();
-  if (ui) ui.renderDonutChart(_allLeads);
+  syncLeadDerivedViews();
+}
+
+function syncLeadDerivedViews({ rerenderTable = false } = {}) {
+  if (rerenderTable) _applyLeadFilters();
+  ui?.renderDonutChart(_allLeads);
+  renderActionCenter();
+  if (activeTab === 'overview') renderOverviewActivity(_allLeads);
+  if (activeTab === 'automations') renderAutomations(_allLeads);
 }
 
 function _sortLeads(rows) {
@@ -953,9 +980,7 @@ async function onLeadStatusChange(e) {
     /* Keep in-memory cache in sync and refresh all affected surfaces */
     const cached = _allLeads.find((l) => l.id === id);
     if (cached) cached.status = newStatus;
-    ui.renderDonutChart(_allLeads);
-    renderActionCenter();
-    if (activeTab === 'overview') renderOverviewActivity(_allLeads);
+    syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
   } catch (err) {
     console.error('[Dashboard] updateLeadStatus failed:', err);
     select.value = oldStatus || config.leadStatuses[0];
@@ -974,6 +999,9 @@ async function doDeleteLead(id) {
   try {
     await api.deleteLead(id);
     if (row) row.remove();
+
+    _allLeads = _allLeads.filter((lead) => lead.id !== id);
+    syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
 
     /* Show leads-specific empty state if now empty */
     const tbody = $('leads-tbody');
@@ -1309,22 +1337,20 @@ function renderAutomations(leads) {
 function startRealtime(token) {
   wsClient = connectRealtime(token, {
     'lead:new': onNewLead,
-    'lead:deleted': ({ id }) => doDeleteLead(id),
+    'lead:deleted': onRemoteLeadDeleted,
     'lead:status_changed': onRemoteLeadStatusChange,
   });
 }
 
 function onNewLead(lead) {
-  ui.updateStat('totalLeads', ui.getStat('totalLeads') + 1);
-  if (lead.status === config.leadStatuses[0])
-    ui.updateStat('newLeads', ui.getStat('newLeads') + 1);
-
-  /* Keep cache in sync */
-  _allLeads.unshift(lead);
-
-  /* If looking at leads tab, natively re-render (preserves sort/filters) */
-  if (activeTab === 'leads') {
-    _applyLeadsFilter();
+  const existing = _allLeads.find((item) => item.id === lead.id);
+  if (existing) {
+    Object.assign(existing, lead);
+  } else {
+    _allLeads.unshift(lead);
+    ui.updateStat('totalLeads', ui.getStat('totalLeads') + 1);
+    if (lead.status === config.leadStatuses[0])
+      ui.updateStat('newLeads', ui.getStat('newLeads') + 1);
   }
 
   const name = lead.name ? `: ${lead.name}` : '';
@@ -1336,12 +1362,7 @@ function onNewLead(lead) {
 
   ui.showToast(toastMsg, lead.priority === 'HIGH' ? 'success' : 'info');
 
-  /* Refresh charts — new lead affects distribution and action center buckets */
-  ui.renderDonutChart(_allLeads);
-  if (activeTab === 'overview') {
-    renderOverviewActivity(_allLeads);
-    renderActionCenter();
-  }
+  syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
 }
 
 function onRemoteLeadStatusChange({ id, status }) {
@@ -1365,9 +1386,27 @@ function onRemoteLeadStatusChange({ id, status }) {
   /* Keep cache in sync and refresh all affected surfaces */
   const cached = _allLeads.find((l) => l.id === id);
   if (cached) cached.status = status;
-  ui?.renderDonutChart(_allLeads);
-  renderActionCenter();
-  if (activeTab === 'overview') renderOverviewActivity(_allLeads);
+  syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
+}
+
+function onRemoteLeadDeleted({ id }) {
+  const deleted = _allLeads.find((lead) => lead.id === id);
+  if (!deleted) return;
+  const wasNew = deleted?.status === 'NEW';
+  const row = document.querySelector(`tr[data-lead-id="${id}"]`);
+
+  _allLeads = _allLeads.filter((lead) => lead.id !== id);
+  if (row) row.remove();
+
+  const tbody = $('leads-tbody');
+  const colSpan = (config.tableColumns.leads?.length ?? 5) + 1;
+  if (tbody && !tbody.querySelector('tr:not(.empty-row)')) {
+    buildLeadsEmptyState(tbody, colSpan);
+  }
+
+  ui.updateStat('totalLeads', Math.max(0, ui.getStat('totalLeads') - 1));
+  if (wasNew) ui.updateStat('newLeads', Math.max(0, ui.getStat('newLeads') - 1));
+  syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
 }
 
 /* ─────────────────────────────────────────────────
@@ -1536,6 +1575,7 @@ function _renderDrawerOverview(lead) {
       <span style="color:var(--text-2);font-weight:500;display:block;margin-bottom:0.4rem;">Original Message</span>
       <div style="background:var(--bg-2);padding:1rem;border-radius:0.4rem;font-size:0.95rem;line-height:1.5;color:var(--text);white-space:pre-wrap;">${esc(lead.message)}</div>
     </div>` : ''}
+  `;
 }
 
 const NBA_ICONS = {

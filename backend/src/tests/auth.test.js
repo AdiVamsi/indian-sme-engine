@@ -36,6 +36,20 @@ describe('Auth', () => {
       expect(res.body).toHaveProperty('error');
     });
 
+    it('accepts mixed-case slug and email input', async () => {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({
+          businessSlug: ctx.slug.toUpperCase(),
+          email: ctx.email.toUpperCase(),
+          password: ctx.password,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.business.slug).toBe(ctx.slug);
+      expect(res.body.user.email).toBe(ctx.email);
+    });
+
     it('returns 400 on missing fields', async () => {
       const res = await request(app)
         .post('/api/auth/login')

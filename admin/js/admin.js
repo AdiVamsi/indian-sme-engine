@@ -996,6 +996,7 @@ function renderLeadsTable(rows) {
     <tr>
       <td>
         <div class="cell-primary">${esc(l.name)}</div>
+        ${l.message ? `<div class="cell-sub"><span class="message-preview" title="${esc(l.message)}">↳ ${esc(truncate(l.message, 96))}</span></div>` : ''}
         <div class="cell-sub">${esc(l.phone ?? '')}</div>
       </td>
       <td>${esc(l.businessName ?? '—')}</td>
@@ -1118,6 +1119,12 @@ function fmtRelative(iso) {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function truncate(value, max = 80) {
+  const text = String(value ?? '').trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
 /**

@@ -1,134 +1,262 @@
 'use strict';
 
-/**
- * modelClassifier.js — Model-backed intent classification.
- *
- * Called only when CLASSIFIER_MODE=hybrid and the rule-based pass
- * did not produce a high-confidence result. All failures return null
- * so the caller (classifier.js) can fall through to the rule result.
- *
- * Requires: ANTHROPIC_API_KEY env var.
- * Install:  npm install @anthropic-ai/sdk   (only needed for hybrid mode)
- */
+const { getPromptPack } = require('./llm/promptPacks');
+const { buildJsonSchema, buildOutputSchema } = require('./llm/schema');
 
-/* Lazy-initialized client — never instantiated in rule_only mode. */
-let _client    = null;
-let _warnedOnce = false;
+const DEFAULT_MODEL = process.env.LLM_CLASSIFIER_MODEL || 'gpt-4o-mini';
+const DEFAULT_PROVIDER = (process.env.LLM_CLASSIFIER_PROVIDER || 'openai').toLowerCase();
+const DEFAULT_BASE_URL = process.env.LLM_CLASSIFIER_BASE_URL || 'https://api.openai.com/v1';
+const DEFAULT_TIMEOUT_MS = Number(process.env.LLM_CLASSIFIER_TIMEOUT_MS || 12000);
+const DEFAULT_TEMPERATURE = Number(process.env.LLM_CLASSIFIER_TEMPERATURE || 0.1);
 
-function getClient() {
-  if (_client) return _client;
+let warnedMissingKey = false;
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    if (!_warnedOnce) {
-      console.warn('[ModelClassifier] ANTHROPIC_API_KEY not set — model path disabled');
-      _warnedOnce = true;
-    }
-    return null;
-  }
-
-  try {
-    /* eslint-disable-next-line global-require */
-    const { default: Anthropic } = require('@anthropic-ai/sdk');
-    _client = new Anthropic({ apiKey });
-  } catch {
-    if (!_warnedOnce) {
-      console.warn('[ModelClassifier] @anthropic-ai/sdk not installed — run: npm install @anthropic-ai/sdk');
-      _warnedOnce = true;
-    }
-    return null;
-  }
-
-  return _client;
+function buildSystemPrompt(pack, businessName) {
+  return [
+    `${pack.nicheRole} Messages may be English, Hinglish, transliterated Hindi, mixed-language, typo-heavy, or WhatsApp-style.`,
+    `Business: ${businessName || 'Unknown business'}. Industry: ${pack.label}. Judge fit for this business, not a generic business.`,
+    `Allowed intents: ${pack.allowedIntents.join(', ')}.`,
+    `Allowed dispositions: ${pack.allowedDispositions.join(', ')}.`,
+    `Allowed tags: ${pack.allowedTags.join(', ')}.`,
+    `Priority guidance: ${pack.priorityGuidance.join(' ')}`,
+    `Wrong-fit examples: ${pack.wrongFitExamples.join('; ')}.`,
+    `Junk examples: ${pack.junkExamples.join('; ')}.`,
+    `Next-action guidance: ${pack.nextActionGuidance.join(' ')}`,
+    'Return JSON only. Keep reasoning short and concrete. Never output markdown.',
+  ].join('\n');
 }
 
-/**
- * classifyWithModel
- *
- * Sends the lead message to Claude Haiku for intent classification.
- * The model must pick exactly one category from the provided list.
- *
- * @param {object}   params
- * @param {string}   params.message                        — raw lead message
- * @param {string[]} params.categories                     — allowed category names
- * @param {Record<string,string>} [params.categoryDescriptions] — optional per-category hints
- * @returns {Promise<{ bestCategory: string, confidenceLabel: string, confidenceScore: number } | null>}
- */
-async function classifyWithModel({ message, categories, categoryDescriptions = {} }) {
-  if (!message || !categories?.length) return null;
+function buildUserPrompt({ message, businessName, industry }) {
+  return JSON.stringify({
+    task: 'classify_lead',
+    businessName: businessName || 'Unknown business',
+    industry: industry || 'other',
+    message: message || '',
+  });
+}
 
-  const client = getClient();
-  if (!client) return null;
+function deriveConfidenceLabel(score) {
+  if (score >= 0.8) return 'high';
+  if (score >= 0.45) return 'medium';
+  return 'low';
+}
 
-  /* Build the category list string; include descriptions when provided. */
-  const categoryList = categories
-    .map((c) => {
-      const desc = categoryDescriptions[c];
-      return desc ? `- ${c}: ${desc}` : `- ${c}`;
-    })
-    .join('\n');
+function derivePriorityFromScore(score) {
+  if (score >= 30) return 'HIGH';
+  if (score >= 10) return 'NORMAL';
+  return 'LOW';
+}
 
-  const systemPrompt = [
-    'You are an intent classifier for lead enquiry messages sent to Indian small businesses.',
-    'Classify the message into exactly one of the provided categories.',
-    'Respond with JSON only — no explanation, no markdown.',
-    'Response schema: { "category": "<allowed category>", "confidence_score": <0.0–1.0> }',
-    '',
-    'Rules:',
-    '- category must be exactly one value from the Allowed Categories list.',
-    '- Do not invent or abbreviate category names.',
-    '- confidence_score is your certainty (0.0 = no idea, 1.0 = certain).',
-    '',
-    'Allowed Categories:',
-    categoryList,
-  ].join('\n');
+function clampScore(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
 
-  let rawText;
-  try {
-    const response = await client.messages.create({
-      model:      'claude-haiku-4-5-20251001',
-      max_tokens: 128,
-      system:     systemPrompt,
-      messages:   [{ role: 'user', content: message }],
-    });
-    rawText = response.content?.[0]?.text ?? '';
-  } catch (err) {
-    console.error('[ModelClassifier] API call failed:', err.message);
-    return null;
-  }
+function normalizeText(value, fallback) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  return trimmed || fallback;
+}
 
-  /* Parse JSON response. */
-  let parsed;
-  try {
-    parsed = JSON.parse(rawText.trim());
-  } catch {
-    console.error('[ModelClassifier] Failed to parse model response as JSON:', rawText);
-    return null;
-  }
-
-  const category = parsed?.category;
-  const rawScore = parsed?.confidence_score;
-
-  /* Validate: category must be in the allowed set — never invent one. */
-  if (!categories.includes(category)) {
-    console.error('[ModelClassifier] Model returned a category not in allowed set:', category);
-    return null;
-  }
-
-  if (typeof rawScore !== 'number' || rawScore < 0 || rawScore > 1) {
-    console.error('[ModelClassifier] Model returned invalid confidence_score:', rawScore);
-    return null;
-  }
-
-  const confidenceLabel = rawScore >= 0.75 ? 'high'
-                        : rawScore >= 0.45 ? 'medium'
-                        :                   'low';
-
+function safeFallback({ pack, reason, provider, model, rawOutput }) {
   return {
-    bestCategory:    category,
-    confidenceLabel,
-    confidenceScore: Math.round(rawScore * 100) / 100,
+    intent: pack.safeIntent,
+    priority: 'LOW',
+    priorityScore: 0,
+    tags: [],
+    confidence: 0.05,
+    confidenceLabel: 'low',
+    disposition: 'weak',
+    languageMode: 'other',
+    reasoning: reason || 'Classifier unavailable; manual review needed.',
+    suggestedNextAction: 'Review manually',
+    via: 'llm_fallback',
+    provider,
+    model,
+    vertical: pack.vertical,
+    promptKey: pack.key,
+    schemaVersion: pack.version,
+    rawOutput: rawOutput ?? null,
   };
 }
 
-module.exports = { classifyWithModel };
+function normalizeClassification({ parsed, pack, provider, model, rawOutput }) {
+  const allowedTags = new Set(pack.allowedTags);
+  const rawConfidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0;
+  const confidence = Math.max(0, Math.min(1, Number(rawConfidence)));
+  const confidenceLabel = deriveConfidenceLabel(confidence);
+
+  let intent = pack.allowedIntents.includes(parsed.intent) ? parsed.intent : pack.safeIntent;
+  let tags = Array.isArray(parsed.tags)
+    ? parsed.tags.filter((tag, index) => allowedTags.has(tag) && parsed.tags.indexOf(tag) === index).slice(0, 6)
+    : [];
+
+  if (allowedTags.has(intent) && !tags.includes(intent) && !['WRONG_FIT', 'NOT_INTERESTED', 'JUNK'].includes(intent)) {
+    tags.unshift(intent);
+  }
+
+  let disposition = parsed.disposition;
+  if (!pack.allowedDispositions.includes(disposition)) disposition = 'weak';
+
+  let priorityScore = clampScore(parsed.priorityScore);
+  let priority = derivePriorityFromScore(priorityScore);
+
+  if (disposition === 'wrong_fit') {
+    intent = pack.allowedIntents.includes('WRONG_FIT') ? 'WRONG_FIT' : pack.safeIntent;
+    tags = tags.includes('WRONG_FIT') ? ['WRONG_FIT'] : (allowedTags.has('WRONG_FIT') ? ['WRONG_FIT'] : []);
+    priorityScore = Math.min(priorityScore, 9);
+    priority = 'LOW';
+  } else if (disposition === 'not_interested' || disposition === 'junk') {
+    if (pack.allowedIntents.includes(intent.toUpperCase())) intent = intent.toUpperCase();
+    tags = [];
+    priorityScore = Math.min(priorityScore, 5);
+    priority = 'LOW';
+  } else if (disposition === 'conflicting') {
+    priorityScore = Math.min(priorityScore, 20);
+    priority = derivePriorityFromScore(priorityScore);
+  }
+
+  return {
+    intent,
+    priority,
+    priorityScore,
+    tags,
+    confidence: Math.round(confidence * 100) / 100,
+    confidenceLabel,
+    disposition,
+    languageMode: pack.allowedLanguageModes.includes(parsed.languageMode) ? parsed.languageMode : 'other',
+    reasoning: normalizeText(parsed.reasoning, 'Short classification rationale unavailable.'),
+    suggestedNextAction: normalizeText(parsed.suggestedNextAction, priority === 'HIGH' ? 'Call soon' : 'Review manually'),
+    via: 'llm_classifier',
+    provider,
+    model,
+    vertical: pack.vertical,
+    promptKey: pack.key,
+    schemaVersion: pack.version,
+    rawOutput: rawOutput ?? null,
+  };
+}
+
+async function requestOpenAIClassification({ apiKey, model, baseUrl, systemPrompt, userPrompt, schema }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: DEFAULT_TEMPERATURE,
+        max_tokens: 220,
+        response_format: {
+          type: 'json_schema',
+          json_schema: schema,
+        },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const payload = await response.json();
+    const rawOutput = payload?.choices?.[0]?.message?.content ?? '';
+    return { rawOutput };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function classifyWithModel({ lead, business }) {
+  const pack = getPromptPack(business?.industry);
+  const provider = DEFAULT_PROVIDER;
+  const model = DEFAULT_MODEL;
+  const apiKey = process.env.OPENAI_API_KEY || process.env.LLM_CLASSIFIER_API_KEY;
+
+  if (provider !== 'openai') {
+    return safeFallback({
+      pack,
+      provider,
+      model,
+      reason: `Unsupported LLM provider: ${provider}`,
+    });
+  }
+
+  if (!apiKey) {
+    if (!warnedMissingKey) {
+      console.warn('[ModelClassifier] OPENAI_API_KEY not set — classifier will fall back safely');
+      warnedMissingKey = true;
+    }
+    return safeFallback({
+      pack,
+      provider,
+      model,
+      reason: 'LLM API key missing; manual review needed.',
+    });
+  }
+
+  if (!lead?.message?.trim()) {
+    return safeFallback({
+      pack,
+      provider,
+      model,
+      reason: 'Lead message is empty; manual review needed.',
+    });
+  }
+
+  const systemPrompt = buildSystemPrompt(pack, business?.name);
+  const userPrompt = buildUserPrompt({
+    message: lead.message,
+    businessName: business?.name,
+    industry: pack.vertical,
+  });
+  const schema = buildJsonSchema(pack);
+  const outputSchema = buildOutputSchema(pack);
+
+  try {
+    const { rawOutput } = await requestOpenAIClassification({
+      apiKey,
+      model,
+      baseUrl: DEFAULT_BASE_URL,
+      systemPrompt,
+      userPrompt,
+      schema,
+    });
+
+    const parsed = JSON.parse(rawOutput.trim());
+    const validated = outputSchema.parse(parsed);
+    return normalizeClassification({
+      parsed: validated,
+      pack,
+      provider,
+      model,
+      rawOutput,
+    });
+  } catch (err) {
+    console.error('[ModelClassifier] Classification failed:', err.message);
+    return safeFallback({
+      pack,
+      provider,
+      model,
+      rawOutput: err.name === 'SyntaxError' ? 'INVALID_JSON' : null,
+      reason: 'Classifier failed validation; manual review needed.',
+    });
+  }
+}
+
+module.exports = {
+  DEFAULT_MODEL,
+  classifyWithModel,
+  deriveConfidenceLabel,
+  derivePriorityFromScore,
+  getPromptPack,
+};

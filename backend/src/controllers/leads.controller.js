@@ -35,6 +35,7 @@ const create = async (req, res) => {
         name:          lead.name,
         phone:         lead.phone,
         email:         lead.email,
+        message:       lead.message,
         status:        lead.status,
         priority:      lead.priority,
         priorityScore: lead.priorityScore,

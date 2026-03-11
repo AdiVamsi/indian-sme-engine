@@ -3,18 +3,21 @@
 const request = require('supertest');
 const { PrismaClient } = require('@prisma/client');
 const app = require('../app');
-const { createTestContext } = require('./_testHelpers');
+const { createTestContext, installLlmFetchMock } = require('./_testHelpers');
 
 const prisma = new PrismaClient();
 
 describe('Public Lead Capture', () => {
   let ctx;
+  let restoreFetch;
 
   beforeAll(async () => {
+    restoreFetch = installLlmFetchMock();
     ctx = await createTestContext();
   }, 15000);
 
   afterAll(async () => {
+    restoreFetch();
     await ctx.cleanup();
     await prisma.$disconnect();
   });

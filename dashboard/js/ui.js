@@ -59,6 +59,12 @@ export function DashUI(config) {
     }
   };
 
+  const truncateText = (value, max = 56) => {
+    const text = String(value ?? '').trim();
+    if (text.length <= max) return text;
+    return `${text.slice(0, max - 1).trimEnd()}…`;
+  };
+
   /* ── DOM helpers ── */
   const $ = (id) => document.getElementById(id);
 
@@ -240,7 +246,7 @@ export function DashUI(config) {
       : '';
 
     const messagePreview = lead.message
-      ? `<div class="cell-sub" style="opacity:0.7;font-size:0.8em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;" title="${esc(lead.message)}">↳ ${esc(lead.message)}</div>`
+      ? `<div class="cell-sub" style="opacity:0.7;font-size:0.8em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;"><span class="message-preview" title="${esc(lead.message)}">↳ ${esc(truncateText(lead.message))}</span></div>`
       : '';
 
     tr.innerHTML = `

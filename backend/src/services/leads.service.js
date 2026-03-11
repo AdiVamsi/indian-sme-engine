@@ -4,16 +4,32 @@ const { AgentEngine } = require('../agents');
 const { prisma } = require('../lib/prisma');
 
 const createLead = async (businessId, data) => {
-  const lead = await prisma.lead.create({ data: { businessId, ...data } });
+  const {
+    source = 'web',
+    externalMessageId = null,
+    receivedAt = null,
+    ...leadData
+  } = data;
+
+  const lead = await prisma.lead.create({ data: { businessId, ...leadData } });
 
   /* Run agent pipeline; capture scores for broadcast payload.
    * Errors are logged but never fail the caller. */
   let priorityScore = 0;
   let tags          = [];
+  let leadSource    = source;
   try {
-    const result = await AgentEngine.run({ type: 'LEAD_CREATED', leadId: lead.id, businessId: lead.businessId });
+    const result = await AgentEngine.run({
+      type: 'LEAD_CREATED',
+      leadId: lead.id,
+      businessId: lead.businessId,
+      source,
+      externalMessageId,
+      receivedAt,
+    });
     priorityScore = result.priorityScore ?? 0;
     tags          = result.tags          ?? [];
+    leadSource    = result.source        ?? source;
 
     /* Advance lifecycle stage on the first successful lead — "lead workflow is now active".
      * updateMany with stage: 'STARTING' in the where clause is a no-op for all other stages. */
@@ -26,7 +42,15 @@ const createLead = async (businessId, data) => {
   }
 
   const priority = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';
-  return { ...lead, priorityScore, tags, priority };
+  return {
+    ...lead,
+    priorityScore,
+    tags,
+    priority,
+    source: leadSource,
+    externalMessageId,
+    receivedAt,
+  };
 };
 
 const findLeadsByBusiness = async (businessId, status) => {
@@ -47,11 +71,12 @@ const findLeadsByBusiness = async (businessId, status) => {
 
     const tags          = classAct?.metadata?.tags         ?? [];
     const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
+    const source        = classAct?.metadata?.source       ?? 'web';
     const priority      = priorityScore >= 30 ? 'HIGH'
                         : priorityScore >= 10 ? 'NORMAL'
                         :                       'LOW';
 
-    return { ...lead, priorityScore, tags, priority };
+    return { ...lead, priorityScore, tags, priority, source };
   });
 };
 
@@ -115,6 +140,7 @@ const getLeadForSuggestions = async (id, businessId) => {
     ...lead,
     tags:          classAct?.metadata?.tags          ?? [],
     priorityScore: prioAct?.metadata?.priorityScore  ?? 0,
+    source:        classAct?.metadata?.source        ?? 'web',
   };
 };
 
@@ -137,6 +163,7 @@ const getLeadForOutreach = async (id, businessId) => {
     ...lead,
     tags:          classAct?.metadata?.tags         ?? [],
     priorityScore: prioAct?.metadata?.priorityScore ?? 0,
+    source:        classAct?.metadata?.source       ?? 'web',
   };
 };
 

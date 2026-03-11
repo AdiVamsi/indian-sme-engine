@@ -1,7 +1,7 @@
 'use strict';
 
 const { classify } = require('./classifier');
-const { runLeadAutomations } = require('../services/leadAutomation.service');
+const { runLeadAutomations } = require('../services/automation.service');
 const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
 const { prisma } = require('../lib/prisma');
 
@@ -11,7 +11,7 @@ const { prisma } = require('../lib/prisma');
  * @param {{ type: string, leadId: string, businessId: string }} params
  * @returns {Promise<object>} structured result
  */
-async function run({ type, leadId, businessId }) {
+async function run({ type, leadId, businessId, source = 'web', externalMessageId = null, receivedAt = null }) {
   if (type !== 'LEAD_CREATED') {
     return { skipped: true, reason: `Unhandled event type: ${type}` };
   }
@@ -79,6 +79,9 @@ async function run({ type, leadId, businessId }) {
           promptKey: intelligence.promptKey,
           schemaVersion: intelligence.schemaVersion,
           rawOutput: intelligence.rawOutput,
+          source,
+          externalMessageId,
+          receivedAt,
           correction: null,
         },
       },
@@ -93,6 +96,7 @@ async function run({ type, leadId, businessId }) {
           priorityLabel: intelligence.priority,
           confidenceScore,
           leadDisposition: intelligence.disposition,
+          source,
         },
       },
     }),
@@ -104,6 +108,7 @@ async function run({ type, leadId, businessId }) {
         metadata: {
           followUpAt: followUpAt.toISOString(),
           followUpMinutes: config.followUpMinutes,
+          source,
         },
       },
     }),
@@ -112,7 +117,12 @@ async function run({ type, leadId, businessId }) {
   /* 6. Run rule-based automations; failures are logged, never propagated. */
   let automationsTriggered = 0;
   try {
-    const automationResult = await runLeadAutomations(lead.id, { tags, priorityScore });
+    const automationResult = await runLeadAutomations(lead.id, {
+      tags,
+      priorityScore,
+      source,
+      phone: lead.phone,
+    });
     automationsTriggered = automationResult.triggered;
     console.log(`[AgentEngine] Automations triggered for lead ${lead.id}: ${automationsTriggered}`);
   } catch (err) {
@@ -126,6 +136,7 @@ async function run({ type, leadId, businessId }) {
     priorityScore,
     priority: intelligence.priority,
     tags,
+    source,
     leadDisposition: intelligence.disposition,
     followUpAt: followUpAt.toISOString(),
     activitiesCreated: 3,

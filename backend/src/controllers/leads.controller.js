@@ -19,6 +19,27 @@ const statusSchema = z.object({
   status: leadStatusEnum,
 });
 
+function buildLeadRealtimePayload(lead) {
+  return {
+    id: lead.id,
+    name: lead.name,
+    phone: lead.phone,
+    email: lead.email,
+    message: lead.message,
+    status: lead.status,
+    priority: lead.priority,
+    priorityScore: lead.priorityScore,
+    tags: lead.tags,
+    source: lead.source || 'web',
+    createdAt: lead.createdAt,
+    timestamp: lead.createdAt,
+  };
+}
+
+function emitLeadCreated(businessId, lead) {
+  broadcast(businessId, 'lead:new', buildLeadRealtimePayload(lead));
+}
+
 const create = async (req, res) => {
   const result = createLeadSchema.safeParse(req.body);
   if (!result.success) {
@@ -30,18 +51,7 @@ const create = async (req, res) => {
 
     /* Non-blocking broadcast — never let WS failure affect the HTTP response */
     try {
-      broadcast(req.user.businessId, 'lead:new', {
-        id:            lead.id,
-        name:          lead.name,
-        phone:         lead.phone,
-        email:         lead.email,
-        message:       lead.message,
-        status:        lead.status,
-        priority:      lead.priority,
-        priorityScore: lead.priorityScore,
-        tags:          lead.tags,
-        createdAt:     lead.createdAt,
-      });
+      emitLeadCreated(req.user.businessId, lead);
     } catch (wsErr) {
       console.error('[LeadsController] broadcast lead:new failed:', wsErr.message);
     }
@@ -116,4 +126,4 @@ const activity = async (req, res) => {
   }
 };
 
-module.exports = { create, list, updateStatus, remove, activity };
+module.exports = { create, list, updateStatus, remove, activity, buildLeadRealtimePayload, emitLeadCreated };

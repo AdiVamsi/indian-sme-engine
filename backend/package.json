@@ -16,7 +16,8 @@
     "prisma:migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
-    "simulate": "node scripts/simulateLeads.js"
+    "simulate": "node scripts/simulateLeads.js",
+    "simulate:whatsapp": "node scripts/simulateWhatsAppMessage.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

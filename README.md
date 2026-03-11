@@ -1,8 +1,50 @@
 # Indian SME Engine
 
-A multi-tenant CRM platform with a rule-based agent engine, built specifically for small businesses in India — coaching centers, gyms, salons, clinics, restaurants, and retail stores.
+A multi-tenant CRM platform with an LLM-powered lead intelligence pipeline, built specifically for small businesses in India — coaching centers, gyms, salons, clinics, restaurants, and retail stores.
 
-The platform captures incoming leads, classifies and scores them automatically, triggers configurable automations, and surfaces the right follow-up actions to the business owner through a real-time dashboard.
+The platform captures incoming leads from website forms and WhatsApp, classifies and scores them automatically, triggers deterministic automations, and surfaces the right follow-up actions to the business owner through a real-time dashboard.
+
+---
+
+## Quick Start
+
+```bash
+git clone <repo-url>
+cd indian-sme-engine/backend
+npm install
+cp .env.example .env
+npm run migrate:deploy
+npm run prisma:seed
+npm run dev
+```
+
+The backend starts on `http://localhost:4000`.
+
+---
+
+## System Overview
+
+```text
+Website Form / WhatsApp
+          |
+          v
+     Lead Intake API
+          |
+          v
+       Lead Service
+          |
+          v
+   Agent Engine (LLM)
+          |
+          v
+    Automation Engine
+          |
+          v
+   WebSocket Broadcast
+          |
+          v
+   Business Dashboard
+```
 
 ---
 
@@ -19,9 +61,9 @@ This platform gives small businesses a structured, automated layer between an in
 ## What the Platform Does
 
 1. Accepts leads from multiple entry points — public form submissions, direct API calls, and internal simulation
-2. Runs each lead through a hybrid classification engine (rule-first, optional model fallback)
-3. Assigns a numeric priority score based on keyword weights and message signals
-4. Fires configurable automation rules (follow-up scheduling, intent alerts, high-priority alerts)
+2. Runs each lead through a vertical-specific LLM classification engine with structured JSON output
+3. Assigns a numeric priority score and label from the classifier result
+4. Fires deterministic automation rules (follow-up scheduling, intent alerts, high-priority alerts, WhatsApp acknowledgement)
 5. Logs every classification, score, and automation decision as a `LeadActivity` row, making each decision traceable to the rule or threshold that produced it
 6. Broadcasts updates over WebSocket to the business dashboard in real time
 7. Surfaces Next Best Action suggestions and outreach drafts to the owner
@@ -36,15 +78,15 @@ This platform gives small businesses a structured, automated layer between an in
 - Per-lead activity timeline showing the full event history
 
 ### Agent Engine
-- Hybrid intent classifier — rule-first keyword scoring, optional model fallback for low-confidence or ambiguous leads
-- Keyword weight scoring — each matched keyword contributes to a numeric priority score
-- Classification result includes `tags[]`, `bestCategory`, `confidenceLabel`, `confidenceScore`, and `via` (`rule` / `model` / `fallback`)
+- Vertical-specific LLM intent classifier with strict JSON output
+- Classification result includes `tags[]`, `bestCategory`, `confidenceLabel`, `confidenceScore`, disposition, language mode, and suggested next action
 - Per-business `AgentConfig` stored in the database — industry-specific presets applied on first activation
 - All classification and scoring decisions recorded as `LeadActivity` rows
 
 ### Automation Engine
 - Triggers fire on tag matches and score thresholds
 - Supported types: `AUTOMATION_ALERT` (high priority), `AUTOMATION_DEMO_INTENT`, `AUTOMATION_ADMISSION_INTENT`
+- High-priority WhatsApp leads can trigger an acknowledgement reply through the WhatsApp Business Platform API
 - All automation events logged to the activity timeline
 
 ### Multi-Tenant Architecture
@@ -101,16 +143,13 @@ Stage advances automatically when the engine processes a lead, or can be updated
 ## Lead Processing Pipeline
 
 ```
-Incoming enquiry (public form, direct API call, simulation, etc.)
+Incoming enquiry (public form, WhatsApp webhook, direct API call, simulation, etc.)
         │
         ▼
-POST /api/public/:slug/leads
+Lead intake route
         │
         ▼
-Zod validation + honeypot check + rate limit
-        │
-        ▼
-findBusinessBySlug → resolve tenant
+Validation + normalization + tenant resolution
         │
         ▼
 createLead → Lead row in PostgreSQL
@@ -118,17 +157,17 @@ createLead → Lead row in PostgreSQL
         ▼
 AgentEngine.run(lead, agentConfig)
         │
-        ├─► classify(lead)                        ← hybrid classifier
-        │     ├─ rule-first: keyword scoring → tags[], topCategory, confidence
-        │     └─ low confidence / ambiguous → optional model fallback
+        ├─► classify(lead)                        ← LLM classifier
+        │     └─ prompt pack by industry → strict JSON output
         │     └─ LeadActivity: AGENT_CLASSIFIED (tags, bestCategory, confidenceLabel, via)
         │
-        ├─► score(lead, tags)
-        │     └─ keyword weight sum → priorityScore
+        ├─► priority assignment
+        │     └─ priorityScore + priority label
         │     └─ LeadActivity: AGENT_PRIORITIZED
         │
         └─► runAutomations(lead, tags, score)
               └─ evaluate automation rules
+              └─ optional WhatsApp acknowledgement reply
               └─ LeadActivity: AUTOMATION_ALERT, AUTOMATION_DEMO_INTENT, etc.
         │
         ▼
@@ -143,62 +182,44 @@ Business dashboard updates in real time
 
 ---
 
-## Agent Engine Design
+## AI Lead Classification Pipeline
 
-The classification layer runs deterministic keyword rules first. A model-backed path is available but off by default.
+The classifier uses vertical-specific prompt packs and strict JSON parsing to keep the model bounded.
+
+Current default model: `gpt-4o-mini`, chosen in the codebase for cost efficiency and structured JSON reliability.
 
 ### How classification works
 
-Each `AgentConfig` stores `classificationRules` — a map of intent categories to keyword lists:
+Each message is routed through a prompt pack selected from the business industry:
 
 ```json
 {
-  "classificationRules": {
-    "keywords": {
-      "DEMO_REQUEST": ["demo", "demo class", "trial class"],
-      "ADMISSION":    ["admission", "enroll", "join"],
-      "FEE_ENQUIRY":  ["fee", "fees", "price", "cost"],
-      "CALL_REQUEST": ["call me", "callback", "phone call"]
-    }
-  }
+  "industry": "academy",
+  "message": "I want a demo session urgently"
 }
 ```
 
-The engine scans the lead's message against these keywords. Every category with at least one match is added to `tags[]`. The top-scoring category becomes `bestCategory`.
+The backend sends a compact system prompt plus a JSON user payload to the model, validates the JSON response against the schema in `backend/src/agents/llm/schema.js`, then normalizes the result before storing it as lead activity metadata.
 
-### Hybrid classification
+### Classification output
 
-The classifier uses a rule-first approach. When the rule result is low-confidence (no matches, a tie between categories, or a single weak match on a long message), it can escalate to a model-backed classifier.
+The normalized output includes:
 
-Controlled by the `CLASSIFIER_MODE` environment variable:
-
-| Mode | Behaviour |
+| Field | Meaning |
 |---|---|
-| `rule_only` | (default) Never calls a model. Safe for dev and CI. |
-| `hybrid` | Rule-first. Model fallback on low-confidence or ambiguous results. |
+| `bestCategory` | Primary business intent |
+| `tags[]` | Structured intent and context tags |
+| `confidenceLabel` / `confidenceScore` | Confidence of the classification |
+| `priority` / `priorityScore` | Priority used by downstream views and automations |
+| `disposition` | Valid, weak, wrong-fit, not interested, junk, or conflicting |
+| `languageMode` | English, Hinglish, mixed, or other |
+| `suggestedNextAction` | Short operational next step |
 
-The `via` field in `AGENT_CLASSIFIED` metadata records whether the result came from `rule`, `model`, or `fallback`.
+The `via` field in `AGENT_CLASSIFIED` metadata records how the result was produced. In the current path, successful classifications are stored as `llm_classifier`, with safe fallback behavior if validation fails or the model is unavailable.
 
 ### How priority scoring works
 
-Each `AgentConfig` stores `priorityRules` — a map of keywords to numeric weights:
-
-```json
-{
-  "priorityRules": {
-    "weights": {
-      "urgent":      30,
-      "immediately": 25,
-      "today":       20,
-      "demo":        20,
-      "admission":   25,
-      "fee":         10
-    }
-  }
-}
-```
-
-Weights are summed across all matches. The resulting score determines priority:
+Priority is produced by the normalized classifier output and used consistently across the dashboard, admin views, and automation engine.
 
 | Score | Priority |
 |---|---|
@@ -208,9 +229,24 @@ Weights are summed across all matches. The resulting score determines priority:
 
 ### Industry-specific presets
 
-When a new business completes the activation flow, the system applies an `AgentConfig` preset matched to their industry. Presets exist for: `academy`, `gym`, `salon`, `clinic`, `restaurant`, `retail` (with a generic fallback for any other industry).
+When a new business completes the activation flow, the system applies an `AgentConfig` preset matched to their industry. Prompt packs and agent presets exist for: `academy`, `gym`, `salon`, `clinic`, `restaurant`, `retail` (with a generic fallback for any other industry).
 
-Each preset includes industry-appropriate keyword categories, weight values, and follow-up timing. The preset is applied eagerly on activation — not lazily on first lead.
+Each preset includes industry-appropriate defaults and follow-up timing. The preset is applied eagerly on activation — not lazily on first lead.
+
+---
+
+## Lead Automation Engine
+
+The automation layer runs after classification and prioritization. It is deterministic, backend-owned, and records every action in `LeadActivity`.
+
+Current automation behaviors implemented in the repository include:
+
+- high-priority alert activities
+- admission-intent activities
+- demo-intent activities
+- WhatsApp acknowledgement replies for qualifying high-priority WhatsApp leads
+
+This keeps automation execution predictable while allowing AI to remain an interpreter of message intent rather than the owner of workflow state.
 
 ---
 
@@ -226,13 +262,14 @@ indian-sme-engine/
 │   └── src/
 │       ├── agents/
 │       │   ├── engine.js               ← AgentEngine orchestrator
-│       │   ├── classifier.js           ← hybrid intent classifier
-│       │   ├── modelClassifier.js      ← model-backed classification path
+│       │   ├── classifier.js           ← classification adapter
+│       │   ├── modelClassifier.js      ← OpenAI-backed classification path
 │       │   ├── index.js                ← entry point
 │       │   ├── leadSuggestions.js      ← Next Best Action logic
 │       │   ├── outreachDrafts.js       ← outreach draft generator
+│       │   ├── llm/                    ← prompt packs + output schema
 │       │   └── policies/
-│       │       └── basicPolicy.js      ← keyword scoring + classification rules
+│       │       └── basicPolicy.js      ← supporting policy helpers
 │       ├── constants/
 │       │   ├── agentConfig.presets.js  ← industry-specific AgentConfig presets
 │       │   └── industry.config.js      ← UI themes, stat labels, column config
@@ -297,7 +334,7 @@ indian-sme-engine/
 | Bcrypt | Password hashing |
 | Helmet | Secure HTTP headers |
 | express-rate-limit | Rate limiting on public endpoints |
-| Morgan | HTTP request logging |
+| Pino | Structured application logging |
 
 ### Frontend
 | Technology | Role |
@@ -418,11 +455,10 @@ Valid stage values: `STARTING`, `WEBSITE_DESIGN`, `WEBSITE_LIVE`, `LEADS_ACTIVE`
 
 ```bash
 cd backend
-cp .env.example .env
-# Set DATABASE_URL and JWT_SECRET in .env
 npm install
-npx prisma migrate dev
-npx prisma db seed
+cp .env.example .env
+npm run migrate:deploy
+npm run prisma:seed
 npm run dev
 ```
 
@@ -436,7 +472,8 @@ Both dashboards are served as static files by the Express backend:
 |---|---|
 | Business dashboard | http://localhost:4000/dashboard |
 | Admin control center | http://localhost:4000/admin |
-| Public lead form | served from `frontend/` |
+| Public business website | http://localhost:4000/site |
+| Public lead form | http://localhost:4000/form/:slug |
 
 ### Default seed credentials
 
@@ -487,6 +524,28 @@ Sample output:
 
 ---
 
+## WhatsApp Simulation
+
+The repository also includes `backend/scripts/simulateWhatsAppMessage.js`, which posts a sample Meta webhook payload into the WhatsApp webhook receiver.
+
+Run it:
+
+```bash
+cd backend
+npm run simulate:whatsapp
+```
+
+This exercises:
+
+- `POST /api/webhooks/whatsapp`
+- inbound message normalization
+- lead creation through the unified lead service
+- AI classification
+- automation execution
+- `lead:new` WebSocket broadcast
+
+---
+
 ## Tests
 
 ```bash
@@ -498,15 +557,16 @@ Tests create isolated business contexts and clean up after themselves. Safe to r
 
 Test coverage includes:
 - Lead creation triggers correct LeadActivity rows
-- Classification tags are applied from message keywords
+- LLM classification output is validated and persisted
 - No cross-tenant data leakage between businesses
 - Default `AgentConfig` is created when none exists
+- WhatsApp webhook ingestion and automation reply flow
 
 ---
 
 ## Current Status
 
-The platform is **fully functional locally**. It is not deployed.
+The platform is functional locally and includes deployment-oriented infrastructure in `backend/render.yaml` and `backend/Dockerfile`.
 
 The seed script (`npx prisma db seed`) populates demo businesses, leads, and LeadActivity data. Run `npm run simulate` to generate additional traffic through the full classification, scoring, and automation pipeline.
 
@@ -516,11 +576,21 @@ The seed script (`npx prisma db seed`) populates demo businesses, leads, and Lea
 
 ---
 
+## Design Principles
+
+- Backend owns workflow and system state.
+- AI interprets inbound messages but does not directly control lead lifecycle state.
+- Automations are deterministic and executed by backend services after classification.
+- Website forms and WhatsApp webhooks both feed the same lead creation pipeline.
+- `LeadActivity` is the audit trail for classification, prioritization, and automation events.
+
+---
+
 ## What's Next
 
-- [ ] WhatsApp integration (inbound lead capture via WhatsApp webhook)
 - [ ] Scheduled follow-up delivery (actual message sending, not just scheduling)
-- [ ] Multi-user support within a business (OWNER + STAFF roles)
+- [ ] Richer automation rules and delivery actions
+- [ ] Human correction workflow for classifier feedback
 - [ ] Public deployment
 - [ ] Mobile-responsive dashboard
 - [ ] Export leads to CSV

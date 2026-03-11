@@ -1,9 +1,7 @@
 'use strict';
 
-const { PrismaClient } = require('@prisma/client');
 const { AgentEngine } = require('../agents');
-
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const createLead = async (businessId, data) => {
   const lead = await prisma.lead.create({ data: { businessId, ...data } });

@@ -1,9 +1,7 @@
 'use strict';
 
-const { PrismaClient } = require('@prisma/client');
 const { getAgentConfigPreset, getTestMessage } = require('../constants/agentConfig.presets');
-
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 /**
  * POST /api/admin/activate

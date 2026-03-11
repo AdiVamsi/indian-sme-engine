@@ -1,18 +1,28 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install all deps (including dev — needed for prisma generate)
 COPY package*.json ./
 RUN npm ci
 
-# Copy source and generate Prisma client
-COPY . .
+COPY prisma ./prisma
 RUN npx prisma generate
 
-# Prune dev dependencies for a leaner production image
+COPY . .
 RUN npm prune --omit=dev
+
+FROM node:20-alpine AS runner
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/src ./src
+
+USER node
 
 EXPOSE 4000
 
-CMD ["node", "src/server.js"]
+CMD ["npm", "start"]

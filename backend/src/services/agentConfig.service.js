@@ -1,9 +1,7 @@
 'use strict';
 
-const { PrismaClient } = require('@prisma/client');
 const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
-
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 /**
  * Fetch AgentConfig for a business. Creates one with industry-aware defaults

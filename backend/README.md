@@ -211,7 +211,7 @@ npm test
 
 ## Deployment (Render)
 
-The `render.yaml` at the project root declares the service. Key settings:
+The `render.yaml` blueprint in `backend/` declares the service and PostgreSQL database. Key settings:
 
 | Setting | Value |
 |---------|-------|
@@ -221,6 +221,61 @@ The `render.yaml` at the project root declares the service. Key settings:
 | Required env vars | `DATABASE_URL`, `JWT_SECRET`, `SUPERADMIN_PASSWORD`, `SUPERADMIN_SECRET` |
 
 On each deploy, Render runs `npm install` → `prisma generate` (via postinstall hook) → `npm start`.
+
+## Production Deployment
+
+### Render
+
+1. Push the repository to GitHub.
+2. In Render, create a Blueprint deployment and point it at this repo.
+3. Use `backend/render.yaml` from the `backend/` directory.
+4. Set the required secrets:
+   `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `SUPERADMIN_PASSWORD`, `SUPERADMIN_SECRET`
+5. Render will run:
+   `npm install && npm run build && npm run migrate:deploy`
+6. The service will start with:
+   `npm start`
+
+### Environment Variables
+
+Required for production:
+- `PORT`
+- `NODE_ENV`
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `OPENAI_API_KEY`
+- `SUPERADMIN_PASSWORD`
+- `SUPERADMIN_SECRET`
+
+Reference values live in `backend/.env.example`.
+
+### Database Migrations
+
+Before serving traffic, Prisma migrations must be applied:
+
+```bash
+npm run migrate:deploy
+```
+
+Generate the Prisma client during install or build:
+
+```bash
+npm run build
+```
+
+### Start Commands
+
+Development:
+
+```bash
+npm run dev
+```
+
+Production:
+
+```bash
+npm start
+```
 
 ---
 

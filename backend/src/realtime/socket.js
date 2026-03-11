@@ -2,6 +2,7 @@
 
 const { WebSocketServer } = require('ws');
 const { verify } = require('../utils/jwt');
+const { logger } = require('../lib/logger');
 
 let wss = null;
 
@@ -30,11 +31,38 @@ const initRealtime = (server) => {
       return;
     }
 
-    ws.on('error', console.error);
+    ws.on('error', (err) => {
+      logger.error({ err, businessId: ws.businessId }, 'websocket client error');
+    });
   });
 
-  console.log('  WebSocket   : ready');
+  logger.info('WebSocket ready');
 };
+
+const closeRealtime = () => new Promise((resolve, reject) => {
+  if (!wss) {
+    resolve();
+    return;
+  }
+
+  wss.clients.forEach((client) => {
+    try {
+      client.close(1001, 'Server shutting down');
+    } catch {
+      /* Ignore shutdown close errors per socket. */
+    }
+  });
+
+  wss.close((err) => {
+    if (err) {
+      reject(err);
+      return;
+    }
+
+    wss = null;
+    resolve();
+  });
+});
 
 /**
  * Send an event to all authenticated clients that belong to the given business.
@@ -56,4 +84,4 @@ const broadcast = (businessId, event, payload) => {
   });
 };
 
-module.exports = { initRealtime, broadcast };
+module.exports = { initRealtime, closeRealtime, broadcast };

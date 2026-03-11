@@ -12,9 +12,7 @@
  * Any failure is caught and logged; lead creation is never blocked.
  */
 
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 /* ── Priority threshold — must stay in sync with leads.service.js ── */
 const HIGH_PRIORITY_THRESHOLD = 30;

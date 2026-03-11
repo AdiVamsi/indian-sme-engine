@@ -3,8 +3,9 @@
 const path    = require('path');
 const express = require('express');
 const cors    = require('cors');
+const compression = require('compression');
 const helmet  = require('helmet');
-const morgan  = require('morgan');
+const rateLimit = require('express-rate-limit');
 
 const { NODE_ENV } = require('./config/env');
 const authRoutes = require('./routes/auth.routes');
@@ -18,29 +19,45 @@ const agentRoutes = require('./routes/agentConfig.routes');
 const superadminRoutes = require('./routes/superadmin.routes');
 const formRoutes       = require('./routes/form.routes');
 const { authenticate } = require('./middleware/auth.middleware');
+const { attachRequestId } = require('./middleware/request-id.middleware');
+const { logRequests } = require('./middleware/request-logger.middleware');
 const { errorHandler } = require('./middleware/error.middleware');
 
 const app = express();
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : null;
+const healthPayload = () => ({
+  status: 'ok',
+  uptime: process.uptime(),
+  timestamp: new Date().toISOString(),
+});
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: NODE_ENV === 'production' ? 300 : 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests' },
+});
 
 /* ── Security & parsing ── */
+app.set('trust proxy', NODE_ENV === 'production' ? 1 : false);
+app.disable('x-powered-by');
 app.use(helmet());
-app.use(cors()); /* same-origin: all static + API served from one host */
-app.use(morgan(NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use(express.json({ limit: '10kb' }));
+app.use(cors({
+  origin: corsOrigins || true,
+  credentials: true,
+}));
+app.use(compression());
+app.use(attachRequestId);
+app.use(logRequests);
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 
 /* ── Health ── */
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
-
-app.get('/api/health/full', (_req, res) => {
-  res.json({
-    status: 'ok',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-    environment: NODE_ENV,
-  });
-});
+app.get('/health', (_req, res) => res.json(healthPayload()));
+app.get('/api/health', (_req, res) => res.json(healthPayload()));
+app.use('/api', apiLimiter);
 
 /* ── Routes ── */
 app.use('/api/auth', authRoutes);
@@ -75,6 +92,13 @@ app.use('/form', formRoutes);                                                   
 app.use('/form', express.static(path.join(__dirname, '../../form')));              /* form.js, form.css */
 app.use('/form', express.static(path.join(__dirname, '../../frontend')));          /* frontend assets for the full website (also at /site) */
 app.use('/',          express.static(path.join(__dirname, '../../landing')));
+
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not found',
+    requestId: req.id,
+  });
+});
 
 /* ── Global error handler (must be last) ── */
 app.use(errorHandler);

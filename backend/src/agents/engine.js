@@ -1,11 +1,9 @@
 'use strict';
 
-const { PrismaClient } = require('@prisma/client');
 const { classify } = require('./classifier');
 const { runLeadAutomations } = require('../services/leadAutomation.service');
 const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
-
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 /**
  * run — stateless entry point for AgentEngine.

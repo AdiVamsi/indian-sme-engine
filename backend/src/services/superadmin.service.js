@@ -1,9 +1,8 @@
 'use strict';
 
 const bcrypt = require('bcrypt');
-const { PrismaClient } = require('@prisma/client');
 const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 /**
  * getOverview

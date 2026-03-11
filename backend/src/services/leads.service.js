@@ -2,8 +2,29 @@
 
 const { AgentEngine } = require('../agents');
 const { prisma } = require('../lib/prisma');
+const { logger } = require('../lib/logger');
 
-const createLead = async (businessId, data) => {
+function decorateLead(lead, {
+  priorityScore = 0,
+  tags = [],
+  source = 'web',
+  externalMessageId = null,
+  receivedAt = null,
+} = {}) {
+  const priority = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';
+
+  return {
+    ...lead,
+    priorityScore,
+    tags,
+    priority,
+    source,
+    externalMessageId,
+    receivedAt,
+  };
+}
+
+const saveRawLead = async (businessId, data) => {
   const {
     source = 'web',
     externalMessageId = null,
@@ -13,44 +34,67 @@ const createLead = async (businessId, data) => {
 
   const lead = await prisma.lead.create({ data: { businessId, ...leadData } });
 
+  return decorateLead(lead, {
+    source,
+    externalMessageId,
+    receivedAt,
+  });
+};
+
+const processLeadAfterSave = async (lead, {
+  businessId,
+  source = 'web',
+  externalMessageId = null,
+  receivedAt = null,
+} = {}) => {
+  let priorityScore = 0;
+  let tags = [];
+  let leadSource = source;
+
   /* Run agent pipeline; capture scores for broadcast payload.
    * Errors are logged but never fail the caller. */
-  let priorityScore = 0;
-  let tags          = [];
-  let leadSource    = source;
-  try {
-    const result = await AgentEngine.run({
-      type: 'LEAD_CREATED',
-      leadId: lead.id,
-      businessId: lead.businessId,
-      source,
-      externalMessageId,
-      receivedAt,
-    });
-    priorityScore = result.priorityScore ?? 0;
-    tags          = result.tags          ?? [];
-    leadSource    = result.source        ?? source;
+  const result = await AgentEngine.run({
+    type: 'LEAD_CREATED',
+    leadId: lead.id,
+    businessId: lead.businessId,
+    source,
+    externalMessageId,
+    receivedAt,
+  });
+  priorityScore = result.priorityScore ?? 0;
+  tags = result.tags ?? [];
+  leadSource = result.source ?? source;
 
-    /* Advance lifecycle stage on the first successful lead — "lead workflow is now active".
-     * updateMany with stage: 'STARTING' in the where clause is a no-op for all other stages. */
-    await prisma.business.updateMany({
-      where: { id: businessId, stage: 'STARTING' },
-      data:  { stage: 'LEADS_ACTIVE' },
-    });
-  } catch (err) {
-    console.error('[LeadsService] AgentEngine failed for lead', lead.id, '—', err.message);
-  }
+  /* Advance lifecycle stage on the first successful lead — "lead workflow is now active".
+   * updateMany with stage: 'STARTING' in the where clause is a no-op for all other stages. */
+  await prisma.business.updateMany({
+    where: { id: businessId, stage: 'STARTING' },
+    data:  { stage: 'LEADS_ACTIVE' },
+  });
 
-  const priority = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';
-  return {
-    ...lead,
+  return decorateLead(lead, {
     priorityScore,
     tags,
-    priority,
     source: leadSource,
     externalMessageId,
     receivedAt,
-  };
+  });
+};
+
+const createLead = async (businessId, data) => {
+  const lead = await saveRawLead(businessId, data);
+
+  try {
+    return await processLeadAfterSave(lead, {
+      businessId,
+      source: lead.source,
+      externalMessageId: lead.externalMessageId,
+      receivedAt: lead.receivedAt,
+    });
+  } catch (err) {
+    logger.error({ err, leadId: lead.id, businessId }, 'AgentEngine failed after lead save');
+    return lead;
+  }
 };
 
 const findLeadsByBusiness = async (businessId, status) => {
@@ -167,4 +211,14 @@ const getLeadForOutreach = async (id, businessId) => {
   };
 };
 
-module.exports = { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead, getLeadActivity, getLeadForSuggestions, getLeadForOutreach };
+module.exports = {
+  createLead,
+  saveRawLead,
+  processLeadAfterSave,
+  findLeadsByBusiness,
+  updateLeadStatus,
+  deleteLead,
+  getLeadActivity,
+  getLeadForSuggestions,
+  getLeadForOutreach,
+};

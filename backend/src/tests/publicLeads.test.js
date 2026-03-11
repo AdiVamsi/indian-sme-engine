@@ -1,7 +1,17 @@
 'use strict';
 
+jest.mock('../realtime/socket', () => {
+  const actual = jest.requireActual('../realtime/socket');
+  return {
+    ...actual,
+    broadcast: jest.fn(),
+  };
+});
+
 const request = require('supertest');
 const { PrismaClient } = require('@prisma/client');
+const { AgentEngine } = require('../agents');
+const { broadcast } = require('../realtime/socket');
 const app = require('../app');
 const { createTestContext, installLlmFetchMock } = require('./_testHelpers');
 
@@ -20,6 +30,11 @@ describe('Public Lead Capture', () => {
     restoreFetch();
     await ctx.cleanup();
     await prisma.$disconnect();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    broadcast.mockClear();
   });
 
   const url = () => `/api/public/${ctx.slug}/leads`;
@@ -50,5 +65,65 @@ describe('Public Lead Capture', () => {
       .send(validBody);
 
     expect(res.status).toBe(404);
+  });
+
+  it('responds immediately after raw lead save and completes classification asynchronously', async () => {
+    const actualRun = AgentEngine.run;
+    let releaseEngine;
+    const engineGate = new Promise((resolve) => {
+      releaseEngine = resolve;
+    });
+    const engineSpy = jest.spyOn(AgentEngine, 'run').mockImplementation(async (...args) => {
+      await engineGate;
+      return actualRun(...args);
+    });
+
+    const responsePromise = request(app).post(url()).send({
+      name: 'Async Lead',
+      phone: '+91 99999 11111',
+      message: 'I need coaching immediately',
+    });
+
+    const respondedBeforeEngineFinished = await Promise.race([
+      responsePromise.then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 75)),
+    ]);
+
+    expect(respondedBeforeEngineFinished).toBe(true);
+
+    const res = await responsePromise;
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ ok: true });
+
+    const rawLead = await prisma.lead.findFirst({
+      where: { businessId: ctx.business.id, phone: '+91 99999 11111' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(rawLead).toBeTruthy();
+
+    const earlyActivities = await prisma.leadActivity.count({ where: { leadId: rawLead.id } });
+    expect(earlyActivities).toBe(0);
+
+    releaseEngine();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    const laterActivities = await prisma.leadActivity.findMany({
+      where: { leadId: rawLead.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(laterActivities.some((activity) => activity.type === 'AGENT_CLASSIFIED')).toBe(true);
+    expect(laterActivities.some((activity) => activity.type === 'AGENT_PRIORITIZED')).toBe(true);
+    expect(engineSpy).toHaveBeenCalled();
+    expect(broadcast).toHaveBeenCalledWith(
+      ctx.business.id,
+      'lead:new',
+      expect.objectContaining({
+        id: rawLead.id,
+        phone: '+91 99999 11111',
+        priority: expect.any(String),
+        tags: expect.any(Array),
+      })
+    );
   });
 });

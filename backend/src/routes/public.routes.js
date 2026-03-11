@@ -5,8 +5,9 @@ const { z } = require('zod');
 const rateLimit = require('express-rate-limit');
 
 const { findBusinessBySlug } = require('../services/auth.service');
-const { createLead } = require('../services/leads.service');
-const { broadcast } = require('../realtime/socket');
+const { logger } = require('../lib/logger');
+const { emitLeadCreated } = require('../controllers/leads.controller');
+const { saveRawLead, processLeadAfterSave } = require('../services/leads.service');
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -69,13 +70,28 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
 
     console.log('[Public] Creating lead for business:', business.id, '| slug:', req.params.businessSlug);
 
-    const lead = await createLead(business.id, {
+    const lead = await saveRawLead(business.id, {
       name: data.name,
       phone: data.phone,
       email,
       message,
     });
-    broadcast(business.id, 'lead:new', lead);
+
+    void processLeadAfterSave(lead, {
+      businessId: business.id,
+      source: lead.source,
+      externalMessageId: lead.externalMessageId,
+      receivedAt: lead.receivedAt,
+    })
+      .then((processedLead) => {
+        emitLeadCreated(business.id, processedLead);
+      })
+      .catch((err) => {
+        logger.error(
+          { err, leadId: lead.id, businessId: business.id, slug: req.params.businessSlug },
+          'Public lead background processing failed'
+        );
+      });
 
     return res.status(201).json({ ok: true });
   } catch (err) {
@@ -90,4 +106,3 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
 });
 
 module.exports = router;
-

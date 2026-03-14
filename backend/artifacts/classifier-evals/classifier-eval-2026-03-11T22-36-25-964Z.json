@@ -1,0 +1,191 @@
+[
+  {
+    "name": "Rahul Sharma",
+    "phone": "+91 91000 059-1",
+    "email": "rahul.eval+1+1773268542059-1@example.com",
+    "message": "My son wants admission for JEE coaching. Please call me today.",
+    "expectedIntent": "ADMISSION",
+    "expectedPriority": "HIGH",
+    "expectedTags": [
+      "ADMISSION"
+    ],
+    "leadId": "cmmmmb0ah0001a72cfinhl5od",
+    "actualIntent": "ADMISSION",
+    "actualPriority": "HIGH",
+    "actualPriorityScore": 60,
+    "actualTags": [
+      "ADMISSION",
+      "URGENT"
+    ],
+    "actualConfidence": 0.95,
+    "actualDisposition": "valid",
+    "intentPassed": true,
+    "priorityPassed": true,
+    "tagsPassed": false,
+    "passed": false
+  },
+  {
+    "name": "Pooja Verma",
+    "phone": "+91 91000 042-2",
+    "email": "pooja.eval+2+1773268547942-2@example.com",
+    "message": "fees kitni hai for the JEE batch?",
+    "expectedIntent": "FEE_ENQUIRY",
+    "expectedPriority": "NORMAL",
+    "expectedTags": [
+      "FEE_ENQUIRY"
+    ],
+    "leadId": "cmmmmb4kx000da72ch5k6z0mm",
+    "actualIntent": "FEE_ENQUIRY",
+    "actualPriority": "NORMAL",
+    "actualPriorityScore": 20,
+    "actualTags": [
+      "FEE_ENQUIRY"
+    ],
+    "actualConfidence": 0.9,
+    "actualDisposition": "valid",
+    "intentPassed": true,
+    "priorityPassed": true,
+    "tagsPassed": true,
+    "passed": true
+  },
+  {
+    "name": "Amit Singh",
+    "phone": "+91 91000 076-3",
+    "email": "amit.eval+3+1773268553276-3@example.com",
+    "message": "Please whatsapp me the brochure and details.",
+    "expectedIntent": "WHATSAPP_REQUEST",
+    "expectedPriority": "NORMAL",
+    "expectedTags": [
+      "WHATSAPP_REQUEST"
+    ],
+    "leadId": "cmmmmb8pn000la72cj6l0wm6r",
+    "actualIntent": "WHATSAPP_REQUEST",
+    "actualPriority": "NORMAL",
+    "actualPriorityScore": 20,
+    "actualTags": [
+      "WHATSAPP_REQUEST"
+    ],
+    "actualConfidence": 0.85,
+    "actualDisposition": "valid",
+    "intentPassed": true,
+    "priorityPassed": true,
+    "tagsPassed": true,
+    "passed": true
+  },
+  {
+    "name": "Sneha Gupta",
+    "phone": "+91 91000 017-4",
+    "email": "sneha.eval+4+1773268558717-4@example.com",
+    "message": "I want a demo class before joining.",
+    "expectedIntent": "DEMO_REQUEST",
+    "expectedPriority": "HIGH",
+    "expectedTags": [
+      "DEMO_REQUEST"
+    ],
+    "leadId": "cmmmmbcxf000ta72cuvq77jgm",
+    "actualIntent": "DEMO_REQUEST",
+    "actualPriority": "HIGH",
+    "actualPriorityScore": 30,
+    "actualTags": [
+      "DEMO_REQUEST"
+    ],
+    "actualConfidence": 0.95,
+    "actualDisposition": "valid",
+    "intentPassed": true,
+    "priorityPassed": true,
+    "tagsPassed": true,
+    "passed": true
+  },
+  {
+    "name": "Nikhil Rao",
+    "phone": "+91 91000 090-5",
+    "email": "nikhil.eval+5+1773268564090-5@example.com",
+    "message": "My favourite food is mango. but i need coaching from next month, give me the details now",
+    "expectedIntent": "ADMISSION",
+    "expectedPriority": "NORMAL",
+    "expectedTags": [
+      "ADMISSION"
+    ],
+    "leadId": "cmmmmbh5z0015a72cw0bz8yof",
+    "actualIntent": "ADMISSION",
+    "actualPriority": "NORMAL",
+    "actualPriorityScore": 20,
+    "actualTags": [
+      "ADMISSION"
+    ],
+    "actualConfidence": 0.9,
+    "actualDisposition": "valid",
+    "intentPassed": true,
+    "priorityPassed": true,
+    "tagsPassed": true,
+    "passed": true
+  },
+  {
+    "name": "Kiran Patel",
+    "phone": "+91 91000 086-6",
+    "email": "kiran.eval+6+1773268569686-6@example.com",
+    "message": "Do you have NEET coaching?",
+    "expectedIntent": "WRONG_FIT",
+    "expectedPriority": "LOW",
+    "expectedTags": [
+      "WRONG_FIT"
+    ],
+    "leadId": "cmmmmbldl001fa72clzeaaqit",
+    "actualIntent": "WRONG_FIT",
+    "actualPriority": "LOW",
+    "actualPriorityScore": 0,
+    "actualTags": [
+      "WRONG_FIT"
+    ],
+    "actualConfidence": 0.9,
+    "actualDisposition": "wrong_fit",
+    "intentPassed": true,
+    "priorityPassed": true,
+    "tagsPassed": true,
+    "passed": true
+  },
+  {
+    "name": "Riya Malhotra",
+    "phone": "+91 91000 012-7",
+    "email": "riya.eval+7+1773268575112-7@example.com",
+    "message": "I dont need coaching. just checking.",
+    "expectedIntent": "NOT_INTERESTED",
+    "expectedPriority": "LOW",
+    "expectedTags": [],
+    "leadId": "cmmmmbpkw001na72c6bc7drrj",
+    "actualIntent": "NOT_INTERESTED",
+    "actualPriority": "LOW",
+    "actualPriorityScore": 0,
+    "actualTags": [],
+    "actualConfidence": 0.9,
+    "actualDisposition": "not_interested",
+    "intentPassed": true,
+    "priorityPassed": true,
+    "tagsPassed": true,
+    "passed": true
+  },
+  {
+    "name": "Arjun Mehta",
+    "phone": "+91 91000 038-8",
+    "email": "arjun.eval+8+1773268580538-8@example.com",
+    "message": "scholarship mil sakta hai kya for jee coaching?",
+    "expectedIntent": "SCHOLARSHIP_ENQUIRY",
+    "expectedPriority": "NORMAL",
+    "expectedTags": [
+      "SCHOLARSHIP_ENQUIRY"
+    ],
+    "leadId": "cmmmmbts0001va72cz12b8958",
+    "actualIntent": "SCHOLARSHIP_ENQUIRY",
+    "actualPriority": "NORMAL",
+    "actualPriorityScore": 20,
+    "actualTags": [
+      "SCHOLARSHIP_ENQUIRY"
+    ],
+    "actualConfidence": 0.9,
+    "actualDisposition": "valid",
+    "intentPassed": true,
+    "priorityPassed": true,
+    "tagsPassed": true,
+    "passed": true
+  }
+]

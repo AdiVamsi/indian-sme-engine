@@ -5,6 +5,12 @@ const { logger } = require('../lib/logger');
 const { normalizePhoneNumber } = require('./messageNormalizer');
 
 const GRAPH_API_BASE_URL = 'https://graph.facebook.com/v18.0';
+const META_TEST_PHONE_NUMBER_ID_TO_SLUG = {
+  '1000851389785357': 'sharma-jee-academy-delhi',
+};
+const META_TEST_DISPLAY_PHONE_TO_SLUG = {
+  [normalizePhoneNumber('15556451322')]: 'sharma-jee-academy-delhi',
+};
 
 function getWhatsAppConfig() {
   return {
@@ -54,9 +60,77 @@ function extractIncomingMessages(payload = {}) {
   return extracted;
 }
 
-async function findBusinessForWhatsAppInbound({ displayPhoneNumber } = {}) {
+async function findBusinessForWhatsAppInbound({ displayPhoneNumber, phoneNumberId } = {}, log = logger) {
   const normalizedDestination = normalizePhoneNumber(displayPhoneNumber);
-  if (!normalizedDestination) return null;
+
+  const mappedSlugByPhoneNumberId = phoneNumberId ? META_TEST_PHONE_NUMBER_ID_TO_SLUG[phoneNumberId] : null;
+  if (mappedSlugByPhoneNumberId) {
+    const mappedBusiness = await prisma.business.findUnique({
+      where: { slug: mappedSlugByPhoneNumberId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        phone: true,
+        industry: true,
+      },
+    });
+
+    if (mappedBusiness) {
+      log.info(
+        {
+          phoneNumberId,
+          slug: mappedBusiness.slug,
+          businessId: mappedBusiness.id,
+        },
+        'WhatsApp tenant matched by phoneNumberId'
+      );
+      return mappedBusiness;
+    }
+
+    log.warn(
+      { phoneNumberId, slug: mappedSlugByPhoneNumberId },
+      'WhatsApp test-mode phoneNumberId matched a slug, but the business is missing'
+    );
+  }
+
+  const mappedSlugByDisplayPhone = normalizedDestination
+    ? META_TEST_DISPLAY_PHONE_TO_SLUG[normalizedDestination]
+    : null;
+  if (mappedSlugByDisplayPhone) {
+    const mappedBusiness = await prisma.business.findUnique({
+      where: { slug: mappedSlugByDisplayPhone },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        phone: true,
+        industry: true,
+      },
+    });
+
+    if (mappedBusiness) {
+      log.info(
+        {
+          displayPhoneNumber: normalizedDestination,
+          slug: mappedBusiness.slug,
+          businessId: mappedBusiness.id,
+        },
+        'WhatsApp tenant matched by display phone'
+      );
+      return mappedBusiness;
+    }
+
+    log.warn(
+      { displayPhoneNumber: normalizedDestination, slug: mappedSlugByDisplayPhone },
+      'WhatsApp test-mode display phone matched a slug, but the business is missing'
+    );
+  }
+
+  if (!normalizedDestination) {
+    log.warn({ displayPhoneNumber, phoneNumberId }, 'WhatsApp tenant resolution failed: no usable destination phone');
+    return null;
+  }
 
   const businesses = await prisma.business.findMany({
     select: {
@@ -68,7 +142,24 @@ async function findBusinessForWhatsAppInbound({ displayPhoneNumber } = {}) {
     },
   });
 
-  return businesses.find((business) => normalizePhoneNumber(business.phone) === normalizedDestination) || null;
+  const matchedBusiness = businesses.find((business) => normalizePhoneNumber(business.phone) === normalizedDestination) || null;
+  if (matchedBusiness) {
+    log.info(
+      {
+        displayPhoneNumber: normalizedDestination,
+        slug: matchedBusiness.slug,
+        businessId: matchedBusiness.id,
+      },
+      'WhatsApp tenant matched by existing business phone lookup'
+    );
+    return matchedBusiness;
+  }
+
+  log.warn(
+    { displayPhoneNumber: normalizedDestination, phoneNumberId },
+    'WhatsApp tenant resolution failed'
+  );
+  return null;
 }
 
 async function sendWhatsAppMessage(phone, message) {

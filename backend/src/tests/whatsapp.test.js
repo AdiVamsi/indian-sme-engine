@@ -12,7 +12,6 @@ const request = require('supertest');
 const { PrismaClient } = require('@prisma/client');
 const { broadcast } = require('../realtime/socket');
 const app = require('../app');
-const { createTestContext } = require('./_testHelpers');
 
 const prisma = new PrismaClient();
 
@@ -28,12 +27,42 @@ describe('WhatsApp webhook integration', () => {
     process.env.WHATSAPP_VERIFY_TOKEN = 'whatsapp-test-token';
     process.env.WHATSAPP_TOKEN = 'whatsapp-api-token';
     process.env.WHATSAPP_PHONE_ID = 'phone-id-123';
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+    process.env.LLM_CLASSIFIER_PROVIDER = 'openai';
+    process.env.LLM_CLASSIFIER_MODEL = 'gpt-4o-mini';
 
-    ctx = await createTestContext();
-    ctx.business = await prisma.business.update({
-      where: { id: ctx.business.id },
-      data: { phone: '+91 98765 43210' },
+    const existingShowcase = await prisma.business.findUnique({
+      where: { slug: 'sharma-jee-academy-delhi' },
     });
+
+    if (existingShowcase) {
+      ctx = {
+        business: await prisma.business.update({
+          where: { id: existingShowcase.id },
+          data: {
+            phone: '+91 70000 11111',
+            industry: existingShowcase.industry || 'academy',
+          },
+        }),
+        cleanup: async () => {},
+      };
+    } else {
+      const business = await prisma.business.create({
+        data: {
+          name: 'Sharma JEE Academy',
+          slug: 'sharma-jee-academy-delhi',
+          industry: 'academy',
+          phone: '+91 70000 11111',
+        },
+      });
+
+      ctx = {
+        business,
+        cleanup: async () => {
+          await prisma.business.deleteMany({ where: { id: business.id } });
+        },
+      };
+    }
 
     originalFetch = global.fetch;
     global.fetch = jest.fn(async (url) => {
@@ -108,8 +137,8 @@ describe('WhatsApp webhook integration', () => {
               field: 'messages',
               value: {
                 metadata: {
-                  display_phone_number: '+91 98765 43210',
-                  phone_number_id: 'phone-id-123',
+                  display_phone_number: '15556451322',
+                  phone_number_id: '1000851389785357',
                 },
                 contacts: [
                   {
@@ -172,11 +201,7 @@ describe('WhatsApp webhook integration', () => {
     expect(prioritized.metadata.priorityScore).toBe(35);
     expect(whatsappAlert).toBeTruthy();
     expect(whatsappAlert.metadata.replyMessage).toContain('Our team will contact you shortly');
-
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('graph.facebook.com/v18.0/phone-id-123/messages'),
-      expect.objectContaining({ method: 'POST' })
-    );
+    expect(whatsappAlert.metadata.providerMessageId).toBe('wamid.reply.123');
 
     expect(broadcast).toHaveBeenCalledWith(
       ctx.business.id,

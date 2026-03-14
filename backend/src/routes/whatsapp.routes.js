@@ -34,7 +34,7 @@ async function processIncomingMessages(incomingMessages, log) {
 
   for (const incoming of incomingMessages) {
     try {
-      const business = await findBusinessForWhatsAppInbound(incoming);
+      const business = await findBusinessForWhatsAppInbound(incoming, log);
       if (!business) {
         log.warn(
           {

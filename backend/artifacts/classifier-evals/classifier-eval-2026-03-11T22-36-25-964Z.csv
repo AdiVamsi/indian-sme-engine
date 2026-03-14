@@ -1,0 +1,9 @@
+name,phone,message,expectedIntent,actualIntent,intentPassed,expectedPriority,actualPriority,priorityPassed,expectedTags,actualTags,tagsPassed,actualPriorityScore,actualConfidence,actualDisposition,passed,leadId
+Rahul Sharma,+91 91000 059-1,My son wants admission for JEE coaching. Please call me today.,ADMISSION,ADMISSION,true,HIGH,HIGH,true,ADMISSION,ADMISSION|URGENT,false,60,0.95,valid,false,cmmmmb0ah0001a72cfinhl5od
+Pooja Verma,+91 91000 042-2,fees kitni hai for the JEE batch?,FEE_ENQUIRY,FEE_ENQUIRY,true,NORMAL,NORMAL,true,FEE_ENQUIRY,FEE_ENQUIRY,true,20,0.9,valid,true,cmmmmb4kx000da72ch5k6z0mm
+Amit Singh,+91 91000 076-3,Please whatsapp me the brochure and details.,WHATSAPP_REQUEST,WHATSAPP_REQUEST,true,NORMAL,NORMAL,true,WHATSAPP_REQUEST,WHATSAPP_REQUEST,true,20,0.85,valid,true,cmmmmb8pn000la72cj6l0wm6r
+Sneha Gupta,+91 91000 017-4,I want a demo class before joining.,DEMO_REQUEST,DEMO_REQUEST,true,HIGH,HIGH,true,DEMO_REQUEST,DEMO_REQUEST,true,30,0.95,valid,true,cmmmmbcxf000ta72cuvq77jgm
+Nikhil Rao,+91 91000 090-5,"My favourite food is mango. but i need coaching from next month, give me the details now",ADMISSION,ADMISSION,true,NORMAL,NORMAL,true,ADMISSION,ADMISSION,true,20,0.9,valid,true,cmmmmbh5z0015a72cw0bz8yof
+Kiran Patel,+91 91000 086-6,Do you have NEET coaching?,WRONG_FIT,WRONG_FIT,true,LOW,LOW,true,WRONG_FIT,WRONG_FIT,true,0,0.9,wrong_fit,true,cmmmmbldl001fa72clzeaaqit
+Riya Malhotra,+91 91000 012-7,I dont need coaching. just checking.,NOT_INTERESTED,NOT_INTERESTED,true,LOW,LOW,true,,,true,0,0.9,not_interested,true,cmmmmbpkw001na72c6bc7drrj
+Arjun Mehta,+91 91000 038-8,scholarship mil sakta hai kya for jee coaching?,SCHOLARSHIP_ENQUIRY,SCHOLARSHIP_ENQUIRY,true,NORMAL,NORMAL,true,SCHOLARSHIP_ENQUIRY,SCHOLARSHIP_ENQUIRY,true,20,0.9,valid,true,cmmmmbts0001va72cz12b8958

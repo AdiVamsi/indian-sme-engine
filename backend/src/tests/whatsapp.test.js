@@ -16,6 +16,10 @@ const { createTestContext } = require('./_testHelpers');
 
 const prisma = new PrismaClient();
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 describe('WhatsApp webhook integration', () => {
   let ctx;
   let originalFetch;
@@ -131,20 +135,28 @@ describe('WhatsApp webhook integration', () => {
 
     const res = await request(app)
       .post('/api/webhooks/whatsapp')
-      .set('x-whatsapp-verify-token', 'whatsapp-test-token')
       .send(payload);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ received: true, processed: 1 });
+    expect(res.body).toEqual({ received: true, accepted: 1 });
 
-    const lead = await prisma.lead.findFirst({
-      where: {
-        businessId: ctx.business.id,
-        phone: '+919876543210',
-      },
-      orderBy: { createdAt: 'desc' },
-      include: { activities: { orderBy: { createdAt: 'asc' } } },
-    });
+    let lead = null;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      lead = await prisma.lead.findFirst({
+        where: {
+          businessId: ctx.business.id,
+          phone: '+919876543210',
+        },
+        orderBy: { createdAt: 'desc' },
+        include: { activities: { orderBy: { createdAt: 'asc' } } },
+      });
+
+      if (lead?.activities?.some((activity) => activity.type === 'AGENT_CLASSIFIED')) {
+        break;
+      }
+
+      await sleep(100);
+    }
 
     expect(lead).toBeTruthy();
 

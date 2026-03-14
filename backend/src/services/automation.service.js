@@ -73,6 +73,14 @@ async function runLeadAutomations(leadId, {
     try {
       const replyResult = await sendWhatsAppMessage(phone, HIGH_PRIORITY_WHATSAPP_REPLY);
       whatsappReplySent = true;
+      logger.info(
+        {
+          leadId,
+          phone,
+          providerMessageId: replyResult?.messages?.[0]?.id || null,
+        },
+        'WhatsApp automation reply sent'
+      );
       await prisma.leadActivity.create({
         data: {
           leadId,

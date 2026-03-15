@@ -13,6 +13,7 @@ const ADMISSION_TAGS = new Set(['ADMISSION', 'COURSE_ENQUIRY']);
 const FEE_TAGS = new Set(['FEE_ENQUIRY', 'FEES']);
 const SCHOLARSHIP_TAGS = new Set(['SCHOLARSHIP_ENQUIRY', 'SCHOLARSHIP']);
 const WRONG_FIT_TAGS = new Set(['WRONG_FIT']);
+const CALLBACK_TAGS = new Set(['CALLBACK_REQUEST']);
 
 function normalizeTagSet(tags = []) {
   return new Set(Array.isArray(tags) ? tags : []);
@@ -73,8 +74,14 @@ function resolveAcademyReplyIntent(intent, tags) {
   if (normalizedIntent === 'FEE_ENQUIRY' || [...FEE_TAGS].some((tag) => tagSet.has(tag))) {
     return 'FEE_ENQUIRY';
   }
+  if (normalizedIntent === 'CALLBACK_REQUEST' || [...CALLBACK_TAGS].some((tag) => tagSet.has(tag))) {
+    return 'CALLBACK_REQUEST';
+  }
   if (normalizedIntent === 'ADMISSION' || [...ADMISSION_TAGS].some((tag) => tagSet.has(tag))) {
     return 'ADMISSION';
+  }
+  if (normalizedIntent === 'GENERAL_ENQUIRY') {
+    return 'GENERAL_ENQUIRY';
   }
 
   return null;
@@ -163,6 +170,32 @@ function buildAcademyFirstReplyPlan({
           status: 'awaiting_user',
         }),
       };
+    case 'CALLBACK_REQUEST':
+      return {
+        reason: 'CALLBACK_REQUEST',
+        message: 'Sure — please share the student\'s class and your preferred call time. Our counsellor will call you accordingly.',
+        conversationMode: 'initial',
+        conversationState: createConversationState({
+          flowIntent: 'CALLBACK_REQUEST',
+          stage: 'AWAITING_CALLBACK_DETAILS',
+          pendingField: 'callback_details',
+          collected: {},
+          status: 'awaiting_user',
+        }),
+      };
+    case 'GENERAL_ENQUIRY':
+      return {
+        reason: 'GENERAL_ENQUIRY',
+        message: 'Sure — please share the student\'s class and whether you want fees, demo, or admission details.',
+        conversationMode: 'initial',
+        conversationState: createConversationState({
+          flowIntent: 'GENERAL_ENQUIRY',
+          stage: 'AWAITING_GENERAL_ENQUIRY_DETAILS',
+          pendingField: 'general_enquiry_details',
+          collected: {},
+          status: 'awaiting_user',
+        }),
+      };
     default:
       if (priorityScore >= HIGH_PRIORITY_THRESHOLD) {
         return buildHandoffPlan({
@@ -244,6 +277,41 @@ function extractMarks(message = '') {
   const scoreMatch = text.match(/\b(\d{2,3})\s*\/\s*100\b/);
   if (scoreMatch) return `${scoreMatch[1]}%`;
 
+  return null;
+}
+
+function extractPreferredCallTime(message = '') {
+  const original = String(message || '').trim();
+  const text = original.toLowerCase();
+  if (!text) return null;
+
+  const relativeTime = original.match(/\b(?:after|around|before)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/i);
+  if (relativeTime) return relativeTime[0];
+
+  const explicitTime = original.match(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i);
+  if (explicitTime) return explicitTime[0];
+
+  const bajeMatch = original.match(/\b\d{1,2}(?::\d{2})?\s*baje\b/i);
+  if (bajeMatch) return bajeMatch[0];
+
+  const parts = [];
+  if (/\b(today|aaj)\b/.test(text)) parts.push('today');
+  if (/\b(tomorrow|kal)\b/.test(text)) parts.push('tomorrow');
+  if (/\b(morning|subah)\b/.test(text)) parts.push('morning');
+  if (/\b(afternoon|dopahar)\b/.test(text)) parts.push('afternoon');
+  if (/\b(evening|shaam)\b/.test(text)) parts.push('evening');
+  if (/\b(night|raat)\b/.test(text)) parts.push('night');
+
+  return parts.length ? parts.join(' ') : null;
+}
+
+function extractAcademyEnquiryTopic(message = '') {
+  const text = String(message || '').trim().toLowerCase();
+  if (!text) return null;
+
+  if (/\b(fees|fee|price|cost|kitni)\b/.test(text)) return 'FEE_ENQUIRY';
+  if (/\b(demo|trial class|demo class)\b/.test(text)) return 'DEMO_REQUEST';
+  if (/\b(admission|join|coaching|course|batch)\b/.test(text)) return 'ADMISSION';
   return null;
 }
 
@@ -347,6 +415,79 @@ function buildAcademyContinuationPlan({
       conversationMode: 'continuation',
       conversationState: createConversationState({
         flowIntent: flowIntent || 'SCHOLARSHIP_ENQUIRY',
+        stage: 'HANDOFF_QUEUED',
+        pendingField: null,
+        collected,
+        status: 'handoff',
+      }),
+    };
+  }
+
+  if (conversationState.pendingField === 'callback_details') {
+    const studentClass = extractStudentClass(message);
+    const preferredCallTime = extractPreferredCallTime(message);
+
+    if (!studentClass && !preferredCallTime) {
+      return buildHandoffPlan({
+        reason: 'OFF_FLOW_HANDOFF',
+        flowIntent,
+        collected,
+      });
+    }
+
+    if (studentClass) collected.studentClass = studentClass;
+    if (preferredCallTime) collected.preferredCallTime = preferredCallTime;
+
+    const classText = studentClass ? `for ${studentClass}` : 'for the student';
+    const callTimeText = preferredCallTime
+      ? ` around ${preferredCallTime}`
+      : ' shortly';
+
+    return {
+      reason: 'CALLBACK_REQUEST_HANDOFF',
+      message: `Thanks. Our counsellor will call ${classText}${callTimeText} and help you with the coaching details.`.replace(/\s+/g, ' ').trim(),
+      conversationMode: 'continuation',
+      conversationState: createConversationState({
+        flowIntent: 'CALLBACK_REQUEST',
+        stage: 'HANDOFF_QUEUED',
+        pendingField: null,
+        collected,
+        status: 'handoff',
+      }),
+    };
+  }
+
+  if (conversationState.pendingField === 'general_enquiry_details') {
+    const studentClass = extractStudentClass(message);
+    const topic = extractAcademyEnquiryTopic(message);
+
+    if (!studentClass && !topic) {
+      return buildHandoffPlan({
+        reason: 'OFF_FLOW_HANDOFF',
+        flowIntent,
+        collected,
+      });
+    }
+
+    if (studentClass) collected.studentClass = studentClass;
+    if (topic) collected.topic = topic;
+
+    const resolvedIntent = topic || 'GENERAL_ENQUIRY';
+    const topicLabelMap = {
+      FEE_ENQUIRY: 'fee details',
+      DEMO_REQUEST: 'demo class details',
+      ADMISSION: 'admission details',
+      GENERAL_ENQUIRY: 'coaching details',
+    };
+    const topicLabel = topicLabelMap[resolvedIntent] || 'coaching details';
+    const classText = studentClass ? ` for ${studentClass}` : '';
+
+    return {
+      reason: 'GENERAL_ENQUIRY_HANDOFF',
+      message: `Thanks. Our team will help you with ${topicLabel}${classText} shortly on WhatsApp.`.replace(/\s+/g, ' ').trim(),
+      conversationMode: 'continuation',
+      conversationState: createConversationState({
+        flowIntent: resolvedIntent,
         stage: 'HANDOFF_QUEUED',
         pendingField: null,
         collected,

@@ -56,6 +56,53 @@ function buildWebhookPayload({ phone, message, messageId }) {
   };
 }
 
+function buildClassificationForMessage(message) {
+  const text = String(message || '').toLowerCase();
+
+  if (text.includes('call karega') || text.includes('preferred call') || text.includes('coaching ke baare me puchhni hai')) {
+    return {
+      intent: 'CALLBACK_REQUEST',
+      priority: 'NORMAL',
+      priorityScore: 20,
+      tags: ['CALLBACK_REQUEST', 'GENERAL_ENQUIRY'],
+      confidence: 0.9,
+      confidenceLabel: 'high',
+      disposition: 'valid',
+      languageMode: 'hinglish',
+      reasoning: 'Caller wants a callback to discuss coaching details.',
+      suggestedNextAction: 'Call within 30 minutes',
+    };
+  }
+
+  if (text.includes('fees details chahiye') || text.includes('demo details') || text.includes('admission details')) {
+    return {
+      intent: 'GENERAL_ENQUIRY',
+      priority: 'NORMAL',
+      priorityScore: 20,
+      tags: ['GENERAL_ENQUIRY'],
+      confidence: 0.88,
+      confidenceLabel: 'high',
+      disposition: 'valid',
+      languageMode: 'hinglish',
+      reasoning: 'General coaching enquiry that needs narrowing.',
+      suggestedNextAction: 'Ask whether they need fees, demo, or admission details',
+    };
+  }
+
+  return {
+    intent: 'ADMISSION',
+    priority: 'HIGH',
+    priorityScore: 35,
+    tags: ['ADMISSION', 'URGENT'],
+    confidence: 0.94,
+    confidenceLabel: 'high',
+    disposition: 'valid',
+    languageMode: 'english',
+    reasoning: 'Urgent coaching admission request from WhatsApp.',
+    suggestedNextAction: 'Call within 15 minutes',
+  };
+}
+
 async function waitForLeadByPhone(businessId, phone, predicate = null) {
   let lead = null;
 
@@ -79,7 +126,7 @@ async function waitForLeadByPhone(businessId, phone, predicate = null) {
 describe('WhatsApp webhook integration', () => {
   let ctx;
   let originalFetch;
-  const testPhones = ['+919876543210', '+919800000001'];
+  const testPhones = ['+919876543210', '+919800000001', '+919811111111'];
 
   beforeAll(async () => {
     process.env.WHATSAPP_VERIFY_TOKEN = 'whatsapp-test-token';
@@ -123,8 +170,12 @@ describe('WhatsApp webhook integration', () => {
     }
 
     originalFetch = global.fetch;
-    global.fetch = jest.fn(async (url) => {
+    global.fetch = jest.fn(async (url, options = {}) => {
       if (String(url).includes('/chat/completions')) {
+        const payload = JSON.parse(options.body || '{}');
+        const userMessage = payload.messages?.find((entry) => entry.role === 'user')?.content || '{}';
+        const userPayload = JSON.parse(userMessage);
+
         return {
           ok: true,
           status: 200,
@@ -132,18 +183,7 @@ describe('WhatsApp webhook integration', () => {
             choices: [
               {
                 message: {
-                  content: JSON.stringify({
-                    intent: 'ADMISSION',
-                    priority: 'HIGH',
-                    priorityScore: 35,
-                    tags: ['ADMISSION', 'URGENT'],
-                    confidence: 0.94,
-                    confidenceLabel: 'high',
-                    disposition: 'valid',
-                    languageMode: 'english',
-                    reasoning: 'Urgent coaching admission request from WhatsApp.',
-                    suggestedNextAction: 'Call within 15 minutes',
-                  }),
+                  content: JSON.stringify(buildClassificationForMessage(userPayload?.message)),
                 },
               },
             ],
@@ -256,7 +296,7 @@ describe('WhatsApp webhook integration', () => {
       .post('/api/webhooks/whatsapp')
       .send(buildWebhookPayload({
         phone,
-        message: 'Need admission details urgently',
+        message: 'Need coaching urgently',
         messageId: 'wamid.message.first',
       }));
 
@@ -324,5 +364,45 @@ describe('WhatsApp webhook integration', () => {
 
     expect(openAiCalls).toHaveLength(1);
     expect(graphCalls).toHaveLength(2);
+  });
+
+  it('sends a callback-focused first reply for callback request plus general enquiry academy leads', async () => {
+    const phone = '+919811111111';
+    const res = await request(app)
+      .post('/api/webhooks/whatsapp')
+      .send(buildWebhookPayload({
+        phone,
+        message: 'bhai hindi aati hai? koi call karega ? coaching ke baare me puchhni hai',
+        messageId: 'wamid.message.callback',
+      }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true, accepted: 1 });
+
+    const lead = await waitForLeadByPhone(ctx.business.id, phone, (candidate) =>
+      candidate.activities.some((activity) =>
+        activity.type === 'AUTOMATION_ALERT'
+        && activity.metadata?.channel === 'whatsapp'
+        && activity.metadata?.direction === 'outbound'
+      )
+    );
+
+    expect(lead).toBeTruthy();
+
+    const classified = lead.activities.find((activity) => activity.type === 'AGENT_CLASSIFIED');
+    const prioritized = lead.activities.find((activity) => activity.type === 'AGENT_PRIORITIZED');
+    const outboundReply = lead.activities.find((activity) =>
+      activity.type === 'AUTOMATION_ALERT'
+      && activity.metadata?.channel === 'whatsapp'
+      && activity.metadata?.direction === 'outbound'
+    );
+
+    expect(classified.metadata.bestCategory).toBe('CALLBACK_REQUEST');
+    expect(classified.metadata.tags).toEqual(expect.arrayContaining(['CALLBACK_REQUEST', 'GENERAL_ENQUIRY']));
+    expect(prioritized.metadata.priorityScore).toBe(20);
+    expect(outboundReply.metadata.replyIntent).toBe('CALLBACK_REQUEST');
+    expect(outboundReply.metadata.replyMessage).toContain('preferred call time');
+    expect(outboundReply.metadata.replyMessage).toContain('student\'s class');
+    expect(outboundReply.metadata.conversationState.pendingField).toBe('callback_details');
   });
 });

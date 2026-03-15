@@ -46,6 +46,34 @@ describe('WhatsApp academy reply selection', () => {
     expect(plan.message).toContain('Which class is the student in?');
   });
 
+  it('builds a callback request first reply', () => {
+    const plan = buildWhatsAppReplyPlan({
+      businessIndustry: 'academy',
+      intent: 'CALLBACK_REQUEST',
+      tags: ['CALLBACK_REQUEST', 'GENERAL_ENQUIRY'],
+      priorityScore: 20,
+    });
+
+    expect(plan.reason).toBe('CALLBACK_REQUEST');
+    expect(plan.message).toContain('preferred call time');
+    expect(plan.message).toContain('student\'s class');
+    expect(plan.conversationState.pendingField).toBe('callback_details');
+  });
+
+  it('builds a general enquiry first reply', () => {
+    const plan = buildWhatsAppReplyPlan({
+      businessIndustry: 'academy',
+      intent: 'GENERAL_ENQUIRY',
+      tags: ['GENERAL_ENQUIRY'],
+      priorityScore: 20,
+    });
+
+    expect(plan.reason).toBe('GENERAL_ENQUIRY');
+    expect(plan.message).toContain('student\'s class');
+    expect(plan.message).toContain('fees, demo, or admission');
+    expect(plan.conversationState.pendingField).toBe('general_enquiry_details');
+  });
+
   it('builds a scholarship enquiry first reply', () => {
     const plan = buildWhatsAppReplyPlan({
       businessIndustry: 'academy',
@@ -119,6 +147,45 @@ describe('WhatsApp academy continuation planning', () => {
     expect(plan.reason).toBe('SCHOLARSHIP_ENQUIRY_HANDOFF');
     expect(plan.message).toContain('88%');
     expect(plan.conversationState.collected.recentMarks).toBe('88%');
+  });
+
+  it('handles a callback request follow-up with class and call time', () => {
+    const plan = buildAcademyContinuationPlan({
+      conversationState: {
+        flowIntent: 'CALLBACK_REQUEST',
+        pendingField: 'callback_details',
+        collected: {},
+        status: 'awaiting_user',
+      },
+      message: 'Class 10, please call after 6 pm',
+      priorityScore: 20,
+    });
+
+    expect(plan.reason).toBe('CALLBACK_REQUEST_HANDOFF');
+    expect(plan.message).toContain('for Class 10');
+    expect(plan.message).toContain('after 6 pm');
+    expect(plan.conversationState.collected.studentClass).toBe('Class 10');
+    expect(plan.conversationState.collected.preferredCallTime).toBe('after 6 pm');
+  });
+
+  it('handles a general enquiry follow-up by routing to the requested topic', () => {
+    const plan = buildAcademyContinuationPlan({
+      conversationState: {
+        flowIntent: 'GENERAL_ENQUIRY',
+        pendingField: 'general_enquiry_details',
+        collected: {},
+        status: 'awaiting_user',
+      },
+      message: 'Class 11 fees details chahiye',
+      priorityScore: 20,
+    });
+
+    expect(plan.reason).toBe('GENERAL_ENQUIRY_HANDOFF');
+    expect(plan.message).toContain('fee details');
+    expect(plan.message).toContain('Class 11');
+    expect(plan.conversationState.flowIntent).toBe('FEE_ENQUIRY');
+    expect(plan.conversationState.collected.studentClass).toBe('Class 11');
+    expect(plan.conversationState.collected.topic).toBe('FEE_ENQUIRY');
   });
 
   it('routes off-flow follow-up replies to human handoff', () => {

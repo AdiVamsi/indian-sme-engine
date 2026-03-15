@@ -4,7 +4,8 @@ const { Router } = require('express');
 
 const { emitLeadCreated } = require('../controllers/leads.controller');
 const { logger } = require('../lib/logger');
-const { saveRawLead, processLeadAfterSave } = require('../services/leads.service');
+const { continueWhatsAppConversation, recordWhatsAppInboundTurn } = require('../services/automation.service');
+const { saveRawLead, processLeadAfterSave, findActiveWhatsAppLead } = require('../services/leads.service');
 const { normalizeWhatsAppMessage } = require('../services/messageNormalizer');
 const {
   extractIncomingMessages,
@@ -58,6 +59,41 @@ async function processIncomingMessages(incomingMessages, log) {
         'WhatsApp tenant resolved'
       );
 
+      const existingLead = await findActiveWhatsAppLead(business.id, incoming.senderPhone);
+      if (existingLead) {
+        log.info(
+          {
+            businessId: business.id,
+            slug: business.slug,
+            leadId: existingLead.id,
+            senderPhone: incoming.senderPhone,
+            messageId: incoming.messageId,
+          },
+          'WhatsApp continuation routed to existing lead'
+        );
+
+        const continuationResult = await continueWhatsAppConversation(existingLead.id, {
+          phone: incoming.senderPhone,
+          message: incoming.message,
+          messageId: incoming.messageId,
+          timestamp: incoming.timestamp ? Number(incoming.timestamp) * 1000 : null,
+        });
+        processed += 1;
+
+        log.info(
+          {
+            businessId: business.id,
+            slug: business.slug,
+            leadId: existingLead.id,
+            replySent: continuationResult.replySent,
+            replyReason: continuationResult.replyReason || null,
+            conversationState: continuationResult.conversationState || null,
+          },
+          'WhatsApp continuation handled'
+        );
+        continue;
+      }
+
       const leadInput = normalizeWhatsAppMessage({
         senderName: incoming.senderName,
         phone: incoming.senderPhone,
@@ -67,6 +103,13 @@ async function processIncomingMessages(incomingMessages, log) {
       });
 
       const rawLead = await saveRawLead(business.id, leadInput);
+      await recordWhatsAppInboundTurn(rawLead.id, {
+        phone: rawLead.phone,
+        message: incoming.message,
+        messageId: incoming.messageId,
+        timestamp: rawLead.receivedAt,
+        conversationMode: 'initial',
+      });
       log.info(
         {
           businessId: business.id,

@@ -24,6 +24,17 @@ function decorateLead(lead, {
   };
 }
 
+function getLatestWhatsAppConversationState(activities = []) {
+  for (const activity of activities) {
+    const metadata = activity?.metadata || {};
+    if (metadata.channel === 'whatsapp' && metadata.direction === 'outbound' && metadata.conversationState) {
+      return metadata.conversationState;
+    }
+  }
+
+  return null;
+}
+
 const saveRawLead = async (businessId, data) => {
   const {
     source = 'web',
@@ -39,6 +50,28 @@ const saveRawLead = async (businessId, data) => {
     externalMessageId,
     receivedAt,
   });
+};
+
+const findActiveWhatsAppLead = async (businessId, phone) => {
+  const leads = await prisma.lead.findMany({
+    where: {
+      businessId,
+      phone,
+      status: { in: ['NEW', 'CONTACTED', 'QUALIFIED'] },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+    include: {
+      activities: {
+        orderBy: { createdAt: 'desc' },
+      },
+    },
+  });
+
+  return leads.find((lead) => {
+    const state = getLatestWhatsAppConversationState(lead.activities);
+    return state && ['awaiting_user', 'handoff'].includes(state.status);
+  }) || null;
 };
 
 const processLeadAfterSave = async (lead, {
@@ -215,6 +248,7 @@ module.exports = {
   createLead,
   saveRawLead,
   processLeadAfterSave,
+  findActiveWhatsAppLead,
   findLeadsByBusiness,
   updateLeadStatus,
   deleteLead,

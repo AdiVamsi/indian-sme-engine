@@ -124,7 +124,8 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
       businessIndustry: business?.industry || 'other',
       source,
       phone: lead.phone,
-      suggestedNextAction: intelligence.suggestedNextAction,
+      confidenceLabel,
+      leadDisposition: intelligence.disposition,
     });
     automationsTriggered = automationResult.triggered;
     console.log(`[AgentEngine] Automations triggered for lead ${lead.id}: ${automationsTriggered}`);

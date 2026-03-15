@@ -119,9 +119,12 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
   try {
     const automationResult = await runLeadAutomations(lead.id, {
       tags,
+      intent: bestCategory,
       priorityScore,
+      businessIndustry: business?.industry || 'other',
       source,
       phone: lead.phone,
+      suggestedNextAction: intelligence.suggestedNextAction,
     });
     automationsTriggered = automationResult.triggered;
     console.log(`[AgentEngine] Automations triggered for lead ${lead.id}: ${automationsTriggered}`);

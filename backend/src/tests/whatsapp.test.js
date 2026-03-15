@@ -200,7 +200,8 @@ describe('WhatsApp webhook integration', () => {
     expect(classified.metadata.source).toBe('whatsapp');
     expect(prioritized.metadata.priorityScore).toBe(35);
     expect(whatsappAlert).toBeTruthy();
-    expect(whatsappAlert.metadata.replyMessage).toContain('Our team will contact you shortly');
+    expect(whatsappAlert.metadata.replyMessage).toContain('Admissions are open');
+    expect(whatsappAlert.metadata.replyMessage).toContain('call you shortly');
     expect(whatsappAlert.metadata.providerMessageId).toBe('wamid.reply.123');
 
     expect(broadcast).toHaveBeenCalledWith(

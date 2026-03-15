@@ -1,6 +1,7 @@
 'use strict';
 
 const { AgentEngine } = require('../agents');
+const { buildWhatsAppConversationSummary } = require('./leadConversation.service');
 const { prisma } = require('../lib/prisma');
 const { logger } = require('../lib/logger');
 
@@ -181,7 +182,19 @@ const getLeadActivity = async (id, businessId) => {
   /* Single query: filter by lead relation for multi-tenant safety */
   const rows = await prisma.leadActivity.findMany({
     where: { leadId: id, lead: { businessId } },
-    include: { lead: { select: { name: true, phone: true } } },
+    include: {
+      lead: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          message: true,
+          status: true,
+          createdAt: true,
+        },
+      },
+    },
     orderBy: { createdAt: 'asc' },
   });
 
@@ -189,12 +202,20 @@ const getLeadActivity = async (id, businessId) => {
     /* No activities yet — confirm lead exists for this business */
     const existing = await prisma.lead.findFirst({ where: { id, businessId } });
     if (!existing) return null;
-    return { lead: { id, name: existing.name, phone: existing.phone }, activities: [] };
+    return {
+      lead: existing,
+      activities: [],
+      whatsappConversation: buildWhatsAppConversationSummary({ lead: existing, activities: [] }),
+    };
   }
 
-  const lead       = { id, ...rows[0].lead };
+  const lead       = rows[0].lead;
   const activities = rows.map(({ lead: _l, ...act }) => act);
-  return { lead, activities };
+  return {
+    lead,
+    activities,
+    whatsappConversation: buildWhatsAppConversationSummary({ lead, activities }),
+  };
 };
 
 /**

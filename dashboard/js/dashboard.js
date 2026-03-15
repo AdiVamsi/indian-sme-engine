@@ -1418,6 +1418,8 @@ const DRAWER_ACTIVITY_MAP = {
   AGENT_PRIORITIZED: { label: 'Priority score set', icon: '⚡', dot: 'dtl-dot--prioritized' },
   FOLLOW_UP_SCHEDULED: { label: 'Follow-up scheduled', icon: '📅', dot: 'dtl-dot--followup' },
   STATUS_CHANGED: { label: 'Status updated', icon: '🔄', dot: 'dtl-dot--default' },
+  AUTOMATION_DEMO_INTENT: { label: 'Demo interest detected', icon: '🎓', dot: 'dtl-dot--automation' },
+  AUTOMATION_ADMISSION_INTENT: { label: 'Admission interest detected', icon: '📘', dot: 'dtl-dot--automation' },
 };
 
 function _escDrawer(s) {
@@ -1428,6 +1430,123 @@ function _fmtDrawerTime(iso) {
   try {
     return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
   } catch { return iso; }
+}
+
+function _titleCaseDrawer(value) {
+  return String(value ?? '')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function _formatDrawerFieldLabel(key) {
+  const labels = {
+    studentClass: 'Student Class',
+    requestedTopic: 'Requested Topic',
+    preferredCallTime: 'Preferred Call Time',
+    recentMarks: 'Recent Marks',
+  };
+  return labels[key] || _titleCaseDrawer(key);
+}
+
+function _resolveDrawerActivityPresentation(act) {
+  const meta = act.metadata || {};
+
+  if (act.type === 'AUTOMATION_ALERT') {
+    if (meta.channel === 'whatsapp' && meta.direction === 'inbound') {
+      return {
+        label: 'Customer message received',
+        icon: '💬',
+        dot: 'dtl-dot--whatsapp-in',
+        message: meta.messageText || act.message || '',
+      };
+    }
+
+    if (meta.channel === 'whatsapp' && meta.direction === 'outbound') {
+      const isHandoff = String(meta.replyIntent || '').includes('HANDOFF');
+      return {
+        label: isHandoff ? 'Counsellor handoff reply sent' : 'WhatsApp reply sent',
+        icon: isHandoff ? '🤝' : '📲',
+        dot: 'dtl-dot--whatsapp-out',
+        message: meta.replyMessage || meta.messageText || act.message || '',
+      };
+    }
+
+    if (meta.reason === 'HIGH_PRIORITY_LEAD') {
+      return {
+        label: 'High-priority lead flagged',
+        icon: '🚨',
+        dot: 'dtl-dot--prioritized',
+        message: `This lead was flagged for quick follow-up with score ${_escDrawer(meta.score ?? '—')}.`,
+      };
+    }
+  }
+
+  const cfg = DRAWER_ACTIVITY_MAP[act.type] ?? {
+    label: _titleCaseDrawer(act.type),
+    icon: '●',
+    dot: 'dtl-dot--default',
+  };
+
+  return {
+    ...cfg,
+    message: act.message || '',
+  };
+}
+
+function _buildWhatsAppSummaryHtml(summary) {
+  if (!summary) return '';
+
+  const fields = Object.entries(summary.capturedFields || {})
+    .filter(([, value]) => value)
+    .map(([key, value]) => `
+      <div class="wa-summary__field">
+        <span class="wa-summary__field-label">${_escDrawer(_formatDrawerFieldLabel(key))}</span>
+        <strong class="wa-summary__field-value">${_escDrawer(value)}</strong>
+      </div>`)
+    .join('');
+
+  const transcript = Array.isArray(summary.transcript) ? summary.transcript : [];
+  const transcriptHtml = transcript.length
+    ? `
+      <div class="wa-transcript">
+        <div class="wa-transcript__header">
+          <span class="wa-transcript__title">WhatsApp Conversation</span>
+          <span class="wa-transcript__count">${transcript.length} turns</span>
+        </div>
+        <div class="wa-transcript__list">
+          ${transcript.map((turn) => `
+            <div class="wa-turn wa-turn--${_escDrawer(turn.direction)}">
+              <div class="wa-turn__meta">
+                <span class="wa-turn__speaker">${_escDrawer(turn.speaker)}</span>
+                <span class="wa-turn__time">${_escDrawer(_fmtDrawerTime(turn.createdAt))}</span>
+              </div>
+              <div class="wa-turn__bubble">${_escDrawer(turn.text)}</div>
+            </div>`).join('')}
+        </div>
+      </div>`
+    : '';
+
+  return `
+    <div class="wa-summary">
+      <div class="wa-summary__header">
+        <div>
+          <div class="wa-summary__eyebrow">WhatsApp handoff</div>
+          <div class="wa-summary__intent">${_escDrawer(summary.primaryIntentLabel || 'WhatsApp lead')}</div>
+        </div>
+        <span class="wa-summary__status wa-summary__status--${_escDrawer(summary.conversationStatus || 'captured')}">
+          ${_escDrawer(summary.conversationStatusLabel || 'Conversation captured')}
+        </span>
+      </div>
+
+      ${fields ? `<div class="wa-summary__fields">${fields}</div>` : '<div class="wa-summary__empty">No captured fields yet. Use the transcript below for context.</div>'}
+
+      <div class="wa-summary__next">
+        <span class="wa-summary__next-label">Recommended next action</span>
+        <p class="wa-summary__next-text">${_escDrawer(summary.recommendedNextAction || 'Review the WhatsApp conversation and continue manually.')}</p>
+      </div>
+    </div>
+    ${transcriptHtml}`;
 }
 
 async function openLeadDrawer(leadId) {
@@ -1517,25 +1636,36 @@ function _renderDrawerTimeline(data) {
     return;
   }
 
-  const { lead, activities } = data;
+  const { lead, activities, whatsappConversation } = data;
 
   /* Update header with authoritative data */
   $('drawer-name').textContent = lead?.name ?? '—';
   $('drawer-phone').textContent = lead?.phone ?? '';
 
+  const prioritized = activities.find((activity) => activity.type === 'AGENT_PRIORITIZED');
+  const priorityScore = prioritized?.metadata?.priorityScore ?? 0;
+  const priorityLabel = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';
+  const headerBadges = [
+    `<span class="drawer__meta-badge">Status: <strong>${_escDrawer(lead?.status ?? 'NEW')}</strong></span>`,
+    `<span class="drawer__meta-badge">Priority: <strong>${_escDrawer(priorityLabel)}</strong></span>`,
+    `<span class="drawer__meta-badge">Score: <strong>${_escDrawer(priorityScore)}</strong></span>`,
+  ];
+  if (whatsappConversation) {
+    headerBadges.push('<span class="drawer__meta-badge">Channel: <strong>WhatsApp</strong></span>');
+  }
+  $('drawer-meta').innerHTML = headerBadges.join('');
+
   if (!activities.length) {
-    $('drawer-timeline').innerHTML = '<div class="drawer-empty">📭<br>No activity recorded yet.</div>';
+    $('drawer-timeline').innerHTML = `
+      ${_buildWhatsAppSummaryHtml(whatsappConversation)}
+      <div class="drawer-empty">📭<br>No activity recorded yet.</div>`;
     return;
   }
 
   const sorted = [...activities].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
   const html = sorted.map((act, i) => {
-    const cfg = DRAWER_ACTIVITY_MAP[act.type] ?? {
-      label: act.type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()),
-      icon: '●',
-      dot: 'dtl-dot--default',
-    };
+    const cfg = _resolveDrawerActivityPresentation(act);
     const meta = act.metadata;
 
     let metaHtml = '';
@@ -1544,6 +1674,8 @@ function _renderDrawerTimeline(data) {
     } else if (act.type === 'AGENT_PRIORITIZED') {
       const score = meta?.priorityScore ?? meta?.score;
       if (score != null) metaHtml = `<div class="dtl-pills"><span class="dtl-pill">Score: ${_escDrawer(score)}</span></div>`;
+    } else if (meta?.channel === 'whatsapp' && meta?.direction === 'outbound' && meta?.conversationState?.status) {
+      metaHtml = `<div class="dtl-pills"><span class="dtl-pill">${_escDrawer(_titleCaseDrawer(meta.conversationState.status))}</span></div>`;
     }
 
     return `
@@ -1552,13 +1684,15 @@ function _renderDrawerTimeline(data) {
         <div class="dtl-content">
           <div class="dtl-title">${_escDrawer(cfg.label)}</div>
           <div class="dtl-time">${_escDrawer(_fmtDrawerTime(act.createdAt))}</div>
-          ${act.message ? `<div class="dtl-msg">${_escDrawer(act.message)}</div>` : ''}
+          ${cfg.message ? `<div class="dtl-msg">${_escDrawer(cfg.message)}</div>` : ''}
           ${metaHtml}
         </div>
       </div>`;
   }).join('');
 
-  $('drawer-timeline').innerHTML = `<div class="drawer-timeline">${html}</div>`;
+  $('drawer-timeline').innerHTML = `
+    ${_buildWhatsAppSummaryHtml(whatsappConversation)}
+    <div class="drawer-timeline">${html}</div>`;
 }
 
 function _renderDrawerOverview(lead) {

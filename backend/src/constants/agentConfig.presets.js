@@ -36,6 +36,27 @@ const PRESETS = {
         COURSE_INFO:         ['syllabus', 'study material', 'curriculum', 'which chapters',
                               'study plan'],
       },
+      whatsappReplyConfig: {
+        institutionLabel: 'counsellor',
+        primaryOffering: 'IIT-JEE coaching',
+        supportedOfferings: ['fee details', 'demo class', 'admission guidance'],
+        wrongFitCategories: ['NEET coaching', 'IAS preparation', 'dance coaching'],
+        preferredLanguage: 'english',
+        requiredCollectedFields: {
+          ADMISSION: ['studentClass'],
+          DEMO_REQUEST: ['studentClass'],
+          FEE_ENQUIRY: ['studentClass'],
+          SCHOLARSHIP_ENQUIRY: ['recentMarks'],
+          CALLBACK_REQUEST: ['studentClass', 'preferredCallTime'],
+          GENERAL_ENQUIRY: ['studentClass', 'topic'],
+        },
+        handoffWording: {
+          genericHighPriority: 'Thank you for your enquiry. Our {{institutionLabel}} will contact you shortly.',
+          lowConfidence: 'Thank you. Our {{institutionLabel}} will continue with you on WhatsApp shortly.',
+          inProgress: 'Thank you. Our {{institutionLabel}} will continue with you on WhatsApp shortly.',
+          offFlow: 'Thank you. Our {{institutionLabel}} will continue with you on WhatsApp shortly.',
+        },
+      },
     },
     priorityRules: {
       weights: {
@@ -174,6 +195,27 @@ const FALLBACK_PRESET = {
       GENERAL_ENQUIRY: ['info', 'details', 'information', 'more'],
       FEE_ENQUIRY:     ['fee', 'fees', 'price', 'cost'],
       CALL_REQUEST:    ['call me', 'callback', 'phone call'],
+    },
+    whatsappReplyConfig: {
+      institutionLabel: 'team',
+      primaryOffering: 'our services',
+      supportedOfferings: ['service details', 'pricing details'],
+      wrongFitCategories: [],
+      preferredLanguage: 'english',
+      requiredCollectedFields: {
+        ADMISSION: ['studentClass'],
+        DEMO_REQUEST: ['studentClass'],
+        FEE_ENQUIRY: ['studentClass'],
+        SCHOLARSHIP_ENQUIRY: ['recentMarks'],
+        CALLBACK_REQUEST: ['studentClass', 'preferredCallTime'],
+        GENERAL_ENQUIRY: ['studentClass', 'topic'],
+      },
+      handoffWording: {
+        genericHighPriority: 'Thank you for your enquiry. Our {{institutionLabel}} will contact you shortly.',
+        lowConfidence: 'Thank you. Our {{institutionLabel}} will continue with you on WhatsApp shortly.',
+        inProgress: 'Thank you. Our {{institutionLabel}} will continue with you on WhatsApp shortly.',
+        offFlow: 'Thank you. Our {{institutionLabel}} will continue with you on WhatsApp shortly.',
+      },
     },
   },
   priorityRules: {

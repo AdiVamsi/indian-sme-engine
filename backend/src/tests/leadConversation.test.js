@@ -38,7 +38,7 @@ describe('WhatsApp conversation summary builder', () => {
           metadata: {
             channel: 'whatsapp',
             direction: 'outbound',
-            messageText: 'Sure — please share the student\'s class and your preferred call time. Our counsellor will call you accordingly.',
+            messageText: 'Certainly. Please share the student\'s class and your preferred call time, and our counsellor will call you accordingly.',
             replyIntent: 'CALLBACK_REQUEST',
             conversationState: {
               flowIntent: 'CALLBACK_REQUEST',
@@ -64,7 +64,7 @@ describe('WhatsApp conversation summary builder', () => {
           metadata: {
             channel: 'whatsapp',
             direction: 'outbound',
-            messageText: 'Thanks. Our counsellor will call for Class 10 after 6 pm and help you with the coaching details.',
+            messageText: 'Thank you. Our counsellor will call you after 6 pm regarding Class 10 and assist you with the coaching details.',
             replyIntent: 'CALLBACK_REQUEST_HANDOFF',
             conversationState: {
               flowIntent: 'CALLBACK_REQUEST',

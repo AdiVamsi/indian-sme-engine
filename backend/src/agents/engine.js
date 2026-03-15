@@ -118,6 +118,7 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
   let automationsTriggered = 0;
   try {
     const automationResult = await runLeadAutomations(lead.id, {
+      businessId,
       tags,
       intent: bestCategory,
       priorityScore,
@@ -126,6 +127,7 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
       phone: lead.phone,
       confidenceLabel,
       leadDisposition: intelligence.disposition,
+      agentConfig: config,
     });
     automationsTriggered = automationResult.triggered;
     console.log(`[AgentEngine] Automations triggered for lead ${lead.id}: ${automationsTriggered}`);

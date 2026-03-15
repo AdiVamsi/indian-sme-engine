@@ -2,11 +2,14 @@
 
 const { prisma } = require('../lib/prisma');
 const { logger } = require('../lib/logger');
+const { getOrCreate: getOrCreateAgentConfig } = require('./agentConfig.service');
 const { sendWhatsAppMessage } = require('./whatsapp.service');
+const {
+  getRequiredCollectedFields,
+  resolveWhatsAppReplyConfig,
+} = require('./whatsappReplyConfig.service');
 
 const HIGH_PRIORITY_THRESHOLD = 30;
-const FALLBACK_WHATSAPP_REPLY = 'Thank you for your enquiry. Our team will contact you shortly.';
-const HUMAN_HANDOFF_REPLY = 'Thanks. Our counsellor will continue with you on WhatsApp shortly.';
 
 const DEMO_TAGS = new Set(['DEMO_REQUEST', 'DEMO', 'BOOK_DEMO']);
 const ADMISSION_TAGS = new Set(['ADMISSION', 'COURSE_ENQUIRY']);
@@ -14,6 +17,87 @@ const FEE_TAGS = new Set(['FEE_ENQUIRY', 'FEES']);
 const SCHOLARSHIP_TAGS = new Set(['SCHOLARSHIP_ENQUIRY', 'SCHOLARSHIP']);
 const WRONG_FIT_TAGS = new Set(['WRONG_FIT']);
 const CALLBACK_TAGS = new Set(['CALLBACK_REQUEST']);
+
+function formatList(items = []) {
+  const values = items.filter(Boolean);
+  if (!values.length) return '';
+  if (values.length === 1) return values[0];
+  if (values.length === 2) return `${values[0]} and ${values[1]}`;
+  return `${values.slice(0, -1).join(', ')}, and ${values.at(-1)}`;
+}
+
+function renderTemplate(template = '', tokens = {}) {
+  return String(template || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, key) => tokens[key] || '');
+}
+
+function getInstitutionLabel(replyConfig = {}) {
+  return replyConfig?.institutionLabel || 'counsellor';
+}
+
+function getInstitutionPhrase(replyConfig = {}) {
+  return `our ${getInstitutionLabel(replyConfig)}`;
+}
+
+function getLanguageSupportSuffix(replyConfig = {}) {
+  return /hindi/i.test(String(replyConfig?.preferredLanguage || ''))
+    ? ' We can assist in Hindi as well.'
+    : '';
+}
+
+function getGeneralOfferingsPrompt(replyConfig = {}) {
+  const offerings = Array.isArray(replyConfig?.supportedOfferings) ? replyConfig.supportedOfferings : [];
+  return offerings.length ? formatList(offerings.slice(0, 3)) : 'fee details, a demo class, or admission guidance';
+}
+
+function getPendingFieldForIntent(intent, requiredFields = []) {
+  const normalizedIntent = String(intent || '').trim().toUpperCase();
+  const fieldSet = new Set(requiredFields);
+
+  if (!fieldSet.size) return null;
+  if (normalizedIntent === 'SCHOLARSHIP_ENQUIRY' || fieldSet.has('recentMarks')) return 'recent_marks';
+  if (normalizedIntent === 'CALLBACK_REQUEST' || fieldSet.has('preferredCallTime')) return 'callback_details';
+  if (normalizedIntent === 'GENERAL_ENQUIRY' || fieldSet.has('topic')) return 'general_enquiry_details';
+  if (fieldSet.has('studentClass')) return 'student_class';
+  return null;
+}
+
+function createConfiguredHandoffPlan({
+  reason = 'HUMAN_HANDOFF',
+  templateKey = 'inProgress',
+  fallbackMessage,
+  replyConfig,
+  flowIntent = null,
+  collected = {},
+  conversationMode = 'continuation',
+} = {}) {
+  const message = renderTemplate(
+    replyConfig?.handoffWording?.[templateKey] || fallbackMessage,
+    { institutionLabel: getInstitutionLabel(replyConfig) }
+  ).trim();
+
+  return {
+    reason,
+    message,
+    conversationMode,
+    conversationState: createConversationState({
+      flowIntent,
+      stage: 'HANDOFF_QUEUED',
+      pendingField: null,
+      collected,
+      status: 'handoff',
+    }),
+  };
+}
+
+function buildWrongFitReply(replyConfig = {}) {
+  const primaryOffering = replyConfig?.primaryOffering || 'IIT-JEE coaching';
+  const offeringSummary = getGeneralOfferingsPrompt(replyConfig);
+  const wrongFitSummary = Array.isArray(replyConfig?.wrongFitCategories) && replyConfig.wrongFitCategories.length
+    ? ` Enquiries related to ${formatList(replyConfig.wrongFitCategories.slice(0, 3))} may not be the right fit for this institute.`
+    : '';
+
+  return `We currently focus on ${primaryOffering}. If you need help with ${offeringSummary}, ${getInstitutionPhrase(replyConfig)} will be happy to guide you.${wrongFitSummary}`;
+}
 
 function normalizeTagSet(tags = []) {
   return new Set(Array.isArray(tags) ? tags : []);
@@ -34,27 +118,6 @@ function createConversationState({
     pendingField,
     collected,
     status,
-  };
-}
-
-function buildHandoffPlan({
-  reason = 'HUMAN_HANDOFF',
-  message = HUMAN_HANDOFF_REPLY,
-  flowIntent = null,
-  collected = {},
-  conversationMode = 'continuation',
-} = {}) {
-  return {
-    reason,
-    message,
-    conversationMode,
-    conversationState: createConversationState({
-      flowIntent,
-      stage: 'HANDOFF_QUEUED',
-      pendingField: null,
-      collected,
-      status: 'handoff',
-    }),
   };
 }
 
@@ -93,12 +156,20 @@ function buildAcademyFirstReplyPlan({
   priorityScore = 0,
   confidenceLabel = 'high',
   leadDisposition = 'valid',
+  replyConfig = {},
 } = {}) {
   const replyIntent = resolveAcademyReplyIntent(intent, tags);
+  const institutionPhrase = getInstitutionPhrase(replyConfig);
+  const requiredFields = getRequiredCollectedFields(replyConfig, replyIntent);
+  const pendingField = getPendingFieldForIntent(replyIntent, requiredFields);
+  const languageSupportSuffix = getLanguageSupportSuffix(replyConfig);
 
   if (confidenceLabel === 'low' || ['conflicting', 'weak'].includes(leadDisposition)) {
-    return buildHandoffPlan({
+    return createConfiguredHandoffPlan({
       reason: 'LOW_CONFIDENCE_HANDOFF',
+      templateKey: 'lowConfidence',
+      fallbackMessage: 'Thank you. Our counsellor will continue with you on WhatsApp shortly.',
+      replyConfig,
       flowIntent: replyIntent,
       conversationMode: 'initial',
     });
@@ -108,7 +179,7 @@ function buildAcademyFirstReplyPlan({
     case 'WRONG_FIT':
       return {
         reason: 'WRONG_FIT',
-        message: 'We currently focus on IIT-JEE coaching. If you are looking for JEE preparation, we can help. Otherwise this may not be the right institute for your requirement.',
+        message: buildWrongFitReply(replyConfig),
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'WRONG_FIT',
@@ -119,88 +190,152 @@ function buildAcademyFirstReplyPlan({
         }),
       };
     case 'DEMO_REQUEST':
+      if (!pendingField) {
+        return createConfiguredHandoffPlan({
+          reason: 'DEMO_REQUEST_DIRECT_HANDOFF',
+          fallbackMessage: `Thank you. ${institutionPhrase} will help you with the next available demo class slot shortly.`,
+          replyConfig,
+          flowIntent: 'DEMO_REQUEST',
+          conversationMode: 'initial',
+        });
+      }
       return {
         reason: 'DEMO_REQUEST',
-        message: 'Sure — which class is the student in? I will help you with the right demo batch.',
+        message: `Certainly. Please share the student's class, and ${institutionPhrase} will help you with the right demo class.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'DEMO_REQUEST',
           stage: 'AWAITING_STUDENT_CLASS',
-          pendingField: 'student_class',
+          pendingField,
           collected: {},
           status: 'awaiting_user',
         }),
       };
     case 'SCHOLARSHIP_ENQUIRY':
+      if (!pendingField) {
+        return createConfiguredHandoffPlan({
+          reason: 'SCHOLARSHIP_ENQUIRY_DIRECT_HANDOFF',
+          fallbackMessage: `Thank you. ${institutionPhrase} will guide you on scholarship options shortly.`,
+          replyConfig,
+          flowIntent: 'SCHOLARSHIP_ENQUIRY',
+          conversationMode: 'initial',
+        });
+      }
       return {
         reason: 'SCHOLARSHIP_ENQUIRY',
-        message: 'Sure — what were the student\'s recent marks or percentage? That will help us guide you on scholarship options.',
+        message: `Certainly. Please share the student's recent marks or percentage so that ${institutionPhrase} can guide you on scholarship options.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'SCHOLARSHIP_ENQUIRY',
           stage: 'AWAITING_RECENT_MARKS',
-          pendingField: 'recent_marks',
+          pendingField,
           collected: {},
           status: 'awaiting_user',
         }),
       };
     case 'FEE_ENQUIRY':
+      if (!pendingField) {
+        return createConfiguredHandoffPlan({
+          reason: 'FEE_ENQUIRY_DIRECT_HANDOFF',
+          fallbackMessage: `Thank you. ${institutionPhrase} will share the fee details and batch timings shortly on WhatsApp.`,
+          replyConfig,
+          flowIntent: 'FEE_ENQUIRY',
+          conversationMode: 'initial',
+        });
+      }
       return {
         reason: 'FEE_ENQUIRY',
-        message: 'Sure — which class is the student in? I will help with the fee structure and batch options.',
+        message: `Certainly. Please share the student's class, and ${institutionPhrase} will help with the fee details and batch timings.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'FEE_ENQUIRY',
           stage: 'AWAITING_STUDENT_CLASS',
-          pendingField: 'student_class',
+          pendingField,
           collected: {},
           status: 'awaiting_user',
         }),
       };
     case 'ADMISSION':
+      if (!pendingField) {
+        return createConfiguredHandoffPlan({
+          reason: 'ADMISSION_DIRECT_HANDOFF',
+          fallbackMessage: `Thank you for your interest. ${institutionPhrase} will guide you on admission details shortly.`,
+          replyConfig,
+          flowIntent: 'ADMISSION',
+          conversationMode: 'initial',
+        });
+      }
       return {
         reason: 'ADMISSION',
-        message: 'Thanks for reaching out. Admissions are open for our JEE batches. Which class is the student in?',
+        message: `Thank you for your interest. Admissions are open for our JEE batches. Please share the student's class so that ${institutionPhrase} can guide you properly.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'ADMISSION',
           stage: 'AWAITING_STUDENT_CLASS',
-          pendingField: 'student_class',
+          pendingField,
           collected: {},
           status: 'awaiting_user',
         }),
       };
     case 'CALLBACK_REQUEST':
+      if (!pendingField) {
+        return createConfiguredHandoffPlan({
+          reason: 'CALLBACK_REQUEST_DIRECT_HANDOFF',
+          fallbackMessage: `Thank you. ${institutionPhrase} will call you shortly and assist you with the enquiry.`,
+          replyConfig,
+          flowIntent: 'CALLBACK_REQUEST',
+          conversationMode: 'initial',
+        });
+      }
       return {
         reason: 'CALLBACK_REQUEST',
-        message: 'Sure — please share the student\'s class and your preferred call time. Our counsellor will call you accordingly.',
+        message: requiredFields.includes('studentClass') && requiredFields.includes('preferredCallTime')
+          ? `Certainly. Please share the student's class and your preferred call time, and ${institutionPhrase} will call you accordingly.${languageSupportSuffix}`
+          : requiredFields.includes('preferredCallTime')
+            ? `Certainly. Please share your preferred call time, and ${institutionPhrase} will call you accordingly.${languageSupportSuffix}`
+            : `Certainly. Please share the student's class so that ${institutionPhrase} can call you accordingly.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'CALLBACK_REQUEST',
           stage: 'AWAITING_CALLBACK_DETAILS',
-          pendingField: 'callback_details',
+          pendingField,
           collected: {},
           status: 'awaiting_user',
         }),
       };
     case 'GENERAL_ENQUIRY':
+      if (!pendingField) {
+        return createConfiguredHandoffPlan({
+          reason: 'GENERAL_ENQUIRY_DIRECT_HANDOFF',
+          fallbackMessage: `Thank you. ${institutionPhrase} will guide you shortly on WhatsApp.`,
+          replyConfig,
+          flowIntent: 'GENERAL_ENQUIRY',
+          conversationMode: 'initial',
+        });
+      }
       return {
         reason: 'GENERAL_ENQUIRY',
-        message: 'Sure — please share the student\'s class and whether you want fees, demo, or admission details.',
+        message: requiredFields.includes('studentClass') && requiredFields.includes('topic')
+          ? `Certainly. Please share the student's class, and let us know if you need ${getGeneralOfferingsPrompt(replyConfig)}.${languageSupportSuffix}`
+          : requiredFields.includes('studentClass')
+            ? `Certainly. Please share the student's class, and ${institutionPhrase} will guide you further.${languageSupportSuffix}`
+            : `Certainly. Please let us know if you need ${getGeneralOfferingsPrompt(replyConfig)}, and ${institutionPhrase} will guide you further.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'GENERAL_ENQUIRY',
           stage: 'AWAITING_GENERAL_ENQUIRY_DETAILS',
-          pendingField: 'general_enquiry_details',
+          pendingField,
           collected: {},
           status: 'awaiting_user',
         }),
       };
     default:
       if (priorityScore >= HIGH_PRIORITY_THRESHOLD) {
-        return buildHandoffPlan({
+        return createConfiguredHandoffPlan({
           reason: 'GENERIC_HIGH_PRIORITY',
-          message: FALLBACK_WHATSAPP_REPLY,
+          templateKey: 'genericHighPriority',
+          fallbackMessage: 'Thank you for your enquiry. Our counsellor will contact you shortly.',
+          replyConfig,
           flowIntent: replyIntent,
           conversationMode: 'initial',
         });
@@ -216,12 +351,17 @@ function buildWhatsAppReplyPlan({
   priorityScore = 0,
   confidenceLabel = 'high',
   leadDisposition = 'valid',
+  agentConfig = null,
 } = {}) {
+  const replyConfig = resolveWhatsAppReplyConfig({ businessIndustry, agentConfig });
+
   if (businessIndustry !== 'academy') {
     if (priorityScore >= HIGH_PRIORITY_THRESHOLD) {
-      return buildHandoffPlan({
+      return createConfiguredHandoffPlan({
         reason: 'GENERIC_HIGH_PRIORITY',
-        message: FALLBACK_WHATSAPP_REPLY,
+        templateKey: 'genericHighPriority',
+        fallbackMessage: 'Thank you for your enquiry. Our team will contact you shortly.',
+        replyConfig,
         flowIntent: intent,
         conversationMode: 'initial',
       });
@@ -235,6 +375,7 @@ function buildWhatsAppReplyPlan({
     priorityScore,
     confidenceLabel,
     leadDisposition,
+    replyConfig,
   });
 }
 
@@ -319,21 +460,29 @@ function buildAcademyContinuationPlan({
   conversationState,
   message,
   priorityScore = 0,
+  replyConfig = {},
 } = {}) {
   const flowIntent = conversationState?.flowIntent || null;
   const collected = { ...(conversationState?.collected || {}) };
+  const institutionPhrase = getInstitutionPhrase(replyConfig);
 
   if (!conversationState || conversationState.status === 'handoff') {
-    return buildHandoffPlan({
+    return createConfiguredHandoffPlan({
       reason: 'HANDOFF_IN_PROGRESS',
+      templateKey: 'inProgress',
+      fallbackMessage: 'Thank you. Our counsellor will continue with you on WhatsApp shortly.',
+      replyConfig,
       flowIntent,
       collected,
     });
   }
 
   if (conversationState.status !== 'awaiting_user') {
-    return buildHandoffPlan({
+    return createConfiguredHandoffPlan({
       reason: 'OFF_FLOW_HANDOFF',
+      templateKey: 'offFlow',
+      fallbackMessage: 'Thank you. Our counsellor will continue with you on WhatsApp shortly.',
+      replyConfig,
       flowIntent,
       collected,
     });
@@ -342,8 +491,11 @@ function buildAcademyContinuationPlan({
   if (conversationState.pendingField === 'student_class') {
     const studentClass = extractStudentClass(message);
     if (!studentClass) {
-      return buildHandoffPlan({
+      return createConfiguredHandoffPlan({
         reason: 'OFF_FLOW_HANDOFF',
+        templateKey: 'offFlow',
+        fallbackMessage: 'Thank you. Our counsellor will continue with you on WhatsApp shortly.',
+        replyConfig,
         flowIntent,
         collected,
       });
@@ -355,7 +507,7 @@ function buildAcademyContinuationPlan({
       case 'FEE_ENQUIRY':
         return {
           reason: 'FEE_ENQUIRY_HANDOFF',
-          message: `Thanks. For ${studentClass}, our team will send the fee structure and batch options shortly on WhatsApp.`,
+          message: `Thank you. For ${studentClass}, ${institutionPhrase} will share the fee details and batch timings shortly on WhatsApp.`,
           conversationMode: 'continuation',
           conversationState: createConversationState({
             flowIntent,
@@ -368,7 +520,7 @@ function buildAcademyContinuationPlan({
       case 'DEMO_REQUEST':
         return {
           reason: 'DEMO_REQUEST_HANDOFF',
-          message: `Thanks. For ${studentClass}, we can help with a demo class. Our team will confirm the next available slot shortly.`,
+          message: `Thank you. For ${studentClass}, ${institutionPhrase} will help you with the next available demo class slot shortly.`,
           conversationMode: 'continuation',
           conversationState: createConversationState({
             flowIntent,
@@ -382,7 +534,7 @@ function buildAcademyContinuationPlan({
       default:
         return {
           reason: 'ADMISSION_HANDOFF',
-          message: `Thanks. For ${studentClass}, our counsellor will guide you on the right JEE batch and call you shortly.`,
+          message: `Thank you. For ${studentClass}, ${institutionPhrase} will guide you on the suitable JEE batch and connect with you shortly.`,
           conversationMode: 'continuation',
           conversationState: createConversationState({
             flowIntent: flowIntent || 'ADMISSION',
@@ -398,8 +550,11 @@ function buildAcademyContinuationPlan({
   if (conversationState.pendingField === 'recent_marks') {
     const marks = extractMarks(message);
     if (!marks) {
-      return buildHandoffPlan({
+      return createConfiguredHandoffPlan({
         reason: 'OFF_FLOW_HANDOFF',
+        templateKey: 'offFlow',
+        fallbackMessage: 'Thank you. Our counsellor will continue with you on WhatsApp shortly.',
+        replyConfig,
         flowIntent,
         collected,
       });
@@ -411,7 +566,7 @@ function buildAcademyContinuationPlan({
 
     return {
       reason: 'SCHOLARSHIP_ENQUIRY_HANDOFF',
-      message: `Thanks. We have noted ${marks}. Our team will review the scholarship options and guide you shortly on WhatsApp.`,
+      message: `Thank you. We have noted ${marks}. ${institutionPhrase} will review the scholarship options and guide you shortly on WhatsApp.`,
       conversationMode: 'continuation',
       conversationState: createConversationState({
         flowIntent: flowIntent || 'SCHOLARSHIP_ENQUIRY',
@@ -428,8 +583,11 @@ function buildAcademyContinuationPlan({
     const preferredCallTime = extractPreferredCallTime(message);
 
     if (!studentClass && !preferredCallTime) {
-      return buildHandoffPlan({
+      return createConfiguredHandoffPlan({
         reason: 'OFF_FLOW_HANDOFF',
+        templateKey: 'offFlow',
+        fallbackMessage: 'Thank you. Our counsellor will continue with you on WhatsApp shortly.',
+        replyConfig,
         flowIntent,
         collected,
       });
@@ -438,14 +596,14 @@ function buildAcademyContinuationPlan({
     if (studentClass) collected.studentClass = studentClass;
     if (preferredCallTime) collected.preferredCallTime = preferredCallTime;
 
-    const classText = studentClass ? `for ${studentClass}` : 'for the student';
+    const classText = studentClass ? ` regarding ${studentClass}` : '';
     const callTimeText = preferredCallTime
-      ? ` around ${preferredCallTime}`
+      ? ` ${preferredCallTime}`
       : ' shortly';
 
     return {
       reason: 'CALLBACK_REQUEST_HANDOFF',
-      message: `Thanks. Our counsellor will call ${classText}${callTimeText} and help you with the coaching details.`.replace(/\s+/g, ' ').trim(),
+      message: `Thank you. ${institutionPhrase} will call you${callTimeText}${classText} and assist you with the coaching details.`.replace(/\s+/g, ' ').trim(),
       conversationMode: 'continuation',
       conversationState: createConversationState({
         flowIntent: 'CALLBACK_REQUEST',
@@ -462,8 +620,11 @@ function buildAcademyContinuationPlan({
     const topic = extractAcademyEnquiryTopic(message);
 
     if (!studentClass && !topic) {
-      return buildHandoffPlan({
+      return createConfiguredHandoffPlan({
         reason: 'OFF_FLOW_HANDOFF',
+        templateKey: 'offFlow',
+        fallbackMessage: 'Thank you. Our counsellor will continue with you on WhatsApp shortly.',
+        replyConfig,
         flowIntent,
         collected,
       });
@@ -484,7 +645,7 @@ function buildAcademyContinuationPlan({
 
     return {
       reason: 'GENERAL_ENQUIRY_HANDOFF',
-      message: `Thanks. Our team will help you with ${topicLabel}${classText} shortly on WhatsApp.`.replace(/\s+/g, ' ').trim(),
+      message: `Thank you. ${institutionPhrase} will guide you on ${topicLabel}${classText} shortly on WhatsApp.`.replace(/\s+/g, ' ').trim(),
       conversationMode: 'continuation',
       conversationState: createConversationState({
         flowIntent: resolvedIntent,
@@ -497,15 +658,21 @@ function buildAcademyContinuationPlan({
   }
 
   if (priorityScore >= HIGH_PRIORITY_THRESHOLD) {
-    return buildHandoffPlan({
+    return createConfiguredHandoffPlan({
       reason: 'GENERIC_HIGH_PRIORITY_HANDOFF',
+      templateKey: 'genericHighPriority',
+      fallbackMessage: 'Thank you for your enquiry. Our counsellor will contact you shortly.',
+      replyConfig,
       flowIntent,
       collected,
     });
   }
 
-  return buildHandoffPlan({
+  return createConfiguredHandoffPlan({
     reason: 'OFF_FLOW_HANDOFF',
+    templateKey: 'offFlow',
+    fallbackMessage: 'Thank you. Our counsellor will continue with you on WhatsApp shortly.',
+    replyConfig,
     flowIntent,
     collected,
   });
@@ -643,6 +810,7 @@ async function continueWhatsAppConversation(leadId, {
     throw new Error(`Lead ${leadId} not found for WhatsApp continuation`);
   }
 
+  const agentConfig = await getOrCreateAgentConfig(lead.business.id);
   const priorState = getLatestWhatsAppConversationState(lead.activities);
   await recordWhatsAppInboundTurn(leadId, {
     phone,
@@ -658,6 +826,10 @@ async function continueWhatsAppConversation(leadId, {
     conversationState: priorState,
     message,
     priorityScore: context.priorityScore,
+    replyConfig: resolveWhatsAppReplyConfig({
+      businessIndustry: lead.business.industry || 'other',
+      agentConfig,
+    }),
   });
 
   if (!replyPlan?.message) {
@@ -681,6 +853,7 @@ async function continueWhatsAppConversation(leadId, {
 }
 
 async function runLeadAutomations(leadId, {
+  businessId = null,
   tags = [],
   intent = null,
   priorityScore = 0,
@@ -689,8 +862,10 @@ async function runLeadAutomations(leadId, {
   phone = null,
   confidenceLabel = 'high',
   leadDisposition = 'valid',
+  agentConfig = null,
 } = {}) {
   const creates = [];
+  const resolvedAgentConfig = agentConfig || (businessId ? await getOrCreateAgentConfig(businessId) : null);
   const replyPlan = buildWhatsAppReplyPlan({
     businessIndustry,
     intent,
@@ -698,6 +873,7 @@ async function runLeadAutomations(leadId, {
     priorityScore,
     confidenceLabel,
     leadDisposition,
+    agentConfig: resolvedAgentConfig,
   });
   const shouldSendWhatsAppReply = source === 'whatsapp'
     && Boolean(phone)

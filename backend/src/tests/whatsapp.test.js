@@ -274,7 +274,7 @@ describe('WhatsApp webhook integration', () => {
     expect(prioritized.metadata.priorityScore).toBe(35);
     expect(outboundReply).toBeTruthy();
     expect(outboundReply.metadata.replyMessage).toContain('Admissions are open');
-    expect(outboundReply.metadata.replyMessage).toContain('Which class is the student in?');
+    expect(outboundReply.metadata.replyMessage).toContain('Please share the student\'s class');
     expect(outboundReply.metadata.conversationState.pendingField).toBe('student_class');
     expect(outboundReply.metadata.providerMessageId).toBe('wamid.reply.123');
 
@@ -355,7 +355,7 @@ describe('WhatsApp webhook integration', () => {
     expect(inboundTurns).toHaveLength(2);
     expect(inboundTurns.map((activity) => activity.metadata.messageText)).toContain('Class 11');
     expect(continuationReply.metadata.replyMessage).toContain('For Class 11');
-    expect(continuationReply.metadata.replyMessage).toContain('call you shortly');
+    expect(continuationReply.metadata.replyMessage).toContain('connect with you shortly');
     expect(continuationReply.metadata.conversationState.status).toBe('handoff');
     expect(continuationReply.metadata.conversationState.collected.studentClass).toBe('Class 11');
 
@@ -402,7 +402,7 @@ describe('WhatsApp webhook integration', () => {
     expect(prioritized.metadata.priorityScore).toBe(20);
     expect(outboundReply.metadata.replyIntent).toBe('CALLBACK_REQUEST');
     expect(outboundReply.metadata.replyMessage).toContain('preferred call time');
-    expect(outboundReply.metadata.replyMessage).toContain('student\'s class');
+    expect(outboundReply.metadata.replyMessage).toContain('Please share the student\'s class');
     expect(outboundReply.metadata.conversationState.pendingField).toBe('callback_details');
   });
 });

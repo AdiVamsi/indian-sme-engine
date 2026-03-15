@@ -15,7 +15,7 @@ describe('WhatsApp academy reply selection', () => {
     });
 
     expect(plan.reason).toBe('FEE_ENQUIRY');
-    expect(plan.message).toContain('which class is the student in?');
+    expect(plan.message).toContain('Please share the student\'s class');
     expect(plan.conversationState.pendingField).toBe('student_class');
     expect(plan.conversationState.status).toBe('awaiting_user');
   });
@@ -29,7 +29,7 @@ describe('WhatsApp academy reply selection', () => {
     });
 
     expect(plan.reason).toBe('DEMO_REQUEST');
-    expect(plan.message).toContain('right demo batch');
+    expect(plan.message).toContain('right demo class');
     expect(plan.conversationState.pendingField).toBe('student_class');
   });
 
@@ -43,7 +43,7 @@ describe('WhatsApp academy reply selection', () => {
 
     expect(plan.reason).toBe('ADMISSION');
     expect(plan.message).toContain('Admissions are open');
-    expect(plan.message).toContain('Which class is the student in?');
+    expect(plan.message).toContain('Please share the student\'s class');
   });
 
   it('builds a callback request first reply', () => {
@@ -56,7 +56,7 @@ describe('WhatsApp academy reply selection', () => {
 
     expect(plan.reason).toBe('CALLBACK_REQUEST');
     expect(plan.message).toContain('preferred call time');
-    expect(plan.message).toContain('student\'s class');
+    expect(plan.message).toContain('Please share the student\'s class');
     expect(plan.conversationState.pendingField).toBe('callback_details');
   });
 
@@ -69,8 +69,9 @@ describe('WhatsApp academy reply selection', () => {
     });
 
     expect(plan.reason).toBe('GENERAL_ENQUIRY');
-    expect(plan.message).toContain('student\'s class');
-    expect(plan.message).toContain('fees, demo, or admission');
+    expect(plan.message).toContain('Please share the student\'s class');
+    expect(plan.message).toContain('fee details');
+    expect(plan.message).toContain('admission guidance');
     expect(plan.conversationState.pendingField).toBe('general_enquiry_details');
   });
 
@@ -109,7 +110,35 @@ describe('WhatsApp academy reply selection', () => {
     });
 
     expect(plan.reason).toBe('FEE_ENQUIRY');
-    expect(plan.message).toContain('fee structure');
+    expect(plan.message).toContain('fee details and batch timings');
+  });
+
+  it('uses business reply config to change offerings, language support, and collected fields', () => {
+    const plan = buildWhatsAppReplyPlan({
+      businessIndustry: 'academy',
+      intent: 'GENERAL_ENQUIRY',
+      tags: ['GENERAL_ENQUIRY'],
+      priorityScore: 20,
+      agentConfig: {
+        toneStyle: 'professional',
+        classificationRules: {
+          whatsappReplyConfig: {
+            institutionLabel: 'admissions team',
+            supportedOfferings: ['foundation batch details', 'hostel guidance', 'admission counselling'],
+            preferredLanguage: 'english_hindi_friendly',
+            requiredCollectedFields: {
+              GENERAL_ENQUIRY: ['topic'],
+            },
+          },
+        },
+      },
+    });
+
+    expect(plan.reason).toBe('GENERAL_ENQUIRY');
+    expect(plan.message).toContain('foundation batch details, hostel guidance, and admission counselling');
+    expect(plan.message).toContain('our admissions team will guide you further');
+    expect(plan.message).toContain('Hindi as well');
+    expect(plan.conversationState.pendingField).toBe('general_enquiry_details');
   });
 });
 
@@ -128,6 +157,7 @@ describe('WhatsApp academy continuation planning', () => {
 
     expect(plan.reason).toBe('ADMISSION_HANDOFF');
     expect(plan.message).toContain('For Class 11');
+    expect(plan.message).toContain('connect with you shortly');
     expect(plan.conversationState.status).toBe('handoff');
     expect(plan.conversationState.collected.studentClass).toBe('Class 11');
   });
@@ -162,7 +192,7 @@ describe('WhatsApp academy continuation planning', () => {
     });
 
     expect(plan.reason).toBe('CALLBACK_REQUEST_HANDOFF');
-    expect(plan.message).toContain('for Class 10');
+    expect(plan.message).toContain('regarding Class 10');
     expect(plan.message).toContain('after 6 pm');
     expect(plan.conversationState.collected.studentClass).toBe('Class 10');
     expect(plan.conversationState.collected.preferredCallTime).toBe('after 6 pm');
@@ -202,5 +232,45 @@ describe('WhatsApp academy continuation planning', () => {
 
     expect(plan.reason).toBe('OFF_FLOW_HANDOFF');
     expect(plan.conversationState.status).toBe('handoff');
+  });
+
+  it('uses business reply config to change institution labels and handoff wording', () => {
+    const inProgressPlan = buildAcademyContinuationPlan({
+      conversationState: {
+        flowIntent: 'ADMISSION',
+        pendingField: null,
+        collected: { studentClass: 'Class 11' },
+        status: 'handoff',
+      },
+      message: 'following up',
+      priorityScore: 35,
+      replyConfig: {
+        institutionLabel: 'admissions team',
+        handoffWording: {
+          inProgress: 'Thank you. Our {{institutionLabel}} will take this forward shortly.',
+        },
+      },
+    });
+
+    expect(inProgressPlan.reason).toBe('HANDOFF_IN_PROGRESS');
+    expect(inProgressPlan.message).toBe('Thank you. Our admissions team will take this forward shortly.');
+
+    const callbackPlan = buildAcademyContinuationPlan({
+      conversationState: {
+        flowIntent: 'CALLBACK_REQUEST',
+        pendingField: 'callback_details',
+        collected: {},
+        status: 'awaiting_user',
+      },
+      message: 'Please call around 7 pm',
+      priorityScore: 20,
+      replyConfig: {
+        institutionLabel: 'admissions team',
+      },
+    });
+
+    expect(callbackPlan.reason).toBe('CALLBACK_REQUEST_HANDOFF');
+    expect(callbackPlan.message).toContain('our admissions team will call you');
+    expect(callbackPlan.message).toContain('7 pm');
   });
 });

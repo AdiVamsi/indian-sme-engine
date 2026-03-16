@@ -30,6 +30,85 @@ const SHARMA_SHOWCASE = {
   ownerName: 'Owner',
 };
 
+function getSharmaShowcaseAgentConfig() {
+  const preset = getAgentConfigPreset('academy');
+
+  return {
+    ...preset,
+    classificationRules: {
+      ...preset.classificationRules,
+      businessKnowledge: {
+        enabled: true,
+        entries: [
+          {
+            id: 'fees_overview',
+            title: 'Fee structure',
+            category: 'fees',
+            intents: ['FEE_ENQUIRY', 'GENERAL_ENQUIRY'],
+            keywords: ['fee', 'fees', 'fee structure', 'charges', 'cost'],
+            content: 'For Sharma JEE Academy, classroom programmes start from INR 78,000 per year depending on class, batch, and scholarship eligibility. Exact fee details are shared after the student class is confirmed.',
+            sourceLabel: 'Fees overview',
+          },
+          {
+            id: 'batch_timings',
+            title: 'Batch timings',
+            category: 'timings',
+            intents: ['GENERAL_ENQUIRY', 'BATCH_TIMING', 'FEE_ENQUIRY'],
+            keywords: ['batch timing', 'batch timings', 'timing', 'schedule', 'morning batch', 'evening batch', 'weekend'],
+            content: 'Weekday batches are available in morning and evening slots, and enrolled students also get weekend doubt-support sessions. The final timing depends on the student class and programme.',
+            sourceLabel: 'Batch timings',
+          },
+          {
+            id: 'demo_class',
+            title: 'Demo class availability',
+            category: 'demo',
+            intents: ['DEMO_REQUEST', 'GENERAL_ENQUIRY'],
+            keywords: ['demo', 'trial class', 'demo class', 'trial'],
+            content: 'Sharma JEE Academy offers scheduled demo classes for serious enquiries. The team confirms the next available demo slot after checking the student class and preferred batch.',
+            sourceLabel: 'Demo class policy',
+          },
+          {
+            id: 'scholarship_policy',
+            title: 'Scholarship policy',
+            category: 'scholarship',
+            intents: ['SCHOLARSHIP_ENQUIRY', 'GENERAL_ENQUIRY', 'FEE_ENQUIRY'],
+            keywords: ['scholarship', 'discount', 'concession', 'merit'],
+            content: 'Scholarship guidance is available for merit students based on recent academic performance and internal eligibility criteria. Students are usually asked to share recent marks before the scholarship discussion is finalised.',
+            sourceLabel: 'Scholarship guidance',
+          },
+          {
+            id: 'branch_location',
+            title: 'Branch location',
+            category: 'location',
+            intents: ['GENERAL_ENQUIRY'],
+            keywords: ['branch', 'location', 'address', 'where', 'map'],
+            content: 'The Sharma JEE Academy demo branch is shown as Connaught Place, New Delhi. The admissions team shares detailed directions and visit timing support on request.',
+            sourceLabel: 'Branch location',
+          },
+          {
+            id: 'course_details',
+            title: 'Course details',
+            category: 'course',
+            intents: ['GENERAL_ENQUIRY', 'COURSE_INFO', 'ADMISSION'],
+            keywords: ['course', 'programme', 'program', 'jee main', 'jee advanced', 'syllabus'],
+            content: 'Sharma JEE Academy focuses on IIT-JEE preparation with classroom guidance for foundation, Class 11, Class 12, and drop-year aspirants. Course guidance is shared after understanding the student class and target exam timeline.',
+            sourceLabel: 'Course details',
+          },
+          {
+            id: 'admission_process',
+            title: 'Admission process',
+            category: 'admission',
+            intents: ['ADMISSION', 'GENERAL_ENQUIRY'],
+            keywords: ['admission process', 'how to join', 'admission', 'enrollment', 'join'],
+            content: 'The admission process usually starts with counselling, programme guidance, and batch mapping based on the student class. The team then shares the suitable batch, fee details, and next enrollment steps.',
+            sourceLabel: 'Admission process',
+          },
+        ],
+      },
+    },
+  };
+}
+
 /* ── Deterministic helpers ──────────────────────────────────────────────── */
 function pick(arr)         { return arr[Math.floor(Math.random() * arr.length)]; }
 function rand(min, max)    { return Math.floor(Math.random() * (max - min + 1)) + min; }
@@ -438,8 +517,8 @@ async function main() {
   /* Seed AgentConfig for primary business so expanded preset is active from first login */
   await prisma.agentConfig.upsert({
     where:  { businessId: primaryBiz.id },
-    update: getAgentConfigPreset('academy'),
-    create: { businessId: primaryBiz.id, ...getAgentConfigPreset('academy') },
+    update: getSharmaShowcaseAgentConfig(),
+    create: { businessId: primaryBiz.id, ...getSharmaShowcaseAgentConfig() },
   });
 
   const demoAcademy = await prisma.business.upsert({

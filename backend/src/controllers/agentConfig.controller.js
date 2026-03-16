@@ -25,6 +25,28 @@ const WHATSAPP_HANDOFF_KEYS = new Set([
   'offFlow',
 ]);
 
+function isValidBusinessKnowledge(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  if (v.enabled !== undefined && typeof v.enabled !== 'boolean') return false;
+  if (v.entries === undefined) return true;
+  if (!Array.isArray(v.entries)) return false;
+
+  return v.entries.every((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+
+    const stringKeys = ['id', 'title', 'category', 'content', 'answer', 'question', 'sourceLabel'];
+    if (!stringKeys.every((key) => entry[key] === undefined || typeof entry[key] === 'string')) {
+      return false;
+    }
+
+    const listKeys = ['intents', 'keywords'];
+    return listKeys.every((key) =>
+      entry[key] === undefined
+      || (Array.isArray(entry[key]) && entry[key].every((value) => typeof value === 'string'))
+    );
+  });
+}
+
 /* ─── Validation helpers ─────────────────────────────────────────────────── */
 
 /**
@@ -72,6 +94,10 @@ function isValidClassificationRules(v) {
     if (!wording || typeof wording !== 'object' || Array.isArray(wording)) return false;
     if (!Object.keys(wording).every((key) => WHATSAPP_HANDOFF_KEYS.has(key))) return false;
     if (!Object.values(wording).every((value) => typeof value === 'string')) return false;
+  }
+
+  if (v.businessKnowledge !== undefined && !isValidBusinessKnowledge(v.businessKnowledge)) {
+    return false;
   }
 
   return true;
@@ -136,7 +162,7 @@ const updateConfig = async (req, res) => {
 
   /* Validate classificationRules */
   if (classificationRules !== undefined && !isValidClassificationRules(classificationRules)) {
-    errors.push('classificationRules must be { keywords: { TAG: ["kw", ...] }, whatsappReplyConfig?: valid config }');
+    errors.push('classificationRules must be { keywords: { TAG: ["kw", ...] }, whatsappReplyConfig?: valid config, businessKnowledge?: valid knowledge config }');
   }
 
   /* Validate priorityRules */

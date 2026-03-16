@@ -59,6 +59,21 @@ function buildWebhookPayload({ phone, message, messageId }) {
 function buildClassificationForMessage(message) {
   const text = String(message || '').toLowerCase();
 
+  if (text.includes('fees') || text.includes('fee') || text.includes('kitni')) {
+    return {
+      intent: 'FEE_ENQUIRY',
+      priority: 'NORMAL',
+      priorityScore: 18,
+      tags: ['FEE_ENQUIRY'],
+      confidence: 0.9,
+      confidenceLabel: 'high',
+      disposition: 'valid',
+      languageMode: 'hinglish',
+      reasoning: 'Asked for fee details.',
+      suggestedNextAction: 'Share the fee structure',
+    };
+  }
+
   if (text.includes('call karega') || text.includes('preferred call') || text.includes('coaching ke baare me puchhni hai')) {
     return {
       intent: 'CALLBACK_REQUEST',
@@ -169,12 +184,104 @@ describe('WhatsApp webhook integration', () => {
       };
     }
 
+    await prisma.agentConfig.upsert({
+      where: { businessId: ctx.business.id },
+      update: {
+        classificationRules: {
+          keywords: {
+            ADMISSION: ['admission', 'coaching', 'join'],
+            FEE_ENQUIRY: ['fee', 'fees', 'cost', 'charges'],
+            GENERAL_ENQUIRY: ['details', 'information'],
+          },
+          businessKnowledge: {
+            enabled: true,
+            entries: [
+              {
+                id: 'fees_overview',
+                title: 'Fee structure',
+                category: 'fees',
+                intents: ['FEE_ENQUIRY', 'GENERAL_ENQUIRY'],
+                keywords: ['fee', 'fees', 'fee structure', 'cost'],
+                content: 'Classroom programmes start from INR 78,000 per year depending on class, batch, and scholarship eligibility.',
+              },
+              {
+                id: 'branch_location',
+                title: 'Branch location',
+                category: 'location',
+                intents: ['GENERAL_ENQUIRY'],
+                keywords: ['branch', 'location', 'address', 'where'],
+                content: 'The branch is shown as Connaught Place, New Delhi.',
+              },
+            ],
+          },
+        },
+        priorityRules: { weights: { fee: 10, fees: 10, urgent: 30 } },
+      },
+      create: {
+        businessId: ctx.business.id,
+        toneStyle: 'professional',
+        followUpMinutes: 30,
+        autoReplyEnabled: false,
+        classificationRules: {
+          keywords: {
+            ADMISSION: ['admission', 'coaching', 'join'],
+            FEE_ENQUIRY: ['fee', 'fees', 'cost', 'charges'],
+            GENERAL_ENQUIRY: ['details', 'information'],
+          },
+          businessKnowledge: {
+            enabled: true,
+            entries: [
+              {
+                id: 'fees_overview',
+                title: 'Fee structure',
+                category: 'fees',
+                intents: ['FEE_ENQUIRY', 'GENERAL_ENQUIRY'],
+                keywords: ['fee', 'fees', 'fee structure', 'cost'],
+                content: 'Classroom programmes start from INR 78,000 per year depending on class, batch, and scholarship eligibility.',
+              },
+              {
+                id: 'branch_location',
+                title: 'Branch location',
+                category: 'location',
+                intents: ['GENERAL_ENQUIRY'],
+                keywords: ['branch', 'location', 'address', 'where'],
+                content: 'The branch is shown as Connaught Place, New Delhi.',
+              },
+            ],
+          },
+        },
+        priorityRules: { weights: { fee: 10, fees: 10, urgent: 30 } },
+      },
+    });
+
     originalFetch = global.fetch;
     global.fetch = jest.fn(async (url, options = {}) => {
       if (String(url).includes('/chat/completions')) {
         const payload = JSON.parse(options.body || '{}');
         const userMessage = payload.messages?.find((entry) => entry.role === 'user')?.content || '{}';
         const userPayload = JSON.parse(userMessage);
+
+        if (userPayload?.task === 'grounded_whatsapp_reply') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      grounded: true,
+                      confidence: 0.93,
+                      reply: 'Certainly. Classroom programmes start from INR 78,000 per year depending on class, batch, and scholarship eligibility.',
+                      usedEntryIds: ['fees_overview'],
+                      reason: 'Used the stored fee overview entry.',
+                    }),
+                  },
+                },
+              ],
+            }),
+          };
+        }
 
         return {
           ok: true,
@@ -364,6 +471,46 @@ describe('WhatsApp webhook integration', () => {
 
     expect(openAiCalls).toHaveLength(1);
     expect(graphCalls).toHaveLength(2);
+  });
+
+  it('sends a grounded business-knowledge answer for factual fee questions', async () => {
+    const phone = '+919844444444';
+    testPhones.push(phone);
+
+    const res = await request(app)
+      .post('/api/webhooks/whatsapp')
+      .send(buildWebhookPayload({
+        phone,
+        message: 'fees kitni hai?',
+        messageId: 'wamid.message.fees',
+      }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true, accepted: 1 });
+
+    const lead = await waitForLeadByPhone(ctx.business.id, phone, (candidate) =>
+      candidate.activities.some((activity) =>
+        activity.type === 'AUTOMATION_ALERT'
+        && activity.metadata?.channel === 'whatsapp'
+        && activity.metadata?.direction === 'outbound'
+        && activity.metadata?.replyIntent === 'BUSINESS_KNOWLEDGE_ANSWER'
+      )
+    );
+
+    expect(lead).toBeTruthy();
+
+    const outboundReply = lead.activities.find((activity) =>
+      activity.type === 'AUTOMATION_ALERT'
+      && activity.metadata?.channel === 'whatsapp'
+      && activity.metadata?.direction === 'outbound'
+      && activity.metadata?.replyIntent === 'BUSINESS_KNOWLEDGE_ANSWER'
+    );
+
+    expect(outboundReply).toBeTruthy();
+    expect(outboundReply.metadata.replyIntent).toBe('BUSINESS_KNOWLEDGE_ANSWER');
+    expect(outboundReply.metadata.replyMessage).toContain('INR 78,000');
+    expect(outboundReply.metadata.knowledgeRetrieval.sourceIds).toContain('fees_overview');
+    expect(outboundReply.metadata.conversationState.pendingField).toBe('knowledge_follow_up');
   });
 
   it('sends a callback-focused first reply for callback request plus general enquiry academy leads', async () => {

@@ -32,6 +32,7 @@ const PENDING_FIELD_ACTIONS = {
   recent_marks: 'Wait for the recent marks or percentage, then guide on scholarship.',
   callback_details: 'Wait for the preferred call time and student class, then call the lead.',
   general_enquiry_details: 'Wait for the class and whether they need fees, demo, or admission details.',
+  knowledge_follow_up: 'The assistant has already shared grounded business details. Watch the next reply or hand off if the lead needs more specifics.',
 };
 
 function getClassificationMeta(activities = []) {

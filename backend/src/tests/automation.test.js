@@ -3,9 +3,23 @@
 const {
   buildWhatsAppReplyPlan,
   buildAcademyContinuationPlan,
+  maybeBuildGroundedKnowledgeReplyPlan,
 } = require('../services/automation.service');
 
 describe('WhatsApp academy reply selection', () => {
+  let originalFetch;
+
+  beforeEach(() => {
+    originalFetch = global.fetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.LLM_CLASSIFIER_PROVIDER;
+    delete process.env.LLM_CLASSIFIER_MODEL;
+  });
+
   it('builds a fee enquiry first reply with a single follow-up question', () => {
     const plan = buildWhatsAppReplyPlan({
       businessIndustry: 'academy',
@@ -139,6 +153,94 @@ describe('WhatsApp academy reply selection', () => {
     expect(plan.message).toContain('our admissions team will guide you further');
     expect(plan.message).toContain('Hindi as well');
     expect(plan.conversationState.pendingField).toBe('general_enquiry_details');
+  });
+
+  it('builds a grounded business-knowledge answer when a confident FAQ match exists', async () => {
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+    process.env.LLM_CLASSIFIER_PROVIDER = 'openai';
+    process.env.LLM_CLASSIFIER_MODEL = 'gpt-4o-mini';
+
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                grounded: true,
+                confidence: 0.91,
+                reply: 'Certainly. Classroom programmes start from INR 78,000 per year depending on class and batch.',
+                usedEntryIds: ['fees_overview'],
+                reason: 'Used the stored fee overview entry.',
+              }),
+            },
+          },
+        ],
+      }),
+    }));
+
+    const plan = await maybeBuildGroundedKnowledgeReplyPlan({
+      businessName: 'Sharma JEE Academy',
+      businessIndustry: 'academy',
+      message: 'fees kitni hai?',
+      intent: 'FEE_ENQUIRY',
+      tags: ['FEE_ENQUIRY'],
+      agentConfig: {
+        classificationRules: {
+          businessKnowledge: {
+            enabled: true,
+            entries: [
+              {
+                id: 'fees_overview',
+                title: 'Fee structure',
+                category: 'fees',
+                intents: ['FEE_ENQUIRY', 'GENERAL_ENQUIRY'],
+                keywords: ['fee', 'fees', 'fee structure'],
+                content: 'Classroom programmes start from INR 78,000 per year depending on class and batch.',
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(plan.reason).toBe('BUSINESS_KNOWLEDGE_ANSWER');
+    expect(plan.message).toContain('INR 78,000');
+    expect(plan.groundedAnswer).toBe(true);
+    expect(plan.knowledgeRetrieval.sourceIds).toContain('fees_overview');
+    expect(plan.conversationState.pendingField).toBe('knowledge_follow_up');
+  });
+
+  it('falls back to safe human handoff when a factual question is not confidently grounded', async () => {
+    const plan = await maybeBuildGroundedKnowledgeReplyPlan({
+      businessName: 'Sharma JEE Academy',
+      businessIndustry: 'academy',
+      message: 'Where exactly is your hostel campus?',
+      intent: 'GENERAL_ENQUIRY',
+      tags: ['GENERAL_ENQUIRY'],
+      agentConfig: {
+        classificationRules: {
+          businessKnowledge: {
+            enabled: true,
+            entries: [
+              {
+                id: 'fees_overview',
+                title: 'Fee structure',
+                category: 'fees',
+                intents: ['FEE_ENQUIRY'],
+                keywords: ['fee', 'fees'],
+                content: 'Classroom programmes start from INR 78,000 per year depending on class and batch.',
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(plan.reason).toBe('BUSINESS_KNOWLEDGE_UNCERTAIN');
+    expect(plan.groundedAnswer).toBe(false);
+    expect(plan.conversationState.status).toBe('handoff');
   });
 });
 

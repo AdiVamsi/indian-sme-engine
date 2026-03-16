@@ -4,6 +4,8 @@ const { prisma } = require('../lib/prisma');
 const { logger } = require('../lib/logger');
 const { getOrCreate: getOrCreateAgentConfig } = require('./agentConfig.service');
 const { sendWhatsAppMessage } = require('./whatsapp.service');
+const { retrieveBusinessKnowledge } = require('./businessKnowledge.service');
+const { generateGroundedWhatsAppReply } = require('./groundedReply.service');
 const {
   getRequiredCollectedFields,
   resolveWhatsAppReplyConfig,
@@ -148,6 +150,132 @@ function resolveAcademyReplyIntent(intent, tags) {
   }
 
   return null;
+}
+
+function buildKnowledgeFollowUpState({ flowIntent, collected = {} } = {}) {
+  return createConversationState({
+    flowIntent,
+    stage: 'KNOWLEDGE_SHARED',
+    pendingField: 'knowledge_follow_up',
+    collected,
+    status: 'awaiting_user',
+  });
+}
+
+async function maybeBuildGroundedKnowledgeReplyPlan({
+  businessName = null,
+  businessIndustry = 'other',
+  message = '',
+  intent = null,
+  tags = [],
+  agentConfig = null,
+  conversationState = null,
+  conversationMode = 'initial',
+} = {}) {
+  const replyConfig = resolveWhatsAppReplyConfig({ businessIndustry, agentConfig });
+  const retrieval = retrieveBusinessKnowledge({
+    message,
+    intent,
+    tags,
+    businessIndustry,
+    agentConfig,
+  });
+
+  if (!retrieval.shouldAttempt) {
+    return null;
+  }
+
+  if (!retrieval.hasConfidentMatch) {
+    return {
+      ...createConfiguredHandoffPlan({
+        reason: 'BUSINESS_KNOWLEDGE_UNCERTAIN',
+        templateKey: 'lowConfidence',
+        fallbackMessage: 'Thank you. Our counsellor will guide you on this shortly on WhatsApp.',
+        replyConfig,
+        flowIntent: conversationState?.flowIntent || intent,
+        collected: conversationState?.collected || {},
+        conversationMode,
+      }),
+      groundedAnswer: false,
+      knowledgeRetrieval: {
+        matched: false,
+        matchCount: retrieval.matches.length,
+        sourceIds: [],
+        sourceTitles: [],
+      },
+    };
+  }
+
+  const groundedReply = await generateGroundedWhatsAppReply({
+    businessName,
+    businessIndustry,
+    institutionLabel: getInstitutionLabel(replyConfig),
+    message,
+    matches: retrieval.matches,
+  });
+
+  if (!groundedReply.grounded || groundedReply.confidence < 0.65 || !groundedReply.reply) {
+    return {
+      ...createConfiguredHandoffPlan({
+        reason: 'BUSINESS_KNOWLEDGE_UNCERTAIN',
+        templateKey: 'lowConfidence',
+        fallbackMessage: 'Thank you. Our counsellor will guide you on this shortly on WhatsApp.',
+        replyConfig,
+        flowIntent: conversationState?.flowIntent || intent,
+        collected: conversationState?.collected || {},
+        conversationMode,
+      }),
+      groundedAnswer: false,
+      knowledgeRetrieval: {
+        matched: true,
+        matchCount: retrieval.matches.length,
+        sourceIds: retrieval.matches.map((match) => match.id),
+        sourceTitles: retrieval.matches.map((match) => match.title),
+        confidence: groundedReply.confidence,
+        reason: groundedReply.reason,
+      },
+    };
+  }
+
+  const resolvedIntent = retrieval.topMatch?.intents?.[0] || intent || conversationState?.flowIntent || 'GENERAL_ENQUIRY';
+  const collected = {
+    ...(conversationState?.collected || {}),
+    topic: resolvedIntent,
+  };
+
+  return {
+    reason: 'BUSINESS_KNOWLEDGE_ANSWER',
+    message: groundedReply.reply,
+    conversationMode,
+    conversationState: buildKnowledgeFollowUpState({
+      flowIntent: resolvedIntent,
+      collected,
+    }),
+    groundedAnswer: true,
+    knowledgeRetrieval: {
+      matched: true,
+      matchCount: retrieval.matches.length,
+      topScore: retrieval.topMatch?.score || 0,
+      sourceIds: groundedReply.usedEntryIds.length
+        ? groundedReply.usedEntryIds
+        : retrieval.matches.map((match) => match.id),
+      sourceTitles: retrieval.matches
+        .filter((match) => groundedReply.usedEntryIds.length === 0 || groundedReply.usedEntryIds.includes(match.id))
+        .map((match) => match.title),
+      snippets: retrieval.matches
+        .filter((match) => groundedReply.usedEntryIds.length === 0 || groundedReply.usedEntryIds.includes(match.id))
+        .map((match) => ({
+          id: match.id,
+          title: match.title,
+          content: match.content,
+        })),
+      confidence: groundedReply.confidence,
+      provider: groundedReply.provider,
+      model: groundedReply.model,
+      rawOutput: groundedReply.rawOutput,
+      reason: groundedReply.reason,
+    },
+  };
 }
 
 function buildAcademyFirstReplyPlan({
@@ -488,6 +616,17 @@ function buildAcademyContinuationPlan({
     });
   }
 
+  if (conversationState.pendingField === 'knowledge_follow_up') {
+    return createConfiguredHandoffPlan({
+      reason: 'HANDOFF_IN_PROGRESS',
+      templateKey: 'inProgress',
+      fallbackMessage: 'Thank you. Our counsellor will continue with you on WhatsApp shortly.',
+      replyConfig,
+      flowIntent,
+      collected,
+    });
+  }
+
   if (conversationState.pendingField === 'student_class') {
     const studentClass = extractStudentClass(message);
     if (!studentClass) {
@@ -712,6 +851,8 @@ async function logWhatsAppActivity(leadId, {
   providerMessageId = null,
   reason,
   replyIntent = null,
+  groundedAnswer = false,
+  knowledgeRetrieval = null,
   conversationMode = 'continuation',
   conversationState = null,
   timestamp = null,
@@ -728,6 +869,8 @@ async function logWhatsAppActivity(leadId, {
     ...(providerMessageId ? { providerMessageId } : {}),
     ...(replyIntent ? { replyIntent } : {}),
     ...(direction === 'outbound' ? { replyMessage: messageText } : {}),
+    ...(direction === 'outbound' ? { groundedAnswer } : {}),
+    ...(direction === 'outbound' && knowledgeRetrieval ? { knowledgeRetrieval } : {}),
     ...(conversationMode ? { conversationMode } : {}),
     ...(conversationState ? { conversationState } : {}),
     ...(createdAt ? { timestamp: createdAt.toISOString() } : {}),
@@ -773,6 +916,8 @@ async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
       leadId,
       phone,
       replyReason: replyPlan.reason,
+      groundedAnswer: Boolean(replyPlan.groundedAnswer),
+      knowledgeSourceIds: replyPlan.knowledgeRetrieval?.sourceIds || [],
       providerMessageId,
     },
     'WhatsApp automation reply sent'
@@ -787,6 +932,8 @@ async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
     replyIntent: replyPlan.reason,
     conversationMode: replyPlan.conversationMode || 'initial',
     conversationState: replyPlan.conversationState || null,
+    groundedAnswer: Boolean(replyPlan.groundedAnswer),
+    knowledgeRetrieval: replyPlan.knowledgeRetrieval || null,
   });
 
   return { providerMessageId };
@@ -801,7 +948,7 @@ async function continueWhatsAppConversation(leadId, {
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
     include: {
-      business: { select: { id: true, industry: true, slug: true } },
+      business: { select: { id: true, name: true, industry: true, slug: true } },
       activities: { orderBy: { createdAt: 'asc' } },
     },
   });
@@ -822,14 +969,25 @@ async function continueWhatsAppConversation(leadId, {
   });
 
   const context = getLeadConversationContext(lead);
-  const replyPlan = buildAcademyContinuationPlan({
+  const replyConfig = resolveWhatsAppReplyConfig({
+    businessIndustry: lead.business.industry || 'other',
+    agentConfig,
+  });
+  const groundedReplyPlan = await maybeBuildGroundedKnowledgeReplyPlan({
+    businessName: lead.business.name,
+    businessIndustry: lead.business.industry || 'other',
+    message,
+    intent: priorState?.flowIntent || context.intent,
+    tags: context.tags,
+    agentConfig,
+    conversationState: priorState,
+    conversationMode: 'continuation',
+  });
+  const replyPlan = groundedReplyPlan || buildAcademyContinuationPlan({
     conversationState: priorState,
     message,
     priorityScore: context.priorityScore,
-    replyConfig: resolveWhatsAppReplyConfig({
-      businessIndustry: lead.business.industry || 'other',
-      agentConfig,
-    }),
+    replyConfig,
   });
 
   if (!replyPlan?.message) {
@@ -854,19 +1012,32 @@ async function continueWhatsAppConversation(leadId, {
 
 async function runLeadAutomations(leadId, {
   businessId = null,
+  businessName = null,
   tags = [],
   intent = null,
   priorityScore = 0,
   businessIndustry = 'other',
   source = 'web',
   phone = null,
+  leadMessage = '',
   confidenceLabel = 'high',
   leadDisposition = 'valid',
   agentConfig = null,
 } = {}) {
   const creates = [];
   const resolvedAgentConfig = agentConfig || (businessId ? await getOrCreateAgentConfig(businessId) : null);
-  const replyPlan = buildWhatsAppReplyPlan({
+  const groundedReplyPlan = source === 'whatsapp'
+    ? await maybeBuildGroundedKnowledgeReplyPlan({
+        businessName,
+        businessIndustry,
+        message: leadMessage,
+        intent,
+        tags,
+        agentConfig: resolvedAgentConfig,
+        conversationMode: 'initial',
+      })
+    : null;
+  const replyPlan = groundedReplyPlan || buildWhatsAppReplyPlan({
     businessIndustry,
     intent,
     tags,
@@ -946,6 +1117,7 @@ async function runLeadAutomations(leadId, {
 module.exports = {
   buildWhatsAppReplyPlan,
   buildAcademyContinuationPlan,
+  maybeBuildGroundedKnowledgeReplyPlan,
   continueWhatsAppConversation,
   getLatestWhatsAppConversationState,
   recordWhatsAppInboundTurn,

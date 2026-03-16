@@ -57,6 +57,10 @@ const PRESETS = {
           offFlow: 'Thank you. Our {{institutionLabel}} will continue with you on WhatsApp shortly.',
         },
       },
+      businessKnowledge: {
+        enabled: false,
+        entries: [],
+      },
     },
     priorityRules: {
       weights: {
@@ -216,6 +220,10 @@ const FALLBACK_PRESET = {
         inProgress: 'Thank you. Our {{institutionLabel}} will continue with you on WhatsApp shortly.',
         offFlow: 'Thank you. Our {{institutionLabel}} will continue with you on WhatsApp shortly.',
       },
+    },
+    businessKnowledge: {
+      enabled: false,
+      entries: [],
     },
   },
   priorityRules: {

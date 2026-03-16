@@ -119,12 +119,14 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
   try {
     const automationResult = await runLeadAutomations(lead.id, {
       businessId,
+      businessName: business?.name || null,
       tags,
       intent: bestCategory,
       priorityScore,
       businessIndustry: business?.industry || 'other',
       source,
       phone: lead.phone,
+      leadMessage: lead.message || '',
       confidenceLabel,
       leadDisposition: intelligence.disposition,
       agentConfig: config,

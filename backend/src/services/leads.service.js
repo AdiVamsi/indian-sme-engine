@@ -28,12 +28,33 @@ function decorateLead(lead, {
 function getLatestWhatsAppConversationState(activities = []) {
   for (const activity of activities) {
     const metadata = activity?.metadata || {};
-    if (metadata.channel === 'whatsapp' && metadata.direction === 'outbound' && metadata.conversationState) {
+    if (metadata.channel === 'whatsapp' && metadata.conversationState) {
       return metadata.conversationState;
     }
   }
 
   return null;
+}
+
+function mergeConversationState(baseState = null, {
+  flowIntent,
+  stage,
+  pendingField,
+  status,
+  collected = {},
+} = {}) {
+  return {
+    version: baseState?.version || 1,
+    channel: 'whatsapp',
+    flowIntent: flowIntent ?? baseState?.flowIntent ?? null,
+    stage: stage ?? baseState?.stage ?? 'HANDOFF_QUEUED',
+    pendingField: pendingField ?? baseState?.pendingField ?? null,
+    collected: {
+      ...(baseState?.collected || {}),
+      ...collected,
+    },
+    status: status ?? baseState?.status ?? 'handoff',
+  };
 }
 
 const saveRawLead = async (businessId, data) => {
@@ -175,6 +196,136 @@ const updateLeadStatus = async (id, businessId, status) => {
   return { count: 1 };
 };
 
+const runLeadOperatorAction = async (id, businessId, {
+  action,
+  note = '',
+  callbackTime = '',
+} = {}) => {
+  const lead = await prisma.lead.findFirst({
+    where: { id, businessId },
+    include: {
+      activities: {
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
+
+  if (!lead) return null;
+
+  const operatorNote = String(note || '').trim() || null;
+  const normalizedCallbackTime = String(callbackTime || '').trim() || null;
+  const latestConversationState = getLatestWhatsAppConversationState(lead.activities);
+  const whatsappConversation = buildWhatsAppConversationSummary({ lead, activities: lead.activities });
+
+  let nextStatus = lead.status;
+  let activityType = 'AUTOMATION_ALERT';
+  let message = '';
+  let metadata = {
+    reason: null,
+    channel: 'operator',
+    operatorAction: action,
+  };
+
+  switch (action) {
+    case 'MARK_CALLED':
+      if (lead.status === 'NEW') nextStatus = 'CONTACTED';
+      message = operatorNote
+        ? `Operator marked this lead as called. Note: ${operatorNote}`
+        : 'Operator marked this lead as called.';
+      metadata = {
+        ...metadata,
+        reason: 'OPERATOR_MARKED_CALLED',
+        operatorNote,
+      };
+      break;
+
+    case 'SCHEDULE_CALLBACK': {
+      activityType = 'FOLLOW_UP_SCHEDULED';
+      const callbackSummary = normalizedCallbackTime
+        ? `Callback scheduled for ${normalizedCallbackTime}.`
+        : 'Callback scheduled for follow-up.';
+      message = operatorNote ? `${callbackSummary} Note: ${operatorNote}` : callbackSummary;
+      metadata = {
+        ...metadata,
+        reason: 'OPERATOR_CALLBACK_SCHEDULED',
+        callbackTime: normalizedCallbackTime,
+        operatorNote,
+      };
+
+      if (whatsappConversation) {
+        metadata.channel = 'whatsapp';
+        metadata.conversationState = mergeConversationState(latestConversationState, {
+          stage: 'HANDOFF_QUEUED',
+          pendingField: null,
+          status: 'handoff',
+          collected: normalizedCallbackTime ? { preferredCallTime: normalizedCallbackTime } : {},
+        });
+      }
+      break;
+    }
+
+    case 'SEND_FEE_DETAILS':
+      if (lead.status === 'NEW') nextStatus = 'CONTACTED';
+      message = operatorNote
+        ? `Operator sent fee details to the lead. Note: ${operatorNote}`
+        : 'Operator sent fee details to the lead.';
+      metadata = {
+        ...metadata,
+        reason: 'OPERATOR_FEE_DETAILS_SENT',
+        operatorNote,
+      };
+      break;
+
+    case 'MARK_HANDOFF_COMPLETE':
+      if (lead.status === 'NEW' || lead.status === 'CONTACTED') nextStatus = 'QUALIFIED';
+      message = operatorNote
+        ? `Operator marked the WhatsApp handoff as complete. Note: ${operatorNote}`
+        : 'Operator marked the WhatsApp handoff as complete.';
+      metadata = {
+        ...metadata,
+        reason: 'OPERATOR_HANDOFF_COMPLETED',
+        channel: 'whatsapp',
+        operatorNote,
+        conversationState: mergeConversationState(latestConversationState, {
+          stage: 'HANDOFF_COMPLETED',
+          pendingField: null,
+          status: 'closed',
+        }),
+      };
+      break;
+
+    default:
+      throw new Error(`Unsupported lead operator action: ${action}`);
+  }
+
+  const statusChanged = nextStatus !== lead.status;
+
+  await prisma.$transaction(async (tx) => {
+    if (statusChanged) {
+      await tx.lead.update({
+        where: { id },
+        data: { status: nextStatus },
+      });
+    }
+
+    await tx.leadActivity.create({
+      data: {
+        leadId: id,
+        type: activityType,
+        message,
+        metadata,
+      },
+    });
+  });
+
+  const refreshed = await getLeadActivity(id, businessId);
+  return {
+    data: refreshed,
+    statusChanged,
+    status: nextStatus,
+  };
+};
+
 const deleteLead = (id, businessId) =>
   prisma.lead.deleteMany({ where: { id, businessId } });
 
@@ -272,6 +423,7 @@ module.exports = {
   findActiveWhatsAppLead,
   findLeadsByBusiness,
   updateLeadStatus,
+  runLeadOperatorAction,
   deleteLead,
   getLeadActivity,
   getLeadForSuggestions,

@@ -25,6 +25,8 @@ let loadedSections = new Set();
 let wsClient = null;
 let expiryTimer = null;
 let _leadsSort = { col: null, dir: 'asc' };
+let activeDrawerLeadId = null;
+let activeDrawerActionBusy = false;
 
 /* Maps tableColumns.leads index → sortable field (null = unsortable) */
 const LEAD_SORT_FIELDS = ['name', null, null, 'status', 'priority', 'score', 'createdAt'];
@@ -1452,7 +1454,43 @@ function _formatDrawerFieldLabel(key) {
 function _resolveDrawerActivityPresentation(act) {
   const meta = act.metadata || {};
 
+  if (act.type === 'FOLLOW_UP_SCHEDULED' && meta.reason === 'OPERATOR_CALLBACK_SCHEDULED') {
+    return {
+      label: 'Callback scheduled',
+      icon: '📞',
+      dot: 'dtl-dot--operator',
+      message: act.message || '',
+    };
+  }
+
   if (act.type === 'AUTOMATION_ALERT') {
+    if (meta.reason === 'OPERATOR_MARKED_CALLED') {
+      return {
+        label: 'Marked as called',
+        icon: '📞',
+        dot: 'dtl-dot--operator',
+        message: act.message || '',
+      };
+    }
+
+    if (meta.reason === 'OPERATOR_FEE_DETAILS_SENT') {
+      return {
+        label: 'Fee details sent',
+        icon: '📄',
+        dot: 'dtl-dot--operator',
+        message: act.message || '',
+      };
+    }
+
+    if (meta.reason === 'OPERATOR_HANDOFF_COMPLETED') {
+      return {
+        label: 'Handoff marked complete',
+        icon: '✅',
+        dot: 'dtl-dot--operator',
+        message: act.message || '',
+      };
+    }
+
     if (meta.channel === 'whatsapp' && meta.direction === 'inbound') {
       return {
         label: 'Customer message received',
@@ -1549,9 +1587,148 @@ function _buildWhatsAppSummaryHtml(summary) {
     ${transcriptHtml}`;
 }
 
-async function openLeadDrawer(leadId) {
+function _leadTagsForDrawer(activities = []) {
+  return activities.find((activity) => activity.type === 'AGENT_CLASSIFIED')?.metadata?.tags || [];
+}
+
+function _getLeadDrawerQuickActions({ lead, activities, whatsappConversation }) {
+  if (config?.business?.industry !== 'academy' || !lead) return [];
+  if (['WON', 'LOST'].includes(lead.status)) return [];
+
+  const tags = new Set(_leadTagsForDrawer(activities));
+  const actions = [];
+
+  if (lead.status === 'NEW') {
+    actions.push({
+      action: 'MARK_CALLED',
+      label: 'Mark as Called',
+      tone: 'neutral',
+      helper: 'Sets the lead status to Contacted.',
+    });
+  }
+
+  actions.push({
+    action: 'SCHEDULE_CALLBACK',
+    label: 'Schedule Callback',
+    tone: 'neutral',
+    helper: 'Logs the callback plan with an optional time or note.',
+  });
+
+  const requestedTopic = String(whatsappConversation?.capturedFields?.requestedTopic || '').toLowerCase();
+  if (tags.has('FEE_ENQUIRY') || tags.has('FEES') || requestedTopic.includes('fee')) {
+    actions.push({
+      action: 'SEND_FEE_DETAILS',
+      label: 'Send Fee Details',
+      tone: 'neutral',
+      helper: 'Records that the fee details were shared with the lead.',
+    });
+  }
+
+  if (whatsappConversation?.conversationStatus === 'handoff' && !['QUALIFIED', 'WON', 'LOST'].includes(lead.status)) {
+    actions.push({
+      action: 'MARK_HANDOFF_COMPLETE',
+      label: 'Mark Handoff Complete',
+      tone: 'primary',
+      helper: 'Closes the WhatsApp handoff and moves the lead forward.',
+    });
+  }
+
+  return actions;
+}
+
+function _buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation }) {
+  const actions = _getLeadDrawerQuickActions({ lead, activities, whatsappConversation });
+  if (!actions.length) return '';
+
+  return `
+    <div class="drawer-actions-card">
+      <div class="drawer-actions-card__header">
+        <div>
+          <div class="drawer-actions-card__eyebrow">Operator quick actions</div>
+          <div class="drawer-actions-card__title">Handle this lead without leaving the drawer</div>
+        </div>
+        <span class="drawer-actions-card__badge">Academy workflow</span>
+      </div>
+
+      <div class="drawer-actions-card__fields">
+        <label class="drawer-actions-card__field">
+          <span>Callback time</span>
+          <input id="drawer-callback-time" type="text" placeholder="Today 6:30 PM" />
+        </label>
+        <label class="drawer-actions-card__field drawer-actions-card__field--full">
+          <span>Operator note</span>
+          <textarea id="drawer-action-note" rows="2" placeholder="Optional note for the activity timeline"></textarea>
+        </label>
+      </div>
+
+      <div class="drawer-actions-card__buttons">
+        ${actions.map((item) => `
+          <button
+            type="button"
+            class="drawer-action-btn drawer-action-btn--${_escDrawer(item.tone)}"
+            data-lead-action="${_escDrawer(item.action)}"
+            title="${_escDrawer(item.helper)}"
+          >${_escDrawer(item.label)}</button>`).join('')}
+      </div>
+
+      <p class="drawer-actions-card__hint">Use these after the AI handoff to keep the lead moving and leave a clear trail for your team.</p>
+    </div>`;
+}
+
+function _getActiveDrawerTab() {
+  return document.querySelector('.drawer__tab.is-active')?.dataset.drawerTab || 'activity';
+}
+
+function _setActiveDrawerTab(target = 'activity') {
+  document.querySelectorAll('.drawer__tab').forEach((t) =>
+    t.classList.toggle('is-active', t.dataset.drawerTab === target)
+  );
+  $('drawer-pane-activity').classList.toggle('drawer__pane--hidden', target !== 'activity');
+  $('drawer-pane-overview').classList.toggle('drawer__pane--hidden', target !== 'overview');
+  $('drawer-pane-suggestions').classList.toggle('drawer__pane--hidden', target !== 'suggestions');
+  $('drawer-pane-outreach').classList.toggle('drawer__pane--hidden', target !== 'outreach');
+}
+
+function _setDrawerActionButtonsBusy(isBusy) {
+  activeDrawerActionBusy = isBusy;
+  document.querySelectorAll('[data-lead-action]').forEach((button) => {
+    button.disabled = isBusy;
+  });
+}
+
+function _leadDrawerActionToast(action) {
+  return {
+    MARK_CALLED: 'Lead marked as called.',
+    SCHEDULE_CALLBACK: 'Callback scheduled.',
+    SEND_FEE_DETAILS: 'Fee details marked as sent.',
+    MARK_HANDOFF_COMPLETE: 'Handoff marked complete.',
+  }[action] || 'Lead action saved.';
+}
+
+async function _runLeadDrawerAction(action) {
+  if (!activeDrawerLeadId || activeDrawerActionBusy) return;
+
+  const callbackTime = $('drawer-callback-time')?.value.trim() || '';
+  const note = $('drawer-action-note')?.value.trim() || '';
+
+  try {
+    _setDrawerActionButtonsBusy(true);
+    await api.runLeadAction(activeDrawerLeadId, { action, callbackTime, note });
+    ui?.showToast(_leadDrawerActionToast(action), 'success');
+    await openLeadDrawer(activeDrawerLeadId, { preserveTab: true });
+  } catch (err) {
+    console.error('[Dashboard] runLeadAction failed:', err);
+    ui?.showToast(err.message || 'Could not save the lead action.', 'error');
+  } finally {
+    _setDrawerActionButtonsBusy(false);
+  }
+}
+
+async function openLeadDrawer(leadId, { preserveTab = false } = {}) {
   const drawer = $('lead-drawer');
   if (!drawer) return;
+  activeDrawerLeadId = leadId;
+  const targetTab = preserveTab ? _getActiveDrawerTab() : 'activity';
 
   /* Populate header from cached lead while we fetch */
   const cached = _allLeads.find((l) => l.id === leadId);
@@ -1565,13 +1742,7 @@ async function openLeadDrawer(leadId) {
   }
 
   /* Reset to Activity tab */
-  document.querySelectorAll('.drawer__tab').forEach((t) =>
-    t.classList.toggle('is-active', t.dataset.drawerTab === 'activity')
-  );
-  $('drawer-pane-activity').classList.remove('drawer__pane--hidden');
-  $('drawer-pane-overview').classList.add('drawer__pane--hidden');
-  $('drawer-pane-suggestions').classList.add('drawer__pane--hidden');
-  $('drawer-pane-outreach').classList.add('drawer__pane--hidden');
+  _setActiveDrawerTab(targetTab);
 
   /* Open */
   drawer.classList.add('is-open');
@@ -1628,6 +1799,8 @@ function closeLeadDrawer() {
   if (!drawer) return;
   drawer.classList.remove('is-open');
   document.body.style.overflow = '';
+  activeDrawerLeadId = null;
+  activeDrawerActionBusy = false;
 }
 
 function _renderDrawerTimeline(data) {
@@ -1657,6 +1830,7 @@ function _renderDrawerTimeline(data) {
 
   if (!activities.length) {
     $('drawer-timeline').innerHTML = `
+      ${_buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })}
       ${_buildWhatsAppSummaryHtml(whatsappConversation)}
       <div class="drawer-empty">📭<br>No activity recorded yet.</div>`;
     return;
@@ -1691,6 +1865,7 @@ function _renderDrawerTimeline(data) {
   }).join('');
 
   $('drawer-timeline').innerHTML = `
+    ${_buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })}
     ${_buildWhatsAppSummaryHtml(whatsappConversation)}
     <div class="drawer-timeline">${html}</div>`;
 }
@@ -1820,15 +1995,14 @@ document.addEventListener('keydown', (e) => {
 /* Drawer tabs */
 document.querySelectorAll('.drawer__tab').forEach((tab) => {
   tab.addEventListener('click', () => {
-    const target = tab.dataset.drawerTab;
-    document.querySelectorAll('.drawer__tab').forEach((t) =>
-      t.classList.toggle('is-active', t.dataset.drawerTab === target)
-    );
-    $('drawer-pane-activity').classList.toggle('drawer__pane--hidden', target !== 'activity');
-    $('drawer-pane-overview').classList.toggle('drawer__pane--hidden', target !== 'overview');
-    $('drawer-pane-suggestions').classList.toggle('drawer__pane--hidden', target !== 'suggestions');
-    $('drawer-pane-outreach').classList.toggle('drawer__pane--hidden', target !== 'outreach');
+    _setActiveDrawerTab(tab.dataset.drawerTab);
   });
+});
+
+$('drawer-timeline')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-lead-action]');
+  if (!button) return;
+  _runLeadDrawerAction(button.dataset.leadAction);
 });
 
 /* ─────────────────────────────────────────────────

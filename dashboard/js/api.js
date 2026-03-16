@@ -106,6 +106,7 @@ export function DashAPI(token, { onUnauthorized } = {}) {
 
     /* ── Lead mutations ── */
     createLead:       (data)       => req('POST',   '/api/leads', data),
+    runLeadAction:    (id, data)   => req('POST',   `/api/leads/${id}/actions`, data),
     updateLeadStatus: (id, status) => req('PATCH',  `/api/leads/${id}/status`, { status }),
     deleteLead:       (id)         => req('DELETE', `/api/leads/${id}`),
 

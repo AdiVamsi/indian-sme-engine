@@ -1,10 +1,12 @@
 'use strict';
 
+const { PrismaClient } = require('@prisma/client');
 const request = require('supertest');
 const app = require('../app');
 const { createTestContext, installLlmFetchMock } = require('./_testHelpers');
 
 describe('Leads', () => {
+  const prisma = new PrismaClient();
   let ctx;
   let token;
   let leadId;
@@ -24,6 +26,7 @@ describe('Leads', () => {
   afterAll(async () => {
     restoreFetch();
     await ctx.cleanup();
+    await prisma.$disconnect();
   });
 
   const auth = () => ({ Authorization: `Bearer ${token}` });
@@ -60,6 +63,101 @@ describe('Leads', () => {
     const list = await request(app).get('/api/leads').set(auth());
     const lead = list.body.find((l) => l.id === leadId);
     expect(lead.status).toBe('CONTACTED');
+  });
+
+  it('POST /api/leads/:id/actions - logs operator actions and returns refreshed drawer payload', async () => {
+    const created = await request(app)
+      .post('/api/leads')
+      .set(auth())
+      .send({ name: 'Operator Lead', phone: '+91 88888 00031', message: 'Please call me for fee details' });
+
+    const res = await request(app)
+      .post(`/api/leads/${created.body.id}/actions`)
+      .set(auth())
+      .send({
+        action: 'SCHEDULE_CALLBACK',
+        callbackTime: 'Today 6 PM',
+        note: 'Parent asked for an evening callback.',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.lead.id).toBe(created.body.id);
+
+    const scheduled = res.body.activities.find(
+      (activity) => activity.type === 'FOLLOW_UP_SCHEDULED' && activity.metadata?.reason === 'OPERATOR_CALLBACK_SCHEDULED'
+    );
+
+    expect(scheduled).toBeTruthy();
+    expect(scheduled.metadata.callbackTime).toBe('Today 6 PM');
+    expect(scheduled.message).toContain('Parent asked for an evening callback.');
+  });
+
+  it('POST /api/leads/:id/actions - can close a WhatsApp handoff and move the lead forward', async () => {
+    const lead = await prisma.lead.create({
+      data: {
+        businessId: ctx.business.id,
+        name: 'WhatsApp Lead',
+        phone: '+91 88888 00041',
+        message: 'Please arrange a callback after school hours',
+      },
+    });
+
+    await prisma.leadActivity.createMany({
+      data: [
+        {
+          leadId: lead.id,
+          type: 'AGENT_CLASSIFIED',
+          message: 'Lead classified as CALLBACK_REQUEST',
+          metadata: {
+            tags: ['CALLBACK_REQUEST'],
+            bestCategory: 'CALLBACK_REQUEST',
+            source: 'whatsapp',
+          },
+        },
+        {
+          leadId: lead.id,
+          type: 'AUTOMATION_ALERT',
+          message: 'WhatsApp reply sent',
+          metadata: {
+            channel: 'whatsapp',
+            direction: 'outbound',
+            messageText: 'Please share the student class and preferred call time.',
+            replyIntent: 'CALLBACK_REQUEST',
+            conversationState: {
+              version: 1,
+              channel: 'whatsapp',
+              flowIntent: 'CALLBACK_REQUEST',
+              stage: 'HANDOFF_QUEUED',
+              pendingField: null,
+              collected: {
+                studentClass: 'Class 11',
+                preferredCallTime: 'After 6 PM',
+              },
+              status: 'handoff',
+            },
+          },
+        },
+      ],
+    });
+
+    const res = await request(app)
+      .post(`/api/leads/${lead.id}/actions`)
+      .set(auth())
+      .send({
+        action: 'MARK_HANDOFF_COMPLETE',
+        note: 'Counsellor has taken over on phone.',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.lead.status).toBe('QUALIFIED');
+    expect(res.body.whatsappConversation.conversationStatus).toBe('closed');
+
+    const completed = res.body.activities.find(
+      (activity) => activity.metadata?.reason === 'OPERATOR_HANDOFF_COMPLETED'
+    );
+
+    expect(completed).toBeTruthy();
+    expect(completed.metadata.conversationState.status).toBe('closed');
   });
 
   it('DELETE /api/leads/:id - returns 204; lead gone from list', async () => {

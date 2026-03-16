@@ -2,7 +2,15 @@
 
 const { z } = require('zod');
 
-const { createLead, findLeadsByBusiness, updateLeadStatus, deleteLead, getLeadActivity, getLeadForSuggestions } = require('../services/leads.service');
+const {
+  createLead,
+  findLeadsByBusiness,
+  updateLeadStatus,
+  runLeadOperatorAction,
+  deleteLead,
+  getLeadActivity,
+  getLeadForSuggestions,
+} = require('../services/leads.service');
 const { getLeadSuggestions } = require('../agents/leadSuggestions');
 const { broadcast } = require('../realtime/socket');
 
@@ -17,6 +25,12 @@ const createLeadSchema = z.object({
 
 const statusSchema = z.object({
   status: leadStatusEnum,
+});
+
+const operatorActionSchema = z.object({
+  action: z.enum(['MARK_CALLED', 'SCHEDULE_CALLBACK', 'SEND_FEE_DETAILS', 'MARK_HANDOFF_COMPLETE']),
+  note: z.string().max(500).optional(),
+  callbackTime: z.string().max(120).optional(),
 });
 
 function buildLeadRealtimePayload(lead) {
@@ -126,4 +140,30 @@ const activity = async (req, res) => {
   }
 };
 
-module.exports = { create, list, updateStatus, remove, activity, buildLeadRealtimePayload, emitLeadCreated };
+const runAction = async (req, res) => {
+  const result = operatorActionSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error.flatten() });
+  }
+
+  try {
+    const actionResult = await runLeadOperatorAction(req.params.id, req.user.businessId, result.data);
+    if (!actionResult) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+
+    if (actionResult.statusChanged) {
+      broadcast(req.user.businessId, 'lead:status_changed', {
+        id: req.params.id,
+        status: actionResult.status,
+      });
+    }
+
+    return res.json(actionResult.data);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+module.exports = { create, list, updateStatus, runAction, remove, activity, buildLeadRealtimePayload, emitLeadCreated };

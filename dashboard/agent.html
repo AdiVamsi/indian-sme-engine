@@ -245,6 +245,200 @@
       border: 1px solid rgba(248,113,113,0.25);
       color: #f87171;
     }
+
+    .config-card__meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #F5B301;
+      background: rgba(245,179,1,0.1);
+      border: 1px solid rgba(245,179,1,0.18);
+      border-radius: 999px;
+      padding: 0.22rem 0.55rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .wa-form-grid,
+    .wa-textarea-grid,
+    .wa-template-grid {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .wa-form-grid,
+    .wa-textarea-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .wa-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .wa-field--full {
+      grid-column: 1 / -1;
+    }
+
+    .wa-field label,
+    .wa-required__heading,
+    .wa-preview__heading {
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: #EDEFF2;
+    }
+
+    .wa-field input,
+    .wa-field select,
+    .wa-field textarea {
+      width: 100%;
+      background: #0B0D10;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 0.45rem;
+      color: #EDEFF2;
+      font-size: 0.8125rem;
+      padding: 0.65rem 0.75rem;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+      resize: vertical;
+    }
+
+    .wa-field input:focus,
+    .wa-field select:focus,
+    .wa-field textarea:focus {
+      border-color: #F5B301;
+    }
+
+    .wa-field__help,
+    .wa-required__sub,
+    .wa-preview__sub {
+      font-size: 0.75rem;
+      color: #9AA4B2;
+      line-height: 1.5;
+    }
+
+    .wa-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 0.45rem;
+      color: #EDEFF2;
+      font-size: 0.78125rem;
+      font-weight: 600;
+      padding: 0.5rem 0.85rem;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    .wa-required {
+      margin-top: 1.25rem;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 1.25rem;
+    }
+
+    .wa-required__table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.85rem;
+    }
+
+    .wa-required__table th {
+      text-align: left;
+      color: #9AA4B2;
+      font-weight: 600;
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0 0.5rem 0.625rem;
+    }
+
+    .wa-required__table td {
+      padding: 0.6rem 0.5rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      vertical-align: top;
+      font-size: 0.78125rem;
+      color: #D7DBE0;
+    }
+
+    .wa-required__checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 0.85rem;
+    }
+
+    .wa-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: #C7CFD9;
+      font-size: 0.78125rem;
+    }
+
+    .wa-check input {
+      accent-color: #F5B301;
+    }
+
+    .wa-preview {
+      margin-top: 1.25rem;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 1.25rem;
+      display: grid;
+      gap: 0.8rem;
+    }
+
+    .wa-preview__card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 0.75rem;
+      padding: 0.85rem 1rem;
+    }
+
+    .wa-preview__label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #9AA4B2;
+      display: block;
+      margin-bottom: 0.35rem;
+    }
+
+    .wa-preview__text {
+      margin: 0;
+      font-size: 0.8125rem;
+      line-height: 1.55;
+      color: #EDEFF2;
+    }
+
+    @media (max-width: 720px) {
+      .wa-form-grid,
+      .wa-textarea-grid,
+      .wa-template-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .wa-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
   </style>
 </head>
 <body>
@@ -310,6 +504,117 @@
         <tbody id="prio-tbody"></tbody>
       </table>
       <button class="btn-add-row" id="btn-add-prio">+ Add keyword</button>
+    </div>
+
+    <div class="config-card">
+      <div class="config-card__meta" id="wa-effective-badge">Effective WhatsApp reply settings</div>
+      <h2 class="config-card__heading">WhatsApp / AI Reply Behavior</h2>
+      <p class="config-card__sub">
+        These values control how your business responds to WhatsApp leads after AI classification.
+        They are the effective values used for new replies. You can reset this section back to your industry preset at any time.
+      </p>
+
+      <div class="wa-form-grid">
+        <div class="wa-field">
+          <label for="wa-institution-label">Institution label</label>
+          <input id="wa-institution-label" type="text" placeholder="counsellor" />
+          <p class="wa-field__help">Used in replies such as “our counsellor” or “our admissions team”.</p>
+        </div>
+
+        <div class="wa-field">
+          <label for="wa-primary-offering">Primary offering</label>
+          <input id="wa-primary-offering" type="text" placeholder="IIT-JEE coaching" />
+          <p class="wa-field__help">Used for wrong-fit handling and business-context phrasing.</p>
+        </div>
+
+        <div class="wa-field">
+          <label for="wa-preferred-language">Preferred language style</label>
+          <select id="wa-preferred-language">
+            <option value="english">English</option>
+            <option value="english_hindi_friendly">English + Hindi friendly</option>
+            <option value="hindi">Hindi friendly</option>
+            <option value="mixed">Mixed</option>
+          </select>
+          <p class="wa-field__help">This affects tone cues such as whether the system offers Hindi assistance.</p>
+        </div>
+      </div>
+
+      <div class="wa-textarea-grid" style="margin-top:1rem">
+        <div class="wa-field">
+          <label for="wa-supported-offerings">Supported offerings</label>
+          <textarea id="wa-supported-offerings" rows="5" placeholder="fee details&#10;demo class&#10;admission guidance"></textarea>
+          <p class="wa-field__help">One item per line. Used in general-enquiry prompts and offer summaries.</p>
+        </div>
+
+        <div class="wa-field">
+          <label for="wa-wrong-fit-categories">Wrong-fit categories</label>
+          <textarea id="wa-wrong-fit-categories" rows="5" placeholder="NEET coaching&#10;IAS preparation&#10;dance coaching"></textarea>
+          <p class="wa-field__help">One item per line. Used to make wrong-fit replies business-specific.</p>
+        </div>
+      </div>
+
+      <div class="wa-required">
+        <div class="wa-required__heading">Required collected fields by intent</div>
+        <p class="wa-required__sub">
+          Choose what the WhatsApp assistant should collect before handing the lead to your team.
+        </p>
+        <table class="wa-required__table">
+          <thead>
+            <tr>
+              <th style="width:28%">Intent</th>
+              <th>Collected fields</th>
+            </tr>
+          </thead>
+          <tbody id="wa-required-fields-body"></tbody>
+        </table>
+      </div>
+
+      <div class="wa-required">
+        <div class="wa-required__heading">Handoff wording templates</div>
+        <p class="wa-required__sub">
+          Use <code>{{institutionLabel}}</code> inside a template to insert your institution label automatically.
+        </p>
+        <div class="wa-template-grid" style="margin-top:0.85rem">
+          <div class="wa-field wa-field--full">
+            <label for="wa-template-genericHighPriority">Generic high-priority</label>
+            <textarea id="wa-template-genericHighPriority" rows="2"></textarea>
+          </div>
+          <div class="wa-field wa-field--full">
+            <label for="wa-template-lowConfidence">Low confidence</label>
+            <textarea id="wa-template-lowConfidence" rows="2"></textarea>
+          </div>
+          <div class="wa-field wa-field--full">
+            <label for="wa-template-inProgress">Handoff in progress</label>
+            <textarea id="wa-template-inProgress" rows="2"></textarea>
+          </div>
+          <div class="wa-field wa-field--full">
+            <label for="wa-template-offFlow">Off-flow / manual handoff</label>
+            <textarea id="wa-template-offFlow" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="wa-preview">
+        <div>
+          <div class="wa-preview__heading">Preview</div>
+          <p class="wa-preview__sub">
+            This is a quick operator preview of how the current settings will sound in live WhatsApp replies.
+          </p>
+        </div>
+        <div class="wa-preview__card">
+          <span class="wa-preview__label">General enquiry preview</span>
+          <p class="wa-preview__text" id="wa-preview-first"></p>
+        </div>
+        <div class="wa-preview__card">
+          <span class="wa-preview__label">Handoff preview</span>
+          <p class="wa-preview__text" id="wa-preview-handoff"></p>
+        </div>
+      </div>
+
+      <div class="wa-actions">
+        <span class="wa-field__help" id="wa-preset-note">Preset fallback is preserved through your industry defaults.</span>
+        <button class="btn-secondary" id="btn-reset-wa" type="button">Reset WhatsApp settings to preset</button>
+      </div>
     </div>
 
     <!-- Status banner -->

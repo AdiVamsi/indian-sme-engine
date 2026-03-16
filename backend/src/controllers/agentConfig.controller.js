@@ -1,6 +1,29 @@
 'use strict';
 
-const { getOrCreate, update } = require('../services/agentConfig.service');
+const { getResolved, update } = require('../services/agentConfig.service');
+
+const WHATSAPP_REPLY_INTENTS = new Set([
+  'ADMISSION',
+  'DEMO_REQUEST',
+  'FEE_ENQUIRY',
+  'SCHOLARSHIP_ENQUIRY',
+  'CALLBACK_REQUEST',
+  'GENERAL_ENQUIRY',
+]);
+
+const WHATSAPP_REQUIRED_FIELDS = new Set([
+  'studentClass',
+  'preferredCallTime',
+  'recentMarks',
+  'topic',
+]);
+
+const WHATSAPP_HANDOFF_KEYS = new Set([
+  'genericHighPriority',
+  'lowConfidence',
+  'inProgress',
+  'offFlow',
+]);
 
 /* ─── Validation helpers ─────────────────────────────────────────────────── */
 
@@ -11,9 +34,47 @@ const { getOrCreate, update } = require('../services/agentConfig.service');
 function isValidClassificationRules(v) {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
   if (!v.keywords || typeof v.keywords !== 'object' || Array.isArray(v.keywords)) return false;
-  return Object.values(v.keywords).every(
+  const keywordsOk = Object.values(v.keywords).every(
     (arr) => Array.isArray(arr) && arr.every((kw) => typeof kw === 'string')
   );
+  if (!keywordsOk) return false;
+
+  const replyConfig = v.whatsappReplyConfig;
+  if (replyConfig === undefined) return true;
+  if (!replyConfig || typeof replyConfig !== 'object' || Array.isArray(replyConfig)) return false;
+
+  const stringKeys = ['institutionLabel', 'primaryOffering', 'preferredLanguage'];
+  if (!stringKeys.every((key) => replyConfig[key] === undefined || typeof replyConfig[key] === 'string')) {
+    return false;
+  }
+
+  const listKeys = ['supportedOfferings', 'wrongFitCategories'];
+  if (!listKeys.every((key) =>
+    replyConfig[key] === undefined
+    || (Array.isArray(replyConfig[key]) && replyConfig[key].every((value) => typeof value === 'string'))
+  )) {
+    return false;
+  }
+
+  if (replyConfig.requiredCollectedFields !== undefined) {
+    const fields = replyConfig.requiredCollectedFields;
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return false;
+    if (!Object.keys(fields).every((intent) => WHATSAPP_REPLY_INTENTS.has(intent))) return false;
+    if (!Object.values(fields).every((value) =>
+      Array.isArray(value) && value.every((fieldName) => WHATSAPP_REQUIRED_FIELDS.has(fieldName))
+    )) {
+      return false;
+    }
+  }
+
+  if (replyConfig.handoffWording !== undefined) {
+    const wording = replyConfig.handoffWording;
+    if (!wording || typeof wording !== 'object' || Array.isArray(wording)) return false;
+    if (!Object.keys(wording).every((key) => WHATSAPP_HANDOFF_KEYS.has(key))) return false;
+    if (!Object.values(wording).every((value) => typeof value === 'string')) return false;
+  }
+
+  return true;
 }
 
 /**
@@ -35,12 +96,20 @@ function isValidPriorityRules(v) {
  */
 const getConfig = async (req, res) => {
   try {
-    const config = await getOrCreate(req.user.businessId);
+    const {
+      config,
+      industry,
+      whatsappReplyConfig,
+      whatsappReplyPreset,
+    } = await getResolved(req.user.businessId);
     return res.json({
       toneStyle:           config.toneStyle,
       followUpMinutes:     config.followUpMinutes,
       classificationRules: config.classificationRules,
       priorityRules:       config.priorityRules,
+      industry,
+      whatsappReplyConfig,
+      whatsappReplyPreset,
     });
   } catch (err) {
     console.error('[AgentConfig] GET failed:', err.message);
@@ -67,7 +136,7 @@ const updateConfig = async (req, res) => {
 
   /* Validate classificationRules */
   if (classificationRules !== undefined && !isValidClassificationRules(classificationRules)) {
-    errors.push('classificationRules must be { keywords: { TAG: ["kw", ...] } }');
+    errors.push('classificationRules must be { keywords: { TAG: ["kw", ...] }, whatsappReplyConfig?: valid config }');
   }
 
   /* Validate priorityRules */
@@ -80,11 +149,17 @@ const updateConfig = async (req, res) => {
   }
 
   try {
-    const config = await update(req.user.businessId, {
+    await update(req.user.businessId, {
       followUpMinutes:     followUpMinutes !== undefined ? Number(followUpMinutes) : undefined,
       classificationRules: classificationRules ?? undefined,
       priorityRules:       priorityRules       ?? undefined,
     });
+    const {
+      config,
+      industry,
+      whatsappReplyConfig,
+      whatsappReplyPreset,
+    } = await getResolved(req.user.businessId);
 
     return res.json({
       ok:                  true,
@@ -92,6 +167,9 @@ const updateConfig = async (req, res) => {
       followUpMinutes:     config.followUpMinutes,
       classificationRules: config.classificationRules,
       priorityRules:       config.priorityRules,
+      industry,
+      whatsappReplyConfig,
+      whatsappReplyPreset,
     });
   } catch (err) {
     console.error('[AgentConfig] PUT failed:', err.message);

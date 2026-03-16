@@ -48,8 +48,45 @@ const HANDOFF_TEMPLATE_KEYS = [
   'offFlow',
 ];
 
+const KNOWLEDGE_INTENTS = [
+  'ADMISSION',
+  'BATCH_TIMING',
+  'COURSE_INFO',
+  'DEMO_REQUEST',
+  'FEE_ENQUIRY',
+  'GENERAL_ENQUIRY',
+  'SCHOLARSHIP_ENQUIRY',
+];
+
+const KNOWLEDGE_INTENT_LABELS = {
+  ADMISSION: 'Admission enquiry',
+  BATCH_TIMING: 'Batch timing',
+  COURSE_INFO: 'Course information',
+  DEMO_REQUEST: 'Demo request',
+  FEE_ENQUIRY: 'Fee enquiry',
+  GENERAL_ENQUIRY: 'General enquiry',
+  SCHOLARSHIP_ENQUIRY: 'Scholarship enquiry',
+};
+
+const KNOWLEDGE_CATEGORY_OPTIONS = [
+  { value: 'fees', label: 'Fees' },
+  { value: 'timings', label: 'Timings' },
+  { value: 'online_classes', label: 'Online classes' },
+  { value: 'demo_class', label: 'Demo class' },
+  { value: 'admission', label: 'Admission' },
+  { value: 'scholarship', label: 'Scholarship' },
+  { value: 'branch_location', label: 'Branch / location' },
+  { value: 'courses', label: 'Courses' },
+  { value: 'general', label: 'General' },
+];
+
 let whatsappPreset = null;
 let currentIndustry = 'other';
+let knowledgePreset = { enabled: false, entries: [] };
+let knowledgeEntries = [];
+let knowledgeEnabled = false;
+let knowledgeUsesPreset = true;
+let activeKnowledgeEntryId = null;
 
 const headers = () => ({
   'Content-Type': 'application/json',
@@ -124,6 +161,29 @@ function normalizeListInput(raw) {
 
 function fillListInput(id, items = []) {
   $(id).value = (Array.isArray(items) ? items : []).join('\n');
+}
+
+function slugify(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48);
+}
+
+function truncateText(value, max = 180) {
+  const text = String(value || '').trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+function makeKnowledgeId(title, category) {
+  const base = slugify(`${category}_${title}`) || `knowledge_${Date.now()}`;
+  if (!knowledgeEntries.some((entry) => entry.id === base)) return base;
+
+  let suffix = 2;
+  while (knowledgeEntries.some((entry) => entry.id === `${base}_${suffix}`)) suffix += 1;
+  return `${base}_${suffix}`;
 }
 
 function makeClassRow(tag = '', keywords = '') {
@@ -307,6 +367,224 @@ function validateWhatsAppReplyConfig(config) {
   return null;
 }
 
+function formatKnowledgeCategory(category) {
+  return KNOWLEDGE_CATEGORY_OPTIONS.find((option) => option.value === category)?.label
+    || category.replace(/_/g, ' ');
+}
+
+function readKnowledgeIntents() {
+  return [...$('kb-intents').querySelectorAll('input[type="checkbox"]')]
+    .filter((input) => input.checked)
+    .map((input) => input.value);
+}
+
+function setKnowledgeIntentSelection(intents = []) {
+  const selected = new Set(intents);
+  $('kb-intents').querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    input.checked = selected.has(input.value);
+  });
+}
+
+function renderKnowledgeStatus() {
+  $('kb-effective-badge').textContent = knowledgeUsesPreset
+    ? `Using ${currentIndustry} preset business knowledge`
+    : `Business-specific knowledge override`;
+  $('kb-preset-note').textContent = knowledgeUsesPreset
+    ? `This business is using the default grounded-answer content for ${currentIndustry}. Add or edit entries below to create a business-specific override.`
+    : `This business has its own grounded-answer content. Reset this section if you want to go back to the ${currentIndustry} preset.`;
+  $('kb-enabled').checked = Boolean(knowledgeEnabled);
+}
+
+function populateBusinessKnowledgeConfig(effective, preset, usesPreset) {
+  knowledgePreset = JSON.parse(JSON.stringify(preset || { enabled: false, entries: [] }));
+  knowledgeEntries = JSON.parse(JSON.stringify(effective?.entries || []));
+  knowledgeEnabled = Boolean(effective?.enabled);
+  knowledgeUsesPreset = usesPreset !== false;
+  activeKnowledgeEntryId = null;
+
+  renderKnowledgeStatus();
+  renderKnowledgeList();
+  closeKnowledgeEditor();
+}
+
+function openKnowledgeEditor(entry = null) {
+  const editing = Boolean(entry);
+  activeKnowledgeEntryId = entry?.id || null;
+  $('kb-editor-title').textContent = editing ? 'Edit knowledge entry' : 'Add knowledge entry';
+  $('kb-editor-mode').textContent = editing ? 'Editing' : 'New entry';
+  $('kb-title').value = entry?.title || '';
+  $('kb-category').value = entry?.category || 'general';
+  $('kb-source-label').value = entry?.sourceLabel || '';
+  $('kb-entry-enabled').checked = entry?.enabled !== false;
+  $('kb-keywords').value = Array.isArray(entry?.keywords) ? entry.keywords.join(', ') : '';
+  $('kb-content').value = entry?.content || '';
+  setKnowledgeIntentSelection(entry?.intents || []);
+  $('kb-editor').hidden = false;
+  requestAnimationFrame(() => $('kb-title')?.focus());
+}
+
+function closeKnowledgeEditor() {
+  activeKnowledgeEntryId = null;
+  $('kb-editor').hidden = true;
+  $('kb-title').value = '';
+  $('kb-category').value = 'general';
+  $('kb-source-label').value = '';
+  $('kb-entry-enabled').checked = true;
+  $('kb-keywords').value = '';
+  $('kb-content').value = '';
+  setKnowledgeIntentSelection([]);
+}
+
+function validateKnowledgeEntry(entry) {
+  if (!entry.title) return 'Knowledge title is required.';
+  if (!entry.category) return 'Knowledge category is required.';
+  if (!entry.content) return 'Knowledge content is required.';
+  if (entry.title.length > 120) return 'Knowledge title must be 120 characters or fewer.';
+  if (entry.content.length > 1200) return 'Knowledge content must be 1200 characters or fewer.';
+  if (entry.sourceLabel && entry.sourceLabel.length > 160) return 'Source label must be 160 characters or fewer.';
+  if (!KNOWLEDGE_CATEGORY_OPTIONS.some((option) => option.value === entry.category)) {
+    return 'Please choose a valid knowledge category.';
+  }
+  if (entry.intents.some((intent) => !KNOWLEDGE_INTENTS.includes(intent))) {
+    return 'Knowledge entry contains an unsupported intent.';
+  }
+  if (entry.keywords.some((keyword) => !keyword.trim())) {
+    return 'Knowledge keywords cannot be empty.';
+  }
+  if (knowledgeEntries.some((existing) =>
+    existing.id !== entry.id
+    && existing.title.toLowerCase() === entry.title.toLowerCase()
+    && existing.category === entry.category
+  )) {
+    return 'A knowledge entry with the same title and category already exists.';
+  }
+  return null;
+}
+
+function readKnowledgeEditorEntry() {
+  const title = $('kb-title').value.trim();
+  const category = $('kb-category').value;
+  const sourceLabel = $('kb-source-label').value.trim();
+  const content = $('kb-content').value.trim();
+  const entry = {
+    id: activeKnowledgeEntryId || makeKnowledgeId(title, category),
+    title,
+    category,
+    intents: readKnowledgeIntents(),
+    keywords: normalizeListInput($('kb-keywords').value).map((value) => value.toLowerCase()),
+    content,
+    sourceLabel: sourceLabel || title,
+    enabled: $('kb-entry-enabled').checked,
+  };
+
+  return entry;
+}
+
+function persistKnowledgeEntry() {
+  const entry = readKnowledgeEditorEntry();
+  const error = validateKnowledgeEntry(entry);
+  if (error) {
+    showStatus(error, 'err');
+    return;
+  }
+
+  knowledgeUsesPreset = false;
+  if (activeKnowledgeEntryId) {
+    knowledgeEntries = knowledgeEntries.map((existing) => existing.id === activeKnowledgeEntryId ? entry : existing);
+  } else {
+    knowledgeEntries = [entry, ...knowledgeEntries];
+  }
+
+  renderKnowledgeStatus();
+  renderKnowledgeList();
+  closeKnowledgeEditor();
+  showStatus('Knowledge entry saved locally. Save changes to apply it to grounded answers.', 'ok');
+}
+
+function renderKnowledgeList() {
+  const list = $('kb-list');
+  const empty = $('kb-empty');
+  const search = $('kb-search').value.trim().toLowerCase();
+  const category = $('kb-category-filter').value;
+  const entries = [...knowledgeEntries].filter((entry) => {
+    const matchesSearch = !search || [
+      entry.title,
+      entry.sourceLabel,
+      entry.content,
+      ...(entry.keywords || []),
+    ].some((value) => String(value || '').toLowerCase().includes(search));
+    const matchesCategory = !category || entry.category === category;
+    return matchesSearch && matchesCategory;
+  });
+
+  if (!entries.length) {
+    list.innerHTML = '';
+    empty.hidden = false;
+    empty.textContent = knowledgeEntries.length
+      ? 'No entries match your current search or category filter.'
+      : 'No business knowledge entries yet. Add practical facts your team repeats often, such as fee details, branch address, batch timings, or admission process.';
+    return;
+  }
+
+  empty.hidden = true;
+  list.innerHTML = entries.map((entry) => `
+    <article class="kb-card${entry.enabled === false ? ' kb-card--disabled' : ''}">
+      <div class="kb-card__top">
+        <div>
+          <h3 class="kb-card__title">${esc(entry.title)}</h3>
+          <div class="kb-card__meta">
+            <span class="kb-chip kb-chip--category">${esc(formatKnowledgeCategory(entry.category))}</span>
+            <span class="kb-chip ${entry.enabled === false ? 'kb-chip--disabled' : 'kb-chip--enabled'}">${entry.enabled === false ? 'Disabled' : 'Enabled'}</span>
+            ${(entry.intents || []).map((intent) => `<span class="kb-chip kb-chip--intent">${esc(KNOWLEDGE_INTENT_LABELS[intent] || intent)}</span>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="kb-card__body">
+        ${(entry.keywords || []).length ? `
+          <div class="kb-card__meta">
+            ${(entry.keywords || []).map((keyword) => `<span class="kb-chip kb-chip--keyword">${esc(keyword)}</span>`).join('')}
+          </div>` : ''}
+        <p class="kb-card__preview">${esc(truncateText(entry.content))}</p>
+        <div class="kb-card__source">Source: ${esc(entry.sourceLabel || entry.title)}</div>
+      </div>
+
+      <div class="kb-card__actions">
+        <button class="btn-secondary" type="button" data-kb-action="edit" data-kb-id="${esc(entry.id)}">Edit</button>
+        <button class="btn-secondary" type="button" data-kb-action="toggle" data-kb-id="${esc(entry.id)}">${entry.enabled === false ? 'Enable' : 'Disable'}</button>
+        <button class="btn-secondary" type="button" data-kb-action="delete" data-kb-id="${esc(entry.id)}">Delete</button>
+      </div>
+    </article>
+  `).join('');
+}
+
+function readBusinessKnowledgeConfig() {
+  if (knowledgeUsesPreset) return null;
+  return {
+    enabled: Boolean(knowledgeEnabled),
+    entries: knowledgeEntries.map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      category: entry.category,
+      intents: entry.intents,
+      keywords: entry.keywords,
+      content: entry.content,
+      sourceLabel: entry.sourceLabel,
+      enabled: entry.enabled !== false,
+    })),
+  };
+}
+
+function validateBusinessKnowledgeConfig(config) {
+  if (config === null) return null;
+  if (config && !Array.isArray(config.entries)) return 'Business knowledge entries are invalid.';
+  for (const entry of config?.entries || []) {
+    const error = validateKnowledgeEntry(entry);
+    if (error) return error;
+  }
+  return null;
+}
+
 function renderPreview() {
   const institutionLabel = $('wa-institution-label').value.trim() || 'counsellor';
   const supportedOfferings = normalizeListInput($('wa-supported-offerings').value);
@@ -324,6 +602,7 @@ function readClassificationRules() {
   return {
     keywords: readKeywords(),
     whatsappReplyConfig: readWhatsAppReplyConfig(),
+    businessKnowledge: readBusinessKnowledgeConfig(),
   };
 }
 
@@ -338,6 +617,11 @@ async function init() {
       config.whatsappReplyConfig || config.classificationRules?.whatsappReplyConfig || {},
       config.whatsappReplyPreset || {},
       config.industry || 'other'
+    );
+    populateBusinessKnowledgeConfig(
+      config.businessKnowledgeConfig || config.classificationRules?.businessKnowledge || { enabled: false, entries: [] },
+      config.businessKnowledgePreset || { enabled: false, entries: [] },
+      config.businessKnowledgeUsesPreset
     );
   } catch (err) {
     console.error('[agent.js] init failed:', err);
@@ -357,6 +641,63 @@ $('btn-reset-wa').addEventListener('click', () => {
   if (!whatsappPreset) return;
   populateWhatsAppReplyConfig(whatsappPreset, whatsappPreset, currentIndustry);
   showStatus('WhatsApp reply settings reset to the industry preset. Save to apply this change.', 'ok');
+});
+
+$('btn-add-knowledge').addEventListener('click', () => {
+  openKnowledgeEditor();
+});
+
+$('btn-cancel-knowledge').addEventListener('click', () => {
+  closeKnowledgeEditor();
+});
+
+$('btn-save-knowledge').addEventListener('click', () => {
+  persistKnowledgeEntry();
+});
+
+$('btn-reset-knowledge').addEventListener('click', () => {
+  populateBusinessKnowledgeConfig(knowledgePreset, knowledgePreset, true);
+  showStatus('Business knowledge reset to the industry preset. Save changes to apply it.', 'ok');
+});
+
+$('kb-enabled').addEventListener('change', (event) => {
+  knowledgeUsesPreset = false;
+  knowledgeEnabled = event.target.checked;
+  renderKnowledgeStatus();
+});
+
+$('kb-search').addEventListener('input', renderKnowledgeList);
+$('kb-category-filter').addEventListener('change', renderKnowledgeList);
+
+$('kb-list').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-kb-action]');
+  if (!button) return;
+
+  const entry = knowledgeEntries.find((item) => item.id === button.dataset.kbId);
+  if (!entry) return;
+
+  if (button.dataset.kbAction === 'edit') {
+    openKnowledgeEditor(entry);
+    return;
+  }
+
+  if (button.dataset.kbAction === 'toggle') {
+    knowledgeUsesPreset = false;
+    knowledgeEntries = knowledgeEntries.map((item) =>
+      item.id === entry.id ? { ...item, enabled: item.enabled === false } : item
+    );
+    renderKnowledgeStatus();
+    renderKnowledgeList();
+    return;
+  }
+
+  if (button.dataset.kbAction === 'delete') {
+    knowledgeUsesPreset = false;
+    knowledgeEntries = knowledgeEntries.filter((item) => item.id !== entry.id);
+    if (activeKnowledgeEntryId === entry.id) closeKnowledgeEditor();
+    renderKnowledgeStatus();
+    renderKnowledgeList();
+  }
 });
 
 [
@@ -387,6 +728,7 @@ $('btn-save').addEventListener('click', async () => {
   const classificationRules = readClassificationRules();
   const priorityRules = readPrioRules();
   const whatsappReplyConfig = classificationRules.whatsappReplyConfig;
+  const businessKnowledge = classificationRules.businessKnowledge;
 
   if (!Number.isInteger(followUpMinutes) || followUpMinutes < 1 || followUpMinutes > 1440) {
     showStatus('Follow-up minutes must be between 1 and 1440.', 'err');
@@ -403,6 +745,14 @@ $('btn-save').addEventListener('click', async () => {
     return;
   }
 
+  const knowledgeValidationError = validateBusinessKnowledgeConfig(businessKnowledge);
+  if (knowledgeValidationError) {
+    showStatus(knowledgeValidationError, 'err');
+    btn.disabled = false;
+    btn.textContent = 'Save changes';
+    return;
+  }
+
   try {
     const saved = await saveConfig({ followUpMinutes, classificationRules, priorityRules });
     populateWhatsAppReplyConfig(
@@ -410,7 +760,12 @@ $('btn-save').addEventListener('click', async () => {
       saved.whatsappReplyPreset || whatsappPreset || {},
       saved.industry || currentIndustry
     );
-    showStatus('Agent config saved. New WhatsApp leads will use these settings immediately.', 'ok');
+    populateBusinessKnowledgeConfig(
+      saved.businessKnowledgeConfig || saved.classificationRules?.businessKnowledge || { enabled: false, entries: [] },
+      saved.businessKnowledgePreset || knowledgePreset || { enabled: false, entries: [] },
+      saved.businessKnowledgeUsesPreset
+    );
+    showStatus('Agent config saved. New WhatsApp replies and grounded business answers will use these settings immediately.', 'ok');
   } catch (err) {
     console.error('[agent.js] save failed:', err);
     showStatus(err.message || 'Save failed. Check console.', 'err');

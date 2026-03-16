@@ -1,5 +1,9 @@
 'use strict';
 
+const {
+  KNOWLEDGE_CATEGORIES,
+  SUPPORTED_KNOWLEDGE_INTENTS,
+} = require('../services/businessKnowledge.service');
 const { getResolved, update } = require('../services/agentConfig.service');
 
 const WHATSAPP_REPLY_INTENTS = new Set([
@@ -26,24 +30,63 @@ const WHATSAPP_HANDOFF_KEYS = new Set([
 ]);
 
 function isValidBusinessKnowledge(v) {
+  if (v === null) return true;
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
   if (v.enabled !== undefined && typeof v.enabled !== 'boolean') return false;
   if (v.entries === undefined) return true;
   if (!Array.isArray(v.entries)) return false;
 
+  const seenIds = new Set();
   return v.entries.every((entry) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+
+    if (entry.enabled !== undefined && typeof entry.enabled !== 'boolean') return false;
 
     const stringKeys = ['id', 'title', 'category', 'content', 'answer', 'question', 'sourceLabel'];
     if (!stringKeys.every((key) => entry[key] === undefined || typeof entry[key] === 'string')) {
       return false;
     }
 
+    const title = String(entry.title || entry.question || '').trim();
+    const category = String(entry.category || '').trim();
+    const content = String(entry.content || entry.answer || '').trim();
+    const entryId = String(entry.id || '').trim();
+    const sourceLabel = String(entry.sourceLabel || '').trim();
+
+    if (!title || !category || !content) return false;
+    if (!KNOWLEDGE_CATEGORIES.includes(category)) return false;
+    if (title.length > 120 || content.length > 1200 || entryId.length > 120 || sourceLabel.length > 160) {
+      return false;
+    }
+
+    if (entryId) {
+      if (seenIds.has(entryId)) return false;
+      seenIds.add(entryId);
+    }
+
+    if (
+      entry.intents !== undefined
+      && (
+        !Array.isArray(entry.intents)
+        || entry.intents.some((value) => !SUPPORTED_KNOWLEDGE_INTENTS.has(String(value || '').trim().toUpperCase()))
+      )
+    ) {
+      return false;
+    }
+
     const listKeys = ['intents', 'keywords'];
-    return listKeys.every((key) =>
+    if (!listKeys.every((key) =>
       entry[key] === undefined
       || (Array.isArray(entry[key]) && entry[key].every((value) => typeof value === 'string'))
-    );
+    )) {
+      return false;
+    }
+
+    if (Array.isArray(entry.keywords) && entry.keywords.some((value) => !String(value || '').trim())) {
+      return false;
+    }
+
+    return true;
   });
 }
 
@@ -127,6 +170,9 @@ const getConfig = async (req, res) => {
       industry,
       whatsappReplyConfig,
       whatsappReplyPreset,
+      businessKnowledgeConfig,
+      businessKnowledgePreset,
+      businessKnowledgeUsesPreset,
     } = await getResolved(req.user.businessId);
     return res.json({
       toneStyle:           config.toneStyle,
@@ -136,6 +182,9 @@ const getConfig = async (req, res) => {
       industry,
       whatsappReplyConfig,
       whatsappReplyPreset,
+      businessKnowledgeConfig,
+      businessKnowledgePreset,
+      businessKnowledgeUsesPreset,
     });
   } catch (err) {
     console.error('[AgentConfig] GET failed:', err.message);
@@ -185,6 +234,9 @@ const updateConfig = async (req, res) => {
       industry,
       whatsappReplyConfig,
       whatsappReplyPreset,
+      businessKnowledgeConfig,
+      businessKnowledgePreset,
+      businessKnowledgeUsesPreset,
     } = await getResolved(req.user.businessId);
 
     return res.json({
@@ -196,6 +248,9 @@ const updateConfig = async (req, res) => {
       industry,
       whatsappReplyConfig,
       whatsappReplyPreset,
+      businessKnowledgeConfig,
+      businessKnowledgePreset,
+      businessKnowledgeUsesPreset,
     });
   } catch (err) {
     console.error('[AgentConfig] PUT failed:', err.message);

@@ -427,16 +427,262 @@
       color: #EDEFF2;
     }
 
+    .kb-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .kb-toolbar__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      align-items: center;
+    }
+
+    .kb-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #EDEFF2;
+    }
+
+    .kb-toggle input {
+      accent-color: #F5B301;
+      width: 16px;
+      height: 16px;
+    }
+
+    .kb-filter,
+    .kb-toolbar select {
+      min-width: 150px;
+      background: #0B0D10;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 0.45rem;
+      color: #EDEFF2;
+      font-size: 0.78125rem;
+      padding: 0.55rem 0.7rem;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+
+    .kb-filter:focus,
+    .kb-toolbar select:focus {
+      border-color: #F5B301;
+    }
+
+    .kb-list {
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .kb-empty {
+      border: 1px dashed rgba(255,255,255,0.12);
+      border-radius: 0.85rem;
+      padding: 1rem;
+      text-align: center;
+      background: rgba(255,255,255,0.02);
+      color: #9AA4B2;
+      font-size: 0.8125rem;
+      line-height: 1.55;
+    }
+
+    .kb-card {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 0.9rem;
+      padding: 1rem;
+      background: rgba(255,255,255,0.03);
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .kb-card--disabled {
+      opacity: 0.72;
+    }
+
+    .kb-card__top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.85rem;
+    }
+
+    .kb-card__title {
+      margin: 0;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #EDEFF2;
+    }
+
+    .kb-card__meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.45rem;
+    }
+
+    .kb-chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.16rem 0.5rem;
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #D7DBE0;
+      background: rgba(255,255,255,0.05);
+    }
+
+    .kb-chip--category {
+      border-color: rgba(245,179,1,0.2);
+      color: #F5B301;
+      background: rgba(245,179,1,0.08);
+    }
+
+    .kb-chip--enabled {
+      border-color: rgba(52,211,153,0.22);
+      color: #34d399;
+      background: rgba(52,211,153,0.08);
+    }
+
+    .kb-chip--disabled {
+      border-color: rgba(148,163,184,0.18);
+      color: #94a3b8;
+      background: rgba(148,163,184,0.08);
+    }
+
+    .kb-chip--intent {
+      border-color: rgba(96,165,250,0.18);
+      color: #93c5fd;
+      background: rgba(96,165,250,0.08);
+    }
+
+    .kb-chip--keyword {
+      text-transform: none;
+      letter-spacing: 0.03em;
+      font-weight: 600;
+      color: #EDEFF2;
+      background: rgba(255,255,255,0.04);
+    }
+
+    .kb-card__body {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .kb-card__preview {
+      margin: 0;
+      font-size: 0.8125rem;
+      line-height: 1.55;
+      color: #EDEFF2;
+    }
+
+    .kb-card__source {
+      font-size: 0.75rem;
+      color: #9AA4B2;
+    }
+
+    .kb-card__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+    }
+
+    .kb-card__actions .btn-secondary,
+    .kb-editor__actions .btn-secondary {
+      padding-inline: 0.75rem;
+    }
+
+    .kb-editor {
+      margin-top: 1rem;
+      border: 1px solid rgba(245,179,1,0.18);
+      border-radius: 0.95rem;
+      padding: 1rem;
+      background: rgba(245,179,1,0.04);
+      display: grid;
+      gap: 1rem;
+    }
+
+    .kb-editor[hidden] {
+      display: none;
+    }
+
+    .kb-editor__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.8rem;
+    }
+
+    .kb-editor__title {
+      margin: 0;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #EDEFF2;
+    }
+
+    .kb-editor__sub {
+      margin: 0.2rem 0 0;
+      font-size: 0.75rem;
+      color: #9AA4B2;
+      line-height: 1.5;
+    }
+
+    .kb-form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .kb-form-grid .wa-field--full {
+      grid-column: 1 / -1;
+    }
+
+    .kb-intents {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem 0.8rem;
+      padding: 0.8rem 0.85rem;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 0.55rem;
+      background: #0B0D10;
+    }
+
+    .kb-editor__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.65rem;
+    }
+
     @media (max-width: 720px) {
       .wa-form-grid,
       .wa-textarea-grid,
-      .wa-template-grid {
+      .wa-template-grid,
+      .kb-form-grid {
         grid-template-columns: 1fr;
       }
 
       .wa-actions {
         flex-direction: column;
         align-items: stretch;
+      }
+
+      .kb-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .kb-toolbar__actions {
+        width: 100%;
       }
     }
   </style>
@@ -614,6 +860,123 @@
       <div class="wa-actions">
         <span class="wa-field__help" id="wa-preset-note">Preset fallback is preserved through your industry defaults.</span>
         <button class="btn-secondary" id="btn-reset-wa" type="button">Reset WhatsApp settings to preset</button>
+      </div>
+    </div>
+
+    <div class="config-card">
+      <div class="config-card__meta" id="kb-effective-badge">Business knowledge is using the preset fallback</div>
+      <h2 class="config-card__heading">Business Knowledge</h2>
+      <p class="config-card__sub">
+        These entries power grounded answers for factual WhatsApp and business replies such as fees, branch location, online classes, admission process, and demo information.
+      </p>
+
+      <div class="kb-toolbar">
+        <label class="kb-toggle">
+          <input id="kb-enabled" type="checkbox" />
+          <span>Enable grounded business answers for this business</span>
+        </label>
+
+        <div class="kb-toolbar__actions">
+          <input class="kb-filter" id="kb-search" type="search" placeholder="Search title, keyword, or source" />
+          <select id="kb-category-filter">
+            <option value="">All categories</option>
+            <option value="fees">Fees</option>
+            <option value="timings">Timings</option>
+            <option value="online_classes">Online classes</option>
+            <option value="demo_class">Demo class</option>
+            <option value="admission">Admission</option>
+            <option value="scholarship">Scholarship</option>
+            <option value="branch_location">Branch / location</option>
+            <option value="courses">Courses</option>
+            <option value="general">General</option>
+          </select>
+          <button class="btn-secondary" id="btn-add-knowledge" type="button">+ Add entry</button>
+          <button class="btn-secondary" id="btn-reset-knowledge" type="button">Reset to preset</button>
+        </div>
+      </div>
+
+      <p class="wa-field__help" id="kb-preset-note">
+        Preset fallback is preserved. If you reset this section, the business will go back to using the default knowledge entries for its industry.
+      </p>
+
+      <div class="kb-list" id="kb-list"></div>
+      <div class="kb-empty" id="kb-empty" hidden>
+        No business knowledge entries yet. Add practical facts your team repeats often, such as fee details, branch address, batch timings, or admission process.
+      </div>
+
+      <div class="kb-editor" id="kb-editor" hidden>
+        <div class="kb-editor__header">
+          <div>
+            <h3 class="kb-editor__title" id="kb-editor-title">Add knowledge entry</h3>
+            <p class="kb-editor__sub">Keep each entry factual, short, and specific to your business.</p>
+          </div>
+          <span class="kb-chip kb-chip--category" id="kb-editor-mode">New entry</span>
+        </div>
+
+        <div class="kb-form-grid">
+          <div class="wa-field">
+            <label for="kb-title">Title</label>
+            <input id="kb-title" type="text" placeholder="Fee structure" />
+          </div>
+
+          <div class="wa-field">
+            <label for="kb-category">Category</label>
+            <select id="kb-category">
+              <option value="fees">Fees</option>
+              <option value="timings">Timings</option>
+              <option value="online_classes">Online classes</option>
+              <option value="demo_class">Demo class</option>
+              <option value="admission">Admission</option>
+              <option value="scholarship">Scholarship</option>
+              <option value="branch_location">Branch / location</option>
+              <option value="courses">Courses</option>
+              <option value="general">General</option>
+            </select>
+          </div>
+
+          <div class="wa-field">
+            <label for="kb-source-label">Source label</label>
+            <input id="kb-source-label" type="text" placeholder="Front desk fee note" />
+            <p class="wa-field__help">Optional. Helps operators identify where the answer came from.</p>
+          </div>
+
+          <div class="wa-field">
+            <label class="kb-toggle" style="margin-top:1.85rem">
+              <input id="kb-entry-enabled" type="checkbox" checked />
+              <span>Entry is enabled for grounded answers</span>
+            </label>
+          </div>
+
+          <div class="wa-field wa-field--full">
+            <label>Relevant intents</label>
+            <div class="kb-intents" id="kb-intents">
+              <label class="wa-check"><input type="checkbox" value="ADMISSION" /><span>Admission enquiry</span></label>
+              <label class="wa-check"><input type="checkbox" value="BATCH_TIMING" /><span>Batch timing</span></label>
+              <label class="wa-check"><input type="checkbox" value="COURSE_INFO" /><span>Course information</span></label>
+              <label class="wa-check"><input type="checkbox" value="DEMO_REQUEST" /><span>Demo request</span></label>
+              <label class="wa-check"><input type="checkbox" value="FEE_ENQUIRY" /><span>Fee enquiry</span></label>
+              <label class="wa-check"><input type="checkbox" value="GENERAL_ENQUIRY" /><span>General enquiry</span></label>
+              <label class="wa-check"><input type="checkbox" value="SCHOLARSHIP_ENQUIRY" /><span>Scholarship enquiry</span></label>
+            </div>
+          </div>
+
+          <div class="wa-field wa-field--full">
+            <label for="kb-keywords">Keywords</label>
+            <textarea id="kb-keywords" rows="3" placeholder="fees, fee structure, cost, price"></textarea>
+            <p class="wa-field__help">Use commas or one keyword per line. These keywords help retrieval find the right answer.</p>
+          </div>
+
+          <div class="wa-field wa-field--full">
+            <label for="kb-content">Grounded answer content</label>
+            <textarea id="kb-content" rows="5" placeholder="Our classroom batches start from INR 78,000 per year depending on class and batch."></textarea>
+            <p class="wa-field__help">Keep this factual. The assistant should answer only from what is written here.</p>
+          </div>
+        </div>
+
+        <div class="kb-editor__actions">
+          <button class="btn-secondary" id="btn-cancel-knowledge" type="button">Cancel</button>
+          <button class="btn-secondary" id="btn-save-knowledge" type="button">Save entry</button>
+        </div>
       </div>
     </div>
 

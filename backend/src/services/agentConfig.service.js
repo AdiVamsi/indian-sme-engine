@@ -2,6 +2,7 @@
 
 const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
 const { prisma } = require('../lib/prisma');
+const { normalizeBusinessKnowledgeConfig, resolveBusinessKnowledge } = require('./businessKnowledge.service');
 const { resolveWhatsAppReplyConfig } = require('./whatsappReplyConfig.service');
 
 /**
@@ -31,6 +32,15 @@ const getResolved = async (businessId) => {
   });
   const industry = business?.industry || 'other';
   const preset = getAgentConfigPreset(industry);
+  const businessKnowledgePreset = resolveBusinessKnowledge({
+    businessIndustry: industry,
+    agentConfig: null,
+  });
+  const businessKnowledgeConfig = resolveBusinessKnowledge({
+    businessIndustry: industry,
+    agentConfig: config,
+  });
+  const businessKnowledgeUsesPreset = JSON.stringify(businessKnowledgeConfig) === JSON.stringify(businessKnowledgePreset);
 
   return {
     config,
@@ -41,6 +51,9 @@ const getResolved = async (businessId) => {
       businessIndustry: industry,
       agentConfig: config,
     }),
+    businessKnowledgePreset,
+    businessKnowledgeConfig,
+    businessKnowledgeUsesPreset,
   };
 };
 
@@ -59,18 +72,31 @@ const update = async (businessId, { followUpMinutes, classificationRules, priori
   const nextFollowUpMinutes = followUpMinutes !== undefined
     ? followUpMinutes
     : existing?.followUpMinutes ?? preset.followUpMinutes;
-  const nextClassificationRules = classificationRules !== undefined
+  const baseClassificationRules = existing?.classificationRules ?? preset.classificationRules;
+  let nextClassificationRules = classificationRules !== undefined
     ? {
-        ...(existing?.classificationRules ?? preset.classificationRules),
+        ...baseClassificationRules,
         ...classificationRules,
         keywords: classificationRules.keywords
-          ?? existing?.classificationRules?.keywords
+          ?? baseClassificationRules.keywords
           ?? preset.classificationRules.keywords,
         whatsappReplyConfig: classificationRules.whatsappReplyConfig
-          ?? existing?.classificationRules?.whatsappReplyConfig
+          ?? baseClassificationRules.whatsappReplyConfig
           ?? preset.classificationRules.whatsappReplyConfig,
       }
-    : existing?.classificationRules ?? preset.classificationRules;
+    : baseClassificationRules;
+
+  if (classificationRules !== undefined) {
+    if (classificationRules.businessKnowledge === null) {
+      const { businessKnowledge: _discarded, ...rest } = nextClassificationRules;
+      nextClassificationRules = rest;
+    } else if (classificationRules.businessKnowledge !== undefined) {
+      nextClassificationRules = {
+        ...nextClassificationRules,
+        businessKnowledge: normalizeBusinessKnowledgeConfig(classificationRules.businessKnowledge),
+      };
+    }
+  }
   const nextPriorityRules = priorityRules !== undefined
     ? {
         ...(existing?.priorityRules ?? preset.priorityRules),

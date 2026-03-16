@@ -12,6 +12,18 @@ const SUPPORTED_KNOWLEDGE_INTENTS = new Set([
   'SCHOLARSHIP_ENQUIRY',
 ]);
 
+const KNOWLEDGE_CATEGORIES = [
+  'fees',
+  'timings',
+  'online_classes',
+  'demo_class',
+  'admission',
+  'scholarship',
+  'branch_location',
+  'courses',
+  'general',
+];
+
 const KNOWLEDGE_QUERY_TERMS = [
   'fee',
   'fees',
@@ -58,6 +70,14 @@ function normalizeStringArray(values = []) {
   )];
 }
 
+function slugify(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48);
+}
+
 function tokenize(text = '') {
   return String(text || '')
     .toLowerCase()
@@ -72,15 +92,38 @@ function normalizeKnowledgeEntry(entry = {}, index = 0) {
     : typeof entry.answer === 'string'
       ? entry.answer.trim()
       : '';
+  const title = String(entry.title || entry.question || `Knowledge ${index + 1}`).trim();
+  const category = String(entry.category || 'general').trim().toLowerCase();
+  const fallbackId = slugify(`${category}_${title}`) || `knowledge_${index + 1}`;
 
   return {
-    id: String(entry.id || `knowledge_${index + 1}`),
-    title: String(entry.title || entry.question || `Knowledge ${index + 1}`).trim(),
-    category: String(entry.category || 'general').trim().toLowerCase(),
+    id: String(entry.id || fallbackId),
+    title,
+    category: KNOWLEDGE_CATEGORIES.includes(category) ? category : 'general',
     intents: normalizeStringArray(entry.intents || []).map((value) => value.toUpperCase()),
     keywords: normalizeStringArray(entry.keywords || []).map((value) => value.toLowerCase()),
     content,
     sourceLabel: String(entry.sourceLabel || entry.title || entry.question || `Knowledge ${index + 1}`).trim(),
+    enabled: entry.enabled !== false,
+  };
+}
+
+function normalizeBusinessKnowledgeConfig(raw = {}, { fallback = null } = {}) {
+  const fallbackConfig = fallback && typeof fallback === 'object' && !Array.isArray(fallback) ? fallback : {};
+  const base = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const rawEntries = Array.isArray(base.entries)
+    ? base.entries
+    : Array.isArray(fallbackConfig.entries)
+      ? fallbackConfig.entries
+      : [];
+
+  return {
+    enabled: base.enabled !== undefined
+      ? Boolean(base.enabled)
+      : Boolean(fallbackConfig.enabled),
+    entries: rawEntries
+      .map((entry, index) => normalizeKnowledgeEntry(entry, index))
+      .filter((entry) => entry.content),
   };
 }
 
@@ -89,23 +132,7 @@ function resolveBusinessKnowledge({ businessIndustry = 'other', agentConfig = nu
   const preset = getAgentConfigPreset(industry);
   const presetKnowledge = preset?.classificationRules?.businessKnowledge || {};
   const businessKnowledge = agentConfig?.classificationRules?.businessKnowledge || {};
-
-  const enabled = businessKnowledge.enabled !== undefined
-    ? Boolean(businessKnowledge.enabled)
-    : Boolean(presetKnowledge.enabled);
-
-  const rawEntries = Array.isArray(businessKnowledge.entries)
-    ? businessKnowledge.entries
-    : Array.isArray(presetKnowledge.entries)
-      ? presetKnowledge.entries
-      : [];
-
-  return {
-    enabled,
-    entries: rawEntries
-      .map((entry, index) => normalizeKnowledgeEntry(entry, index))
-      .filter((entry) => entry.content),
-  };
+  return normalizeBusinessKnowledgeConfig(businessKnowledge, { fallback: presetKnowledge });
 }
 
 function isPotentialBusinessKnowledgeQuestion({ message = '', intent = null, tags = [] } = {}) {
@@ -182,6 +209,7 @@ function retrieveBusinessKnowledge({
   }
 
   const matches = knowledge.entries
+    .filter((entry) => entry.enabled !== false)
     .map((entry) => scoreKnowledgeEntry(entry, { message, intent, tags }))
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score)
@@ -205,8 +233,12 @@ function retrieveBusinessKnowledge({
 }
 
 module.exports = {
+  KNOWLEDGE_CATEGORIES,
   KNOWLEDGE_QUERY_TERMS,
+  SUPPORTED_KNOWLEDGE_INTENTS,
   isPotentialBusinessKnowledgeQuestion,
+  normalizeBusinessKnowledgeConfig,
+  normalizeKnowledgeEntry,
   resolveBusinessKnowledge,
   retrieveBusinessKnowledge,
 };

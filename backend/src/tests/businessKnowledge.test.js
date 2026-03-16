@@ -98,4 +98,35 @@ describe('Business knowledge retrieval', () => {
     expect(result.hasConfidentMatch).toBe(true);
     expect(result.topMatch.id).toBe('online_classes');
   });
+
+  it('does not retrieve disabled knowledge entries', () => {
+    const result = retrieveBusinessKnowledge({
+      message: 'fees kitni hai?',
+      intent: 'FEE_ENQUIRY',
+      tags: ['FEE_ENQUIRY'],
+      businessIndustry: 'academy',
+      agentConfig: {
+        classificationRules: {
+          businessKnowledge: {
+            enabled: true,
+            entries: [
+              {
+                id: 'fees_overview',
+                title: 'Fee structure',
+                category: 'fees',
+                intents: ['FEE_ENQUIRY'],
+                keywords: ['fees'],
+                content: 'Programmes start from INR 78,000 per year.',
+                enabled: false,
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(result.shouldAttempt).toBe(true);
+    expect(result.hasConfidentMatch).toBe(false);
+    expect(result.matches).toHaveLength(0);
+  });
 });

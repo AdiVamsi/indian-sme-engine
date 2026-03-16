@@ -2127,6 +2127,7 @@ function _syncDrawerLeadCache(data) {
 
   const derived = _deriveLeadDrawerDisplayMeta(data);
   const latestCallback = _getLatestCallbackMemory(data?.activities || []);
+  const conversationStatus = data?.whatsappConversation?.conversationStatus || null;
   const cached = _allLeads.find((item) => item.id === lead.id);
 
   if (cached) {
@@ -2139,6 +2140,8 @@ function _syncDrawerLeadCache(data) {
       status: lead.status,
       callbackTime: latestCallback?.callbackTime || null,
       callbackScheduledAt: latestCallback?.createdAt || null,
+      conversationStatus,
+      handoffReady: conversationStatus === 'handoff',
       ...derived,
     });
   }
@@ -2345,10 +2348,10 @@ function _renderDrawerOverview(data) {
         <div class="drawer-overview__eyebrow">Lead snapshot</div>
         <div class="drawer-overview__headline">${esc(primaryIntentLabel)}</div>
         <div class="drawer-overview__badges">
-          <span class="drawer-overview__badge drawer-overview__badge--source">${esc(sourceLabel)}</span>
           <span class="drawer-overview__badge drawer-overview__badge--status">${esc(_titleCaseDrawer(lead.status || 'NEW'))}</span>
           ${callbackCue ? `<span class="drawer-overview__badge drawer-overview__badge--callback drawer-overview__badge--callback-${esc(callbackCue.state)}">${esc(callbackCue.badgeLabel)}</span>` : ''}
           ${conversationStatus ? `<span class="drawer-overview__badge drawer-overview__badge--conversation">${esc(whatsappConversation.conversationStatusLabel || _titleCaseDrawer(conversationStatus))}</span>` : ''}
+          <span class="drawer-overview__badge drawer-overview__badge--source">${esc(sourceLabel)}</span>
         </div>
         <p class="drawer-overview__summary">${esc(summaryText)}</p>
         <div class="drawer-overview__hint">${esc(lastCustomerActivity)}</div>

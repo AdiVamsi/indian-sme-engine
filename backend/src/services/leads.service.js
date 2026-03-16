@@ -59,6 +59,15 @@ function getLatestCallbackDetails(activities = []) {
   };
 }
 
+function getLatestConversationStatus(activities = []) {
+  const latest = activities.find((activity) => {
+    const metadata = activity?.metadata || {};
+    return metadata.channel === 'whatsapp' && metadata.conversationState?.status;
+  });
+
+  return latest?.metadata?.conversationState?.status || null;
+}
+
 function mergeConversationState(baseState = null, {
   flowIntent,
   stage,
@@ -185,7 +194,7 @@ const findLeadsByBusiness = async (businessId, status) => {
     orderBy: { createdAt: 'desc' },
     include: {
       activities: {
-        where:   { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED', 'FOLLOW_UP_SCHEDULED'] } },
+        where:   { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED', 'FOLLOW_UP_SCHEDULED', 'AUTOMATION_ALERT'] } },
         orderBy: { createdAt: 'desc' },
       },
     },
@@ -195,6 +204,7 @@ const findLeadsByBusiness = async (businessId, status) => {
     const classAct = activities.find((a) => a.type === 'AGENT_CLASSIFIED');
     const prioAct  = activities.find((a) => a.type === 'AGENT_PRIORITIZED');
     const callback = getLatestCallbackDetails(activities);
+    const conversationStatus = getLatestConversationStatus(activities);
 
     const tags          = classAct?.metadata?.tags         ?? [];
     const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
@@ -211,6 +221,8 @@ const findLeadsByBusiness = async (businessId, status) => {
       source,
       callbackTime: callback.callbackTime,
       callbackScheduledAt: callback.callbackScheduledAt,
+      conversationStatus,
+      handoffReady: conversationStatus === 'handoff',
       hasClassification: Boolean(classAct),
       hasPrioritization: Boolean(prioAct),
     };

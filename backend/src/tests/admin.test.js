@@ -190,6 +190,57 @@ describe('Admin API', () => {
     );
   });
 
+  it('GET /api/admin/leads - marks handoff-ready WhatsApp leads for operator attention', async () => {
+    const lead = await prisma.lead.create({
+      data: {
+        businessId: ctx.business.id,
+        name: 'Handoff Admin Lead',
+        phone: '+91 99999 70021',
+        message: 'Please call after 5 PM',
+      },
+    });
+
+    await prisma.leadActivity.createMany({
+      data: [
+        {
+          leadId: lead.id,
+          type: 'AGENT_CLASSIFIED',
+          message: 'Lead classified as CALLBACK_REQUEST',
+          metadata: {
+            source: 'whatsapp',
+            bestCategory: 'CALLBACK_REQUEST',
+            tags: ['CALLBACK_REQUEST'],
+          },
+        },
+        {
+          leadId: lead.id,
+          type: 'AUTOMATION_ALERT',
+          message: 'WhatsApp handoff ready',
+          metadata: {
+            channel: 'whatsapp',
+            direction: 'outbound',
+            conversationState: {
+              status: 'handoff',
+            },
+          },
+        },
+      ],
+    });
+
+    const res = await request(app).get('/api/admin/leads').set(auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: lead.id,
+          conversationStatus: 'handoff',
+          handoffReady: true,
+        }),
+      ])
+    );
+  });
+
   it('GET /api/admin/leads - returns 401 without token', async () => {
     const res = await request(app).get('/api/admin/leads');
     expect(res.status).toBe(401);

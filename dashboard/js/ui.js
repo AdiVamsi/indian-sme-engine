@@ -260,11 +260,30 @@ export function DashUI(config) {
       </span>`;
   }
 
+  function buildLeadWorkflowBadge(lead) {
+    if (!lead?.handoffReady) return '';
+    return `<span class="lead-workflow-badge" title="The AI handoff is ready for an operator follow-up.">Handoff ready</span>`;
+  }
+
   /* ── Row builders ── */
   function buildLeadRow(lead, isNew = false) {
     const tr = document.createElement('tr');
     tr.dataset.leadId = lead.id;
     if (isNew) tr.classList.add('row-enter');
+
+    const callbackCue = lead.callbackTime
+      ? getCallbackCue({ callbackTime: lead.callbackTime })
+      : null;
+
+    if (callbackCue?.state === 'overdue') {
+      tr.classList.add('lead-row--attention-critical');
+    } else if (callbackCue?.state === 'due-soon') {
+      tr.classList.add('lead-row--attention-high');
+    } else if (lead.priority === 'HIGH') {
+      tr.classList.add('lead-row--priority-high');
+    } else if (lead.handoffReady) {
+      tr.classList.add('lead-row--attention-handoff');
+    }
 
     const tags = Array.isArray(lead.tags) ? lead.tags : [];
     const tagHtml = tags.length
@@ -274,8 +293,10 @@ export function DashUI(config) {
     const messagePreview = lead.message
       ? `<div class="lead-row__sub"><span class="message-preview" title="${esc(lead.message)}">↳ ${esc(truncateText(lead.message))}</span></div>`
       : '';
-    const callbackHint = lead.callbackTime
-      ? `<div class="lead-row__hint lead-row__hint--callback" title="${esc(`Latest callback: ${lead.callbackTime}`)}">⏰ ${esc(lead.callbackTime)}</div>`
+    const callbackHint = callbackCue
+      ? `<div class="lead-row__hint lead-row__hint--callback lead-row__hint--${esc(callbackCue.state)}" title="${esc(callbackCue.title)}">⏰ ${esc(callbackCue.stateLabel)}${lead.callbackTime ? ` · ${esc(lead.callbackTime)}` : ''}</div>`
+      : lead.handoffReady
+        ? '<div class="lead-row__hint lead-row__hint--handoff">🤝 Ready for counsellor follow-up</div>'
       : '';
 
     tr.innerHTML = `
@@ -283,8 +304,9 @@ export function DashUI(config) {
         <div class="lead-row__primary">
           <button class="lead-name-btn" data-lead-id="${esc(lead.id)}">${esc(lead.name)}</button>
           <div class="lead-row__badges">
-            ${buildLeadSourceBadge(lead.source)}
             ${buildLeadCallbackBadge(lead)}
+            ${buildLeadWorkflowBadge(lead)}
+            ${buildLeadSourceBadge(lead.source)}
           </div>
         </div>
         ${messagePreview}

@@ -208,6 +208,57 @@ describe('Leads', () => {
     expect(completed.metadata.conversationState.status).toBe('closed');
   });
 
+  it('GET /api/leads - includes handoff-ready state for active WhatsApp leads', async () => {
+    const lead = await prisma.lead.create({
+      data: {
+        businessId: ctx.business.id,
+        name: 'Handoff List Lead',
+        phone: '+91 88888 00051',
+        message: 'Need a callback after tuition',
+      },
+    });
+
+    await prisma.leadActivity.createMany({
+      data: [
+        {
+          leadId: lead.id,
+          type: 'AGENT_CLASSIFIED',
+          message: 'Lead classified as CALLBACK_REQUEST',
+          metadata: {
+            tags: ['CALLBACK_REQUEST'],
+            bestCategory: 'CALLBACK_REQUEST',
+            source: 'whatsapp',
+          },
+        },
+        {
+          leadId: lead.id,
+          type: 'AUTOMATION_ALERT',
+          message: 'WhatsApp reply sent',
+          metadata: {
+            channel: 'whatsapp',
+            direction: 'outbound',
+            conversationState: {
+              status: 'handoff',
+            },
+          },
+        },
+      ],
+    });
+
+    const res = await request(app).get('/api/leads').set(auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: lead.id,
+          conversationStatus: 'handoff',
+          handoffReady: true,
+        }),
+      ])
+    );
+  });
+
   it('DELETE /api/leads/:id - returns 204; lead gone from list', async () => {
     const del = await request(app).delete(`/api/leads/${leadId}`).set(auth());
     expect(del.status).toBe(204);

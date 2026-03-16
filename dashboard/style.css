@@ -1966,6 +1966,16 @@ td.empty { text-align: center; padding: 3rem 1rem; cursor: default; }
   gap: 0.75rem;
 }
 
+.wa-transcript__empty {
+  padding: 0.85rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border);
+  background: rgba(15, 23, 42, 0.32);
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
 .wa-turn {
   display: flex;
   flex-direction: column;
@@ -2117,192 +2127,200 @@ td.empty { text-align: center; padding: 3rem 1rem; cursor: default; }
 
 .drawer-error { color: var(--error); }
 
-/* ══════════════════════════════════════════════
-   NEXT BEST ACTION — suggestion cards in drawer
-══════════════════════════════════════════════ */
-.nba-card {
-  background: var(--elevated);
-  border: 1px solid var(--border-md);
-  border-radius: var(--radius-md);
-  padding: 1rem 1.125rem;
-  animation: fadeSlideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--i, 0) * 70ms);
+.drawer-focus-card {
+  margin-bottom: 1rem;
+  padding: 0.95rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(17, 24, 39, 0.92)),
+    var(--panel);
 }
 
-.nba-card + .nba-card { margin-top: 0.625rem; }
-
-.nba-card__header {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  margin-bottom: 0.5rem;
+.drawer-focus-card--urgent {
+  border-color: rgba(245, 179, 1, 0.18);
+  background:
+    linear-gradient(135deg, rgba(245, 179, 1, 0.08), rgba(17, 24, 39, 0.92)),
+    var(--panel);
 }
 
-.nba-card__icon {
-  font-size: 1.125rem;
-  line-height: 1;
-  flex-shrink: 0;
+.drawer-focus-card--pending {
+  border-color: rgba(148, 163, 184, 0.2);
+  background:
+    linear-gradient(135deg, rgba(148, 163, 184, 0.08), rgba(17, 24, 39, 0.92)),
+    var(--panel);
 }
 
-.nba-card__label {
-  font-size: 0.875rem;
+.drawer-focus-card__eyebrow {
+  margin-bottom: 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #93c5fd;
+}
+
+.drawer-focus-card--urgent .drawer-focus-card__eyebrow { color: #fcd34d; }
+.drawer-focus-card--pending .drawer-focus-card__eyebrow { color: #cbd5e1; }
+
+.drawer-focus-card__title {
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--text);
 }
 
-.nba-card__reason {
-  font-size: 0.8125rem;
+.drawer-focus-card__text {
+  margin: 0.4rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
   color: var(--text-2);
-  line-height: 1.45;
-  margin-bottom: 0.75rem;
 }
 
-.nba-card__conf {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-}
-
-.nba-card__conf-track {
-  flex: 1;
-  height: 3px;
-  background: var(--border-md);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.nba-card__conf-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.nba-card__conf-pct {
-  font-size: 0.6875rem;
-  color: var(--muted);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ══════════════════════════════════════════════
-   OUTREACH DRAFT CARD
-══════════════════════════════════════════════ */
-.outreach-card {
-  background: var(--elevated);
-  border: 1px solid var(--border-md);
-  border-radius: var(--radius-md);
-  padding: 1rem 1.125rem;
+.drawer-overview {
   display: flex;
   flex-direction: column;
-  gap: 0.875rem;
-  animation: fadeSlideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  gap: 0.95rem;
 }
 
-.outreach-card__header {
+.drawer-overview__section {
+  padding: 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(12, 17, 23, 0.84);
+}
+
+.drawer-overview__section--hero {
+  border-color: rgba(245, 179, 1, 0.18);
+  background:
+    linear-gradient(135deg, rgba(245, 179, 1, 0.08), rgba(17, 24, 39, 0.92)),
+    var(--panel);
+}
+
+.drawer-overview__eyebrow {
+  margin-bottom: 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fcd34d;
+}
+
+.drawer-overview__headline {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.drawer-overview__badges {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.drawer-overview__badge {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
+  border-radius: 999px;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  background: rgba(90, 100, 120, 0.12);
+  color: var(--text);
+}
+
+.drawer-overview__badge--source {
+  border-color: rgba(59, 130, 246, 0.22);
+  background: rgba(59, 130, 246, 0.12);
+  color: #bfdbfe;
+}
+
+.drawer-overview__badge--status {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.12);
+  color: #e2e8f0;
+}
+
+.drawer-overview__badge--conversation {
+  border-color: rgba(34, 197, 94, 0.2);
+  background: rgba(34, 197, 94, 0.12);
+  color: #bbf7d0;
+}
+
+.drawer-overview__summary {
+  margin: 0.85rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.drawer-overview__hint {
+  margin-top: 0.65rem;
+  font-size: 0.76rem;
+  color: var(--text-2);
+}
+
+.drawer-overview__section-title {
+  margin-bottom: 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.drawer-overview__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.75rem;
 }
 
-.outreach-card__type {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-2);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.outreach-card__conf {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-.outreach-card__conf-track {
-  width: 60px;
-  height: 3px;
-  background: var(--border-md);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.outreach-card__conf-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.outreach-card__conf-pct {
-  font-size: 0.6875rem;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.outreach-card__textarea {
-  width: 100%;
-  min-height: 7rem;
-  background: var(--panel-2);
+.drawer-overview__item {
+  padding: 0.8rem 0.85rem;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 0.875rem;
-  line-height: 1.6;
-  padding: 0.75rem;
-  resize: vertical;
-  transition: border-color 0.15s;
-  outline: none;
+  background: rgba(17, 24, 39, 0.72);
 }
 
-.outreach-card__textarea:not([readonly]):focus {
-  border-color: var(--accent);
-}
-
-.outreach-card__textarea[readonly] {
-  cursor: default;
+.drawer-overview__label {
+  display: block;
+  margin-bottom: 0.28rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--text-2);
 }
 
-.outreach-card__actions {
+.drawer-overview__value {
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.drawer-overview__chips {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
 }
 
-.outreach-card__btn {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-sm);
+.drawer-overview__empty {
+  margin-top: 0.8rem;
   font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--border-md);
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.outreach-card__btn--copy {
-  background: var(--accent);
-  color: #000;
-  border-color: var(--accent);
-}
-
-.outreach-card__btn--copy:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-
-.outreach-card__btn--edit {
-  background: transparent;
   color: var(--text-2);
 }
 
-.outreach-card__btn--edit:hover {
-  background: var(--panel-hover);
+.drawer-overview__message {
+  padding: 0.95rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
   color: var(--text);
-  border-color: var(--border-hi);
+  font-size: 0.92rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 /* ══════════════════════════════════════════════

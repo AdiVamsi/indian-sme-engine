@@ -94,8 +94,6 @@ export function DashAPI(token, { onUnauthorized } = {}) {
     getLeads:        ()         => req('GET', '/api/admin/leads'),
     getLeadsByDay:    (days = 7) => req('GET', `/api/admin/leads/by-day?days=${days}`),
     getLeadActivity:    (id)    => req('GET', `/api/admin/leads/${id}/activity`),
-    getLeadSuggestions:   (id)  => req('GET', `/api/admin/leads/${id}/suggestions`),
-    getLeadOutreachDraft: (id)  => req('GET', `/api/admin/leads/${id}/outreach-draft`),
     getAppts:        ()         => req('GET', '/api/admin/appointments'),
     getServices:     ()         => req('GET', '/api/admin/services'),
     getTestimonials: ()         => req('GET', '/api/admin/testimonials'),

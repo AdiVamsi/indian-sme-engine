@@ -1442,6 +1442,18 @@ const DRAWER_ACTIVITY_MAP = {
   AUTOMATION_ADMISSION_INTENT: { label: 'Admission interest detected', icon: '📘', dot: 'dtl-dot--automation' },
 };
 
+const DRAWER_INTENT_LABELS = {
+  ADMISSION: 'Admission enquiry',
+  DEMO_REQUEST: 'Demo request',
+  FEE_ENQUIRY: 'Fee enquiry',
+  SCHOLARSHIP_ENQUIRY: 'Scholarship enquiry',
+  CALLBACK_REQUEST: 'Callback request',
+  GENERAL_ENQUIRY: 'General enquiry',
+  WRONG_FIT: 'Wrong fit',
+  NOT_INTERESTED: 'Not interested',
+  JUNK: 'Junk',
+};
+
 function _escDrawer(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -1461,6 +1473,16 @@ function _titleCaseDrawer(value) {
     .replace(/_/g, ' ')
     .toLowerCase()
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function _formatDrawerIntentLabel(intent) {
+  return DRAWER_INTENT_LABELS[intent] || _titleCaseDrawer(intent);
+}
+
+function _formatDrawerSourceLabel(source) {
+  if (source === 'whatsapp') return 'WhatsApp';
+  if (source === 'web') return 'Website form';
+  return _titleCaseDrawer(source || 'web');
 }
 
 function _formatDrawerFieldLabel(key) {
@@ -1585,13 +1607,13 @@ function _buildWhatsAppSummaryHtml(summary) {
     .join('');
 
   const transcript = Array.isArray(summary.transcript) ? summary.transcript : [];
-  const transcriptHtml = transcript.length
-    ? `
-      <div class="wa-transcript">
-        <div class="wa-transcript__header">
-          <span class="wa-transcript__title">WhatsApp Conversation</span>
-          <span class="wa-transcript__count">${transcript.length} turns</span>
-        </div>
+  const transcriptHtml = `
+    <div class="wa-transcript">
+      <div class="wa-transcript__header">
+        <span class="wa-transcript__title">WhatsApp Conversation</span>
+        <span class="wa-transcript__count">${transcript.length} turns</span>
+      </div>
+      ${transcript.length ? `
         <div class="wa-transcript__list">
           ${transcript.map((turn) => `
             <div class="wa-turn wa-turn--${_escDrawer(turn.direction)}">
@@ -1601,9 +1623,11 @@ function _buildWhatsAppSummaryHtml(summary) {
               </div>
               <div class="wa-turn__bubble">${_escDrawer(turn.text)}</div>
             </div>`).join('')}
-        </div>
-      </div>`
-    : '';
+        </div>` : `
+        <div class="wa-transcript__empty">
+          No WhatsApp conversation is visible yet. New customer and assistant messages will appear here automatically.
+        </div>`}
+    </div>`;
 
   return `
     <div class="wa-summary">
@@ -1764,13 +1788,12 @@ function _getActiveDrawerTab() {
 }
 
 function _setActiveDrawerTab(target = 'activity') {
+  const nextTarget = target === 'overview' ? 'overview' : 'activity';
   document.querySelectorAll('.drawer__tab').forEach((t) =>
-    t.classList.toggle('is-active', t.dataset.drawerTab === target)
+    t.classList.toggle('is-active', t.dataset.drawerTab === nextTarget)
   );
-  $('drawer-pane-activity').classList.toggle('drawer__pane--hidden', target !== 'activity');
-  $('drawer-pane-overview').classList.toggle('drawer__pane--hidden', target !== 'overview');
-  $('drawer-pane-suggestions').classList.toggle('drawer__pane--hidden', target !== 'suggestions');
-  $('drawer-pane-outreach').classList.toggle('drawer__pane--hidden', target !== 'outreach');
+  $('drawer-pane-activity').classList.toggle('drawer__pane--hidden', nextTarget !== 'activity');
+  $('drawer-pane-overview').classList.toggle('drawer__pane--hidden', nextTarget !== 'overview');
 }
 
 function _setDrawerActionButtonsBusy(isBusy) {
@@ -1836,6 +1859,70 @@ function _deriveLeadDrawerDisplayMeta(data) {
   };
 }
 
+function _getDrawerClassificationMeta(activities = []) {
+  return activities.find((activity) => activity.type === 'AGENT_CLASSIFIED')?.metadata || {};
+}
+
+function _getDrawerPrioritizationMeta(activities = []) {
+  return activities.find((activity) => activity.type === 'AGENT_PRIORITIZED')?.metadata || {};
+}
+
+function _getLastCustomerActivityText({ lead, activities = [], source }) {
+  const lastInboundWhatsApp = [...activities]
+    .filter((activity) => activity?.metadata?.channel === 'whatsapp' && activity?.metadata?.direction === 'inbound')
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+
+  if (lastInboundWhatsApp) {
+    return `Customer last replied on ${_fmtDrawerTime(lastInboundWhatsApp.createdAt)}.`;
+  }
+
+  if (lead?.createdAt) {
+    const label = source === 'whatsapp' ? 'Lead created' : 'Website enquiry received';
+    return `${label} on ${_fmtDrawerTime(lead.createdAt)}.`;
+  }
+
+  return 'No recent customer activity yet.';
+}
+
+function _buildLeadFocusCardHtml({ lead, activities, whatsappConversation }) {
+  if (!lead) return '';
+  if (whatsappConversation) return '';
+
+  const classified = _getDrawerClassificationMeta(activities);
+  const prioritized = _getDrawerPrioritizationMeta(activities);
+  const hasClassification = activities.some((activity) => activity.type === 'AGENT_CLASSIFIED');
+  const priorityScore = prioritized.priorityScore ?? 0;
+
+  let eyebrow = 'Operator focus';
+  let title = 'What to do next';
+  let text = '';
+  let tone = 'default';
+
+  if (!hasClassification) {
+    eyebrow = 'AI update pending';
+    title = 'Review the fresh enquiry now';
+    text = 'The lead is already saved and visible. Tags and priority will appear here as soon as AI processing finishes.';
+    tone = 'pending';
+  } else if (classified.suggestedNextAction) {
+    text = classified.suggestedNextAction;
+    tone = priorityScore >= 30 ? 'urgent' : 'default';
+  } else if (priorityScore >= 30) {
+    text = 'Call this lead soon and move the conversation forward while interest is still high.';
+    tone = 'urgent';
+  } else if (lead.status === 'NEW') {
+    text = 'Review the enquiry, record the first operator action, and move the lead into contact.';
+  }
+
+  if (!text) return '';
+
+  return `
+    <div class="drawer-focus-card drawer-focus-card--${_escDrawer(tone)}">
+      <div class="drawer-focus-card__eyebrow">${_escDrawer(eyebrow)}</div>
+      <div class="drawer-focus-card__title">${_escDrawer(title)}</div>
+      <p class="drawer-focus-card__text">${_escDrawer(text)}</p>
+    </div>`;
+}
+
 function _syncDrawerLeadCache(data) {
   const lead = data?.lead;
   if (!lead) return;
@@ -1863,7 +1950,7 @@ function _applyLeadDrawerData(data) {
   activeDrawerData = data;
   _syncDrawerLeadCache(data);
   _renderDrawerTimeline(data);
-  _renderDrawerOverview(data.lead);
+  _renderDrawerOverview(data);
 }
 
 async function openLeadDrawer(leadId, { preserveTab = false } = {}) {
@@ -1895,48 +1982,27 @@ async function openLeadDrawer(leadId, { preserveTab = false } = {}) {
   drawer.classList.add('is-open');
   document.body.style.overflow = 'hidden';
 
-  /* Show spinners while fetching both data sources in parallel */
+  /* Show loading state while the drawer summary loads */
   $('drawer-timeline').innerHTML = `
     <div class="drawer-loading">
       <div class="drawer-loading__spinner"></div>
       Loading timeline…
     </div>`;
-  $('drawer-suggestions').innerHTML = `
+  $('drawer-overview-content').innerHTML = `
     <div class="drawer-loading">
       <div class="drawer-loading__spinner"></div>
-      Analysing lead…
-    </div>`;
-  $('drawer-outreach').innerHTML = `
-    <div class="drawer-loading">
-      <div class="drawer-loading__spinner"></div>
-      Preparing suggested reply…
+      Loading lead summary…
     </div>`;
 
-  const [actRes, sugRes, outRes] = await Promise.allSettled([
-    api.getLeadActivity(leadId),
-    api.getLeadSuggestions(leadId),
-    api.getLeadOutreachDraft(leadId),
-  ]);
+  const [actRes] = await Promise.allSettled([api.getLeadActivity(leadId)]);
 
   if (actRes.status === 'fulfilled') {
     _applyLeadDrawerData(actRes.value);
   } else {
     $('drawer-timeline').innerHTML =
       `<p class="drawer-error">Could not load timeline: ${_escDrawer(actRes.reason?.message)}</p>`;
-  }
-
-  if (sugRes.status === 'fulfilled') {
-    _renderDrawerSuggestions(sugRes.value);
-  } else {
-    $('drawer-suggestions').innerHTML =
-      `<p class="drawer-error">Could not load suggestions.</p>`;
-  }
-
-  if (outRes.status === 'fulfilled') {
-    _renderDrawerOutreach(outRes.value);
-  } else {
-    $('drawer-outreach').innerHTML =
-      `<p class="drawer-error">Could not load the suggested reply.</p>`;
+    $('drawer-overview-content').innerHTML =
+      `<p class="drawer-error">Could not load the lead summary.</p>`;
   }
 }
 
@@ -1972,11 +2038,7 @@ function _renderDrawerTimeline(data) {
   const source = classified?.metadata?.source
     || _allLeads.find((item) => item.id === lead?.id)?.source
     || 'web';
-  const sourceLabel = source === 'whatsapp'
-    ? 'WhatsApp'
-    : source === 'web'
-      ? 'Website form'
-      : _titleCaseDrawer(source);
+  const sourceLabel = _formatDrawerSourceLabel(source);
   const headerBadges = [
     `<span class="drawer__meta-badge">Status: <strong>${_escDrawer(lead?.status ?? 'NEW')}</strong></span>`,
     `<span class="drawer__meta-badge">Priority: <strong>${_escDrawer(priorityLabel)}</strong></span>`,
@@ -1988,6 +2050,7 @@ function _renderDrawerTimeline(data) {
   if (!activities.length) {
     $('drawer-timeline').innerHTML = `
       ${_buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })}
+      ${_buildLeadFocusCardHtml({ lead, activities, whatsappConversation })}
       ${_buildWhatsAppSummaryHtml(whatsappConversation)}
       <div class="drawer-empty">📭<br>No activity recorded yet.</div>`;
     return;
@@ -2023,123 +2086,116 @@ function _renderDrawerTimeline(data) {
 
   $('drawer-timeline').innerHTML = `
     ${_buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })}
+    ${_buildLeadFocusCardHtml({ lead, activities, whatsappConversation })}
     ${_buildWhatsAppSummaryHtml(whatsappConversation)}
     <div class="drawer-timeline">${html}</div>`;
 }
 
-function _renderDrawerOverview(lead) {
+function _renderDrawerOverview(data) {
+  const lead = data?.lead;
   if (!lead) { $('drawer-overview-content').innerHTML = ''; return; }
+
   const esc = _escDrawer;
+  const activities = data?.activities || [];
+  const whatsappConversation = data?.whatsappConversation || null;
+  const classified = _getDrawerClassificationMeta(activities);
+  const prioritized = _getDrawerPrioritizationMeta(activities);
+  const source = classified.source
+    || _allLeads.find((item) => item.id === lead.id)?.source
+    || 'web';
+  const sourceLabel = _formatDrawerSourceLabel(source);
+  const priorityScore = prioritized.priorityScore ?? 0;
+  const priorityLabel = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';
+  const primaryIntent = whatsappConversation?.primaryIntent || classified.bestCategory || null;
+  const primaryIntentLabel = primaryIntent ? _formatDrawerIntentLabel(primaryIntent) : 'Pending AI classification';
+  const hasClassification = activities.some((activity) => activity.type === 'AGENT_CLASSIFIED');
+  const tags = Array.isArray(classified.tags) ? classified.tags : [];
+  const capturedFields = Object.entries(whatsappConversation?.capturedFields || {}).filter(([, value]) => value);
+  const conversationStatus = whatsappConversation?.conversationStatus || null;
+  const lastCustomerActivity = _getLastCustomerActivityText({ lead, activities, source });
+  const summaryText = whatsappConversation?.recommendedNextAction
+    || classified.suggestedNextAction
+    || (!hasClassification
+      ? 'AI is still processing this lead. Review the message now or wait a moment for tags and priority.'
+      : 'Review the lead details and take the next operator action from the Activity tab.');
+  const dispositionLabel = hasClassification
+    ? _titleCaseDrawer(classified.leadDisposition || 'valid')
+    : 'Pending AI';
+
   $('drawer-overview-content').innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:0.75rem;font-size:0.875rem;">
-      <div><span style="color:var(--text-2);font-weight:500;">Name</span><br><strong>${esc(lead.name ?? '—')}</strong></div>
-      <div><span style="color:var(--text-2);font-weight:500;">Phone</span><br><strong>${esc(lead.phone ?? '—')}</strong></div>
-      ${lead.email ? `<div><span style="color:var(--text-2);font-weight:500;">Email</span><br><strong>${esc(lead.email)}</strong></div>` : ''}
-    </div>
-    ${lead.message ? `
-    <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border);">
-      <span style="color:var(--text-2);font-weight:500;display:block;margin-bottom:0.4rem;">Original Message</span>
-      <div style="background:var(--bg-2);padding:1rem;border-radius:0.4rem;font-size:0.95rem;line-height:1.5;color:var(--text);white-space:pre-wrap;">${esc(lead.message)}</div>
-    </div>` : ''}
-  `;
-}
-
-const NBA_ICONS = {
-  CALL_NOW: '⚡',
-  SEND_DEMO_LINK: '🔗',
-  FOLLOW_UP: '📩',
-  SEND_ADMISSION_DETAILS: '📋',
-};
-
-function _renderDrawerSuggestions(suggestions) {
-  const el = $('drawer-suggestions');
-  if (!el) return;
-
-  if (!Array.isArray(suggestions) || !suggestions.length) {
-    el.innerHTML = `
-      <div class="drawer-empty">
-        ✓<br>No recommendation yet.<br>Continue monitoring this lead.
-      </div>`;
-    return;
-  }
-
-  el.innerHTML = suggestions.map((s, i) => {
-    const pct = Math.round((s.confidence ?? 0) * 100);
-    const icon = NBA_ICONS[s.action] ?? '💡';
-    return `
-      <div class="nba-card" style="--i:${i}">
-        <div class="nba-card__header">
-          <span class="nba-card__icon">${icon}</span>
-          <span class="nba-card__label">${_escDrawer(s.label)}</span>
+    <div class="drawer-overview">
+      <section class="drawer-overview__section drawer-overview__section--hero">
+        <div class="drawer-overview__eyebrow">Lead snapshot</div>
+        <div class="drawer-overview__headline">${esc(primaryIntentLabel)}</div>
+        <div class="drawer-overview__badges">
+          <span class="drawer-overview__badge drawer-overview__badge--source">${esc(sourceLabel)}</span>
+          <span class="drawer-overview__badge drawer-overview__badge--status">${esc(_titleCaseDrawer(lead.status || 'NEW'))}</span>
+          ${conversationStatus ? `<span class="drawer-overview__badge drawer-overview__badge--conversation">${esc(whatsappConversation.conversationStatusLabel || _titleCaseDrawer(conversationStatus))}</span>` : ''}
         </div>
-        <p class="nba-card__reason">${_escDrawer(s.reason)}</p>
-        <div class="nba-card__conf">
-          <div class="nba-card__conf-track">
-            <div class="nba-card__conf-fill" style="width:${pct}%"></div>
+        <p class="drawer-overview__summary">${esc(summaryText)}</p>
+        <div class="drawer-overview__hint">${esc(lastCustomerActivity)}</div>
+      </section>
+
+      <section class="drawer-overview__section">
+        <div class="drawer-overview__section-title">Lead basics</div>
+        <div class="drawer-overview__grid">
+          <div class="drawer-overview__item">
+            <span class="drawer-overview__label">Phone</span>
+            <strong class="drawer-overview__value">${esc(lead.phone ?? '—')}</strong>
           </div>
-          <span class="nba-card__conf-pct">${pct}% confidence</span>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-const OUTREACH_TYPE_LABELS = {
-  DEMO_REPLY: 'Demo enquiry reply',
-  ADMISSION_REPLY: 'Admission enquiry reply',
-  URGENT_REPLY: 'Urgent reply',
-  FOLLOW_UP: 'Follow-up',
-  GENERAL_REPLY: 'General reply',
-};
-
-function _renderDrawerOutreach(draft) {
-  const el = $('drawer-outreach');
-  if (!el) return;
-
-  if (!draft || !draft.message) {
-    el.innerHTML = `<div class="drawer-empty">✉<br>No suggested reply yet.</div>`;
-    return;
-  }
-
-  const pct = Math.round((draft.confidence ?? 0) * 100);
-  const label = OUTREACH_TYPE_LABELS[draft.type] ?? draft.type;
-  const id = 'outreach-textarea';
-
-  el.innerHTML = `
-    <div class="outreach-card">
-      <div class="outreach-card__header">
-        <span class="outreach-card__type">${_escDrawer(label)}</span>
-        <div class="outreach-card__conf">
-          <div class="outreach-card__conf-track">
-            <div class="outreach-card__conf-fill" style="width:${pct}%"></div>
+          ${lead.email ? `
+            <div class="drawer-overview__item">
+              <span class="drawer-overview__label">Email</span>
+              <strong class="drawer-overview__value">${esc(lead.email)}</strong>
+            </div>` : ''}
+          <div class="drawer-overview__item">
+            <span class="drawer-overview__label">Priority</span>
+            <strong class="drawer-overview__value">${esc(priorityLabel)}</strong>
           </div>
-          <span class="outreach-card__conf-pct">${pct}%</span>
+          <div class="drawer-overview__item">
+            <span class="drawer-overview__label">Score</span>
+            <strong class="drawer-overview__value">${esc(priorityScore)}</strong>
+          </div>
         </div>
-      </div>
-      <textarea id="${id}" class="outreach-card__textarea" readonly>${_escDrawer(draft.message)}</textarea>
-      <div class="outreach-card__actions">
-        <button class="outreach-card__btn outreach-card__btn--copy" id="outreach-copy-btn">Copy Reply</button>
-        <button class="outreach-card__btn outreach-card__btn--edit" id="outreach-edit-btn">Edit Reply</button>
-      </div>
+      </section>
+
+      <section class="drawer-overview__section">
+        <div class="drawer-overview__section-title">Lead intelligence</div>
+        <div class="drawer-overview__grid">
+          <div class="drawer-overview__item">
+            <span class="drawer-overview__label">Primary intent</span>
+            <strong class="drawer-overview__value">${esc(primaryIntentLabel)}</strong>
+          </div>
+          <div class="drawer-overview__item">
+            <span class="drawer-overview__label">Disposition</span>
+            <strong class="drawer-overview__value">${esc(dispositionLabel)}</strong>
+          </div>
+        </div>
+        ${tags.length ? `
+          <div class="drawer-overview__chips">
+            ${tags.map((tag) => `<span class="dtl-pill">${esc(tag)}</span>`).join('')}
+          </div>` : `
+          <div class="drawer-overview__empty">AI tags will appear here after classification completes.</div>`}
+      </section>
+
+      ${capturedFields.length ? `
+        <section class="drawer-overview__section">
+          <div class="drawer-overview__section-title">Captured context</div>
+          <div class="drawer-overview__grid">
+            ${capturedFields.map(([key, value]) => `
+              <div class="drawer-overview__item">
+                <span class="drawer-overview__label">${esc(_formatDrawerFieldLabel(key))}</span>
+                <strong class="drawer-overview__value">${esc(value)}</strong>
+              </div>`).join('')}
+          </div>
+        </section>` : ''}
+
+      ${lead.message ? `
+        <section class="drawer-overview__section">
+          <div class="drawer-overview__section-title">Original message</div>
+          <div class="drawer-overview__message">${esc(lead.message)}</div>
+        </section>` : ''}
     </div>`;
-
-  $('outreach-copy-btn').addEventListener('click', () => {
-    const text = document.getElementById(id).value;
-    navigator.clipboard.writeText(text).then(() => {
-      const btn = $('outreach-copy-btn');
-      const orig = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = orig; }, 1500);
-    });
-  });
-
-  $('outreach-edit-btn').addEventListener('click', () => {
-    const ta = document.getElementById(id);
-    const btn = $('outreach-edit-btn');
-    const editing = ta.readOnly;
-    ta.readOnly = !editing;
-    btn.textContent = editing ? 'Lock Reply' : 'Edit Reply';
-    if (editing) ta.focus();
-  });
 }
 
 /* Drawer controls */

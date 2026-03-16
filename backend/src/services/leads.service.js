@@ -310,6 +310,18 @@ const runLeadOperatorAction = async (id, businessId, {
       };
       break;
 
+    case 'ADD_NOTE':
+      if (!operatorNote) {
+        throw new Error('Operator note is required.');
+      }
+      message = `Operator note added. Note: ${operatorNote}`;
+      metadata = {
+        ...metadata,
+        reason: 'OPERATOR_NOTE_ADDED',
+        operatorNote,
+      };
+      break;
+
     default:
       throw new Error(`Unsupported lead operator action: ${action}`);
   }

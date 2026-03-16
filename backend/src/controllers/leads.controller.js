@@ -28,9 +28,17 @@ const statusSchema = z.object({
 });
 
 const operatorActionSchema = z.object({
-  action: z.enum(['MARK_CALLED', 'SCHEDULE_CALLBACK', 'SEND_FEE_DETAILS', 'MARK_HANDOFF_COMPLETE']),
+  action: z.enum(['MARK_CALLED', 'SCHEDULE_CALLBACK', 'SEND_FEE_DETAILS', 'MARK_HANDOFF_COMPLETE', 'ADD_NOTE']),
   note: z.string().max(500).optional(),
   callbackTime: z.string().max(120).optional(),
+}).superRefine((data, ctx) => {
+  if (data.action === 'ADD_NOTE' && !String(data.note || '').trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['note'],
+      message: 'Operator note is required.',
+    });
+  }
 });
 
 function buildLeadRealtimePayload(lead) {

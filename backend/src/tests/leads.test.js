@@ -92,6 +92,49 @@ describe('Leads', () => {
     expect(scheduled.message).toContain('Parent asked for an evening callback.');
   });
 
+  it('POST /api/leads/:id/actions - saves a lightweight operator note', async () => {
+    const created = await request(app)
+      .post('/api/leads')
+      .set(auth())
+      .send({ name: 'Notes Lead', phone: '+91 88888 00035', message: 'Need Class 11 fee details' });
+
+    const res = await request(app)
+      .post(`/api/leads/${created.body.id}/actions`)
+      .set(auth())
+      .send({
+        action: 'ADD_NOTE',
+        note: 'Parent requested evening call and prefers Hindi.',
+      });
+
+    expect(res.status).toBe(200);
+
+    const noteActivity = res.body.activities.find(
+      (activity) => activity.metadata?.reason === 'OPERATOR_NOTE_ADDED'
+    );
+
+    expect(noteActivity).toBeTruthy();
+    expect(noteActivity.metadata.operatorNote).toBe('Parent requested evening call and prefers Hindi.');
+    expect(noteActivity.message).toContain('Operator note added');
+  });
+
+  it('POST /api/leads/:id/actions - rejects empty operator notes', async () => {
+    const created = await request(app)
+      .post('/api/leads')
+      .set(auth())
+      .send({ name: 'Invalid Note Lead', phone: '+91 88888 00036' });
+
+    const res = await request(app)
+      .post(`/api/leads/${created.body.id}/actions`)
+      .set(auth())
+      .send({
+        action: 'ADD_NOTE',
+        note: '   ',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.fieldErrors.note).toContain('Operator note is required.');
+  });
+
   it('POST /api/leads/:id/actions - can close a WhatsApp handoff and move the lead forward', async () => {
     const lead = await prisma.lead.create({
       data: {

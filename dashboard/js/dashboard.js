@@ -30,7 +30,7 @@ let activeDrawerData = null;
 let activeDrawerActionBusy = false;
 let activeDrawerActionPending = null;
 let activeDrawerSelectedAction = null;
-let activeDrawerDraft = { callbackTime: '', note: '' };
+let activeDrawerDraft = { callbackTime: '', note: '', standaloneNote: '' };
 
 /* Maps tableColumns.leads index → sortable field (null = unsortable) */
 const LEAD_SORT_FIELDS = ['name', null, null, 'status', 'priority', 'score', 'createdAt'];
@@ -1547,6 +1547,18 @@ function _resolveDrawerActivityPresentation(act) {
       };
     }
 
+    if (meta.reason === 'OPERATOR_NOTE_ADDED') {
+      return {
+        label: 'Operator note added',
+        icon: '📝',
+        dot: 'dtl-dot--operator',
+        category: 'operator',
+        categoryLabel: 'Operator',
+        emphasis: 'medium',
+        message: meta.operatorNote || act.message || '',
+      };
+    }
+
     if (meta.channel === 'whatsapp' && meta.direction === 'inbound') {
       return {
         label: 'Customer message received',
@@ -1847,6 +1859,7 @@ function _leadDrawerActionToast(action) {
     SCHEDULE_CALLBACK: 'Callback scheduled.',
     SEND_FEE_DETAILS: 'Fee details marked as sent.',
     MARK_HANDOFF_COMPLETE: 'Handoff marked complete.',
+    ADD_NOTE: 'Operator note saved.',
   }[action] || 'Lead action saved.';
 }
 
@@ -1858,6 +1871,8 @@ async function _runLeadDrawerAction(action) {
     : '';
   const note = action === 'SCHEDULE_CALLBACK'
     ? String(activeDrawerDraft.note || '').trim()
+    : action === 'ADD_NOTE'
+      ? String(activeDrawerDraft.standaloneNote || '').trim()
     : '';
 
   try {
@@ -1869,7 +1884,7 @@ async function _runLeadDrawerAction(action) {
 
     activeDrawerActionPending = null;
     activeDrawerSelectedAction = null;
-    activeDrawerDraft = { callbackTime: '', note: '' };
+    activeDrawerDraft = { callbackTime: '', note: '', standaloneNote: '' };
     ui?.showToast(_leadDrawerActionToast(action), 'success');
     _applyLeadDrawerData(payload);
   } catch (err) {
@@ -1964,6 +1979,119 @@ function _buildLeadFocusCardHtml({ lead, activities, whatsappConversation }) {
     </div>`;
 }
 
+function _getLeadOperatorNoteContextLabel(reason) {
+  return {
+    OPERATOR_NOTE_ADDED: 'Operator note',
+    OPERATOR_CALLBACK_SCHEDULED: 'Callback note',
+    OPERATOR_MARKED_CALLED: 'Call update',
+    OPERATOR_FEE_DETAILS_SENT: 'Fee follow-up',
+    OPERATOR_HANDOFF_COMPLETED: 'Handoff note',
+  }[reason] || 'Operator note';
+}
+
+function _getLeadOperatorNotes(activities = []) {
+  return [...activities]
+    .filter((activity) => {
+      const meta = activity?.metadata || {};
+      return meta.reason === 'OPERATOR_NOTE_ADDED' || Boolean(meta.operatorNote);
+    })
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map((activity) => ({
+      id: activity.id,
+      text: activity.metadata?.operatorNote || '',
+      createdAt: activity.createdAt,
+      label: _getLeadOperatorNoteContextLabel(activity.metadata?.reason),
+    }))
+    .filter((note) => note.text);
+}
+
+function _getLatestCallbackMemory(activities = []) {
+  const latest = [...activities]
+    .filter((activity) =>
+      activity.type === 'FOLLOW_UP_SCHEDULED'
+      && activity.metadata?.reason === 'OPERATOR_CALLBACK_SCHEDULED'
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+
+  if (!latest) return null;
+
+  return {
+    callbackTime: latest.metadata?.callbackTime || null,
+    note: latest.metadata?.operatorNote || null,
+    createdAt: latest.createdAt,
+  };
+}
+
+function _buildLeadOperatorNotesHtml({ activities = [] }) {
+  const notes = _getLeadOperatorNotes(activities).slice(0, 3);
+  const latestNote = notes[0] || null;
+  const olderNotes = latestNote ? notes.slice(1) : notes;
+  const latestCallback = _getLatestCallbackMemory(activities);
+  const noteDraft = activeDrawerDraft.standaloneNote || '';
+  const saveDisabled = activeDrawerActionBusy || !String(noteDraft).trim();
+
+  return `
+    <div class="drawer-notes-card">
+      <div class="drawer-notes-card__header">
+        <div>
+          <div class="drawer-notes-card__eyebrow">Operator notes</div>
+          <div class="drawer-notes-card__title">Keep useful human follow-up context on this lead</div>
+        </div>
+        <span class="drawer-notes-card__badge">Internal</span>
+      </div>
+
+      ${latestCallback ? `
+        <div class="drawer-notes-card__memory">
+          <div class="drawer-notes-card__memory-label">Latest callback memory</div>
+          <div class="drawer-notes-card__memory-value">${_escDrawer(latestCallback.callbackTime || 'Scheduled callback')}</div>
+          <div class="drawer-notes-card__memory-sub">
+            ${_escDrawer(latestCallback.note || `Last updated on ${_fmtDrawerTime(latestCallback.createdAt)}.`)}
+          </div>
+        </div>` : ''}
+
+      ${latestNote ? `
+        <div class="drawer-notes-card__latest">
+          <span class="drawer-notes-card__latest-label">Latest note</span>
+          <p class="drawer-notes-card__latest-text">${_escDrawer(latestNote.text)}</p>
+        </div>` : ''}
+
+      ${olderNotes.length ? `
+        <div class="drawer-note-list">
+          ${olderNotes.map((note) => `
+            <div class="drawer-note-item">
+              <div class="drawer-note-item__meta">
+                <span class="drawer-note-item__kind">${_escDrawer(note.label)}</span>
+                <span class="drawer-note-item__time">${_escDrawer(_fmtDrawerTime(note.createdAt))}</span>
+              </div>
+              <div class="drawer-note-item__text">${_escDrawer(note.text)}</div>
+            </div>`).join('')}
+        </div>` : !latestNote ? `
+        <div class="drawer-notes-card__empty">
+          No operator notes yet. Add small reminders like “prefers Hindi” or “asked about Class 11 batch”.
+        </div>` : ''}
+
+      <div class="drawer-notes-card__composer">
+        <label class="drawer-notes-card__field">
+          <span>New note</span>
+          <textarea
+            id="drawer-standalone-note"
+            rows="2"
+            placeholder="Add a quick operator note for follow-up"
+            ${activeDrawerActionPending === 'ADD_NOTE' ? 'disabled' : ''}
+          >${_escDrawer(noteDraft)}</textarea>
+        </label>
+        <button
+          type="button"
+          class="drawer-notes-card__save${activeDrawerActionPending === 'ADD_NOTE' ? ' is-loading' : ''}"
+          data-lead-action="ADD_NOTE"
+          ${saveDisabled ? 'disabled' : ''}
+        >
+          ${activeDrawerActionPending === 'ADD_NOTE' ? 'Saving…' : 'Save note'}
+        </button>
+      </div>
+    </div>`;
+}
+
 function _syncDrawerLeadCache(data) {
   const lead = data?.lead;
   if (!lead) return;
@@ -2002,7 +2130,7 @@ async function openLeadDrawer(leadId, { preserveTab = false } = {}) {
   activeDrawerActionPending = null;
   activeDrawerActionBusy = false;
   activeDrawerSelectedAction = null;
-  activeDrawerDraft = { callbackTime: '', note: '' };
+  activeDrawerDraft = { callbackTime: '', note: '', standaloneNote: '' };
   const targetTab = preserveTab ? _getActiveDrawerTab() : 'activity';
 
   /* Populate header from cached lead while we fetch */
@@ -2057,7 +2185,7 @@ function closeLeadDrawer() {
   activeDrawerActionBusy = false;
   activeDrawerActionPending = null;
   activeDrawerSelectedAction = null;
-  activeDrawerDraft = { callbackTime: '', note: '' };
+  activeDrawerDraft = { callbackTime: '', note: '', standaloneNote: '' };
 }
 
 function _renderDrawerTimeline(data) {
@@ -2091,6 +2219,7 @@ function _renderDrawerTimeline(data) {
   if (!activities.length) {
     $('drawer-timeline').innerHTML = `
       ${_buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })}
+      ${_buildLeadOperatorNotesHtml({ activities })}
       ${_buildLeadFocusCardHtml({ lead, activities, whatsappConversation })}
       ${_buildWhatsAppSummaryHtml(whatsappConversation)}
       <div class="drawer-empty">📭<br>No activity recorded yet.</div>`;
@@ -2109,6 +2238,8 @@ function _renderDrawerTimeline(data) {
     } else if (act.type === 'AGENT_PRIORITIZED') {
       const score = meta?.priorityScore ?? meta?.score;
       if (score != null) metaHtml = `<div class="dtl-pills"><span class="dtl-pill">Score: ${_escDrawer(score)}</span></div>`;
+    } else if (act.type === 'FOLLOW_UP_SCHEDULED' && meta?.callbackTime) {
+      metaHtml = `<div class="dtl-pills"><span class="dtl-pill">Callback: ${_escDrawer(meta.callbackTime)}</span></div>`;
     } else if (meta?.channel === 'whatsapp' && meta?.direction === 'outbound' && meta?.conversationState?.status) {
       metaHtml = `<div class="dtl-pills"><span class="dtl-pill">${_escDrawer(_titleCaseDrawer(meta.conversationState.status))}</span></div>`;
     }
@@ -2130,6 +2261,7 @@ function _renderDrawerTimeline(data) {
 
   $('drawer-timeline').innerHTML = `
     ${_buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })}
+    ${_buildLeadOperatorNotesHtml({ activities })}
     ${_buildLeadFocusCardHtml({ lead, activities, whatsappConversation })}
     ${_buildWhatsAppSummaryHtml(whatsappConversation)}
     <div class="drawer-timeline">${html}</div>`;
@@ -2260,7 +2392,7 @@ $('drawer-timeline')?.addEventListener('click', (event) => {
   const cancelButton = event.target.closest('[data-lead-action-cancel]');
   if (cancelButton) {
     activeDrawerSelectedAction = null;
-    activeDrawerDraft = { callbackTime: '', note: '' };
+    activeDrawerDraft = { ...activeDrawerDraft, callbackTime: '', note: '' };
     if (activeDrawerData) _renderDrawerTimeline(activeDrawerData);
     return;
   }
@@ -2285,6 +2417,13 @@ $('drawer-timeline')?.addEventListener('input', (event) => {
   }
   if (event.target.id === 'drawer-action-note') {
     activeDrawerDraft.note = event.target.value;
+  }
+  if (event.target.id === 'drawer-standalone-note') {
+    activeDrawerDraft.standaloneNote = event.target.value;
+    const saveButton = event.currentTarget.querySelector('[data-lead-action="ADD_NOTE"]');
+    if (saveButton && activeDrawerActionPending !== 'ADD_NOTE') {
+      saveButton.disabled = activeDrawerActionBusy || !String(activeDrawerDraft.standaloneNote).trim();
+    }
   }
 });
 

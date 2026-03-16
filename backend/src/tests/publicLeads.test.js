@@ -40,6 +40,14 @@ describe('Public Lead Capture', () => {
   const url = () => `/api/public/${ctx.slug}/leads`;
   const validBody = { name: 'Test Customer', phone: '+91 99999 00001' };
 
+  async function authHeader() {
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ businessSlug: ctx.slug, email: ctx.email, password: ctx.password });
+
+    return { Authorization: `Bearer ${login.body.token}` };
+  }
+
   it('POST creates a lead and returns 201 {ok:true}', async () => {
     const res = await request(app).post(url()).send(validBody);
 
@@ -102,6 +110,18 @@ describe('Public Lead Capture', () => {
     });
     expect(rawLead).toBeTruthy();
 
+    expect(broadcast).toHaveBeenCalledWith(
+      ctx.business.id,
+      'lead:new',
+      expect.objectContaining({
+        id: rawLead.id,
+        phone: '+91 99999 11111',
+        status: 'NEW',
+        priority: 'LOW',
+        tags: [],
+      })
+    );
+
     const earlyActivities = await prisma.leadActivity.count({ where: { leadId: rawLead.id } });
     expect(earlyActivities).toBe(0);
 
@@ -125,5 +145,44 @@ describe('Public Lead Capture', () => {
         tags: expect.any(Array),
       })
     );
+  });
+
+  it('fresh website leads are returned by the dashboard API even before classification finishes', async () => {
+    const actualRun = AgentEngine.run;
+    let releaseEngine;
+    const engineGate = new Promise((resolve) => {
+      releaseEngine = resolve;
+    });
+    jest.spyOn(AgentEngine, 'run').mockImplementation(async (...args) => {
+      await engineGate;
+      return actualRun(...args);
+    });
+
+    const res = await request(app).post(url()).send({
+      name: 'Dashboard Visible Lead',
+      phone: '+91 99999 22222',
+      message: 'Please share admission details',
+    });
+
+    expect(res.status).toBe(201);
+
+    const leadsRes = await request(app)
+      .get('/api/admin/leads')
+      .set(await authHeader());
+
+    expect(leadsRes.status).toBe(200);
+    expect(leadsRes.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          phone: '+91 99999 22222',
+          status: 'NEW',
+          priority: 'LOW',
+          tags: [],
+        }),
+      ])
+    );
+
+    releaseEngine();
+    await new Promise((resolve) => setTimeout(resolve, 150));
   });
 });

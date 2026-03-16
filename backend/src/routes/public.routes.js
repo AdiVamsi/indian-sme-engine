@@ -49,11 +49,23 @@ const bodySchema = z.object({
 const router = Router();
 
 router.post('/:businessSlug/leads', limiter, async (req, res) => {
+  const reqLogger = req.log || logger;
+
   try {
     const data = bodySchema.parse(req.body);
+    reqLogger.info(
+      {
+        slug: req.params.businessSlug,
+        phone: data.phone,
+        hasEmail: Boolean(data.email),
+        hasMessage: Boolean(data.message),
+      },
+      'Public form submission received'
+    );
 
     /* Honeypot — return fake 200 silently */
     if (data.hp) {
+      reqLogger.info({ slug: req.params.businessSlug }, 'Public form honeypot triggered');
       return res.status(200).json({ ok: true });
     }
 
@@ -64,11 +76,18 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
 
     const business = await findBusinessBySlug(req.params.businessSlug);
     if (!business) {
-      console.warn('[Public] Business not found for slug:', req.params.businessSlug);
+      reqLogger.warn({ slug: req.params.businessSlug }, 'Public form business not found');
       return res.status(404).json({ error: 'Business not found' });
     }
 
-    console.log('[Public] Creating lead for business:', business.id, '| slug:', req.params.businessSlug);
+    reqLogger.info(
+      {
+        slug: req.params.businessSlug,
+        businessId: business.id,
+        businessName: business.name,
+      },
+      'Public form business resolved'
+    );
 
     const lead = await saveRawLead(business.id, {
       name: data.name,
@@ -76,7 +95,36 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
       email,
       message,
     });
+    reqLogger.info(
+      {
+        slug: req.params.businessSlug,
+        businessId: business.id,
+        leadId: lead.id,
+        source: lead.source,
+      },
+      'Public lead saved'
+    );
 
+    // Make website leads visible in open dashboards immediately, even if
+    // async classification is still running or later fails.
+    emitLeadCreated(business.id, lead);
+    reqLogger.info(
+      {
+        slug: req.params.businessSlug,
+        businessId: business.id,
+        leadId: lead.id,
+      },
+      'Public lead realtime broadcast sent'
+    );
+
+    reqLogger.info(
+      {
+        slug: req.params.businessSlug,
+        businessId: business.id,
+        leadId: lead.id,
+      },
+      'Public lead classification started'
+    );
     void processLeadAfterSave(lead, {
       businessId: business.id,
       source: lead.source,
@@ -84,6 +132,17 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
       receivedAt: lead.receivedAt,
     })
       .then((processedLead) => {
+        reqLogger.info(
+          {
+            slug: req.params.businessSlug,
+            businessId: business.id,
+            leadId: processedLead.id,
+            priority: processedLead.priority,
+            priorityScore: processedLead.priorityScore,
+            tags: processedLead.tags,
+          },
+          'Public lead classification completed'
+        );
         emitLeadCreated(business.id, processedLead);
       })
       .catch((err) => {
@@ -93,6 +152,14 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
         );
       });
 
+    reqLogger.info(
+      {
+        slug: req.params.businessSlug,
+        businessId: business.id,
+        leadId: lead.id,
+      },
+      'Public lead response returned'
+    );
     return res.status(201).json({ ok: true });
   } catch (err) {
     if (err.name === 'ZodError') {
@@ -100,7 +167,7 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
       return res.status(400).json({ error: firstError });
     }
 
-    console.error(err);
+    reqLogger.error({ err, slug: req.params.businessSlug }, 'Public lead request failed');
     return res.status(500).json({ error: 'Server error' });
   }
 });

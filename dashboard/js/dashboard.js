@@ -26,7 +26,11 @@ let wsClient = null;
 let expiryTimer = null;
 let _leadsSort = { col: null, dir: 'asc' };
 let activeDrawerLeadId = null;
+let activeDrawerData = null;
 let activeDrawerActionBusy = false;
+let activeDrawerActionPending = null;
+let activeDrawerSelectedAction = null;
+let activeDrawerDraft = { callbackTime: '', note: '' };
 
 /* Maps tableColumns.leads index → sortable field (null = unsortable) */
 const LEAD_SORT_FIELDS = ['name', null, null, 'status', 'priority', 'score', 'createdAt'];
@@ -1428,6 +1432,10 @@ function _escDrawer(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function _escDrawerAttr(s) {
+  return _escDrawer(s).replace(/"/g, '&quot;');
+}
+
 function _fmtDrawerTime(iso) {
   try {
     return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
@@ -1636,9 +1644,39 @@ function _getLeadDrawerQuickActions({ lead, activities, whatsappConversation }) 
   return actions;
 }
 
+function _getRecommendedLeadAction(actions = [], whatsappConversation) {
+  if (!actions.length) return null;
+  if (whatsappConversation?.conversationStatus === 'handoff') {
+    return actions.find((item) => item.action === 'MARK_HANDOFF_COMPLETE')?.action || actions[0].action;
+  }
+  return actions.find((item) => item.action === 'SCHEDULE_CALLBACK')?.action || actions[0].action;
+}
+
+function _getLeadDrawerActionLabel(action, { isPending = false, isSelected = false } = {}) {
+  switch (action) {
+    case 'MARK_CALLED':
+      return isPending ? 'Saving…' : 'Mark as Called';
+    case 'SCHEDULE_CALLBACK':
+      if (isPending) return 'Scheduling…';
+      return isSelected ? 'Save Callback' : 'Schedule Callback';
+    case 'SEND_FEE_DETAILS':
+      return isPending ? 'Saving…' : 'Send Fee Details';
+    case 'MARK_HANDOFF_COMPLETE':
+      return isPending ? 'Saving…' : 'Mark Handoff Complete';
+    default:
+      return isPending ? 'Saving…' : _titleCaseDrawer(action);
+  }
+}
+
 function _buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation }) {
   const actions = _getLeadDrawerQuickActions({ lead, activities, whatsappConversation });
   if (!actions.length) return '';
+
+  const recommendedAction = _getRecommendedLeadAction(actions, whatsappConversation);
+  const showCallbackFields = activeDrawerSelectedAction === 'SCHEDULE_CALLBACK'
+    && actions.some((item) => item.action === 'SCHEDULE_CALLBACK');
+  const callbackDraft = activeDrawerDraft.callbackTime || '';
+  const noteDraft = activeDrawerDraft.note || '';
 
   return `
     <div class="drawer-actions-card">
@@ -1650,26 +1688,40 @@ function _buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })
         <span class="drawer-actions-card__badge">Academy workflow</span>
       </div>
 
-      <div class="drawer-actions-card__fields">
-        <label class="drawer-actions-card__field">
-          <span>Callback time</span>
-          <input id="drawer-callback-time" type="text" placeholder="Today 6:30 PM" />
-        </label>
-        <label class="drawer-actions-card__field drawer-actions-card__field--full">
-          <span>Operator note</span>
-          <textarea id="drawer-action-note" rows="2" placeholder="Optional note for the activity timeline"></textarea>
-        </label>
-      </div>
-
       <div class="drawer-actions-card__buttons">
         ${actions.map((item) => `
           <button
             type="button"
-            class="drawer-action-btn drawer-action-btn--${_escDrawer(item.tone)}"
+            class="drawer-action-btn drawer-action-btn--${_escDrawer(item.tone)}${item.action === recommendedAction ? ' is-recommended' : ''}${item.action === activeDrawerSelectedAction ? ' is-selected' : ''}${item.action === activeDrawerActionPending ? ' is-loading' : ''}"
             data-lead-action="${_escDrawer(item.action)}"
             title="${_escDrawer(item.helper)}"
-          >${_escDrawer(item.label)}</button>`).join('')}
+            ${activeDrawerActionBusy ? 'disabled' : ''}
+          >
+            <span class="drawer-action-btn__label">${_escDrawer(_getLeadDrawerActionLabel(item.action, {
+              isPending: item.action === activeDrawerActionPending,
+              isSelected: item.action === activeDrawerSelectedAction,
+            }))}</span>
+            ${item.action === recommendedAction ? '<span class="drawer-action-btn__badge">Recommended</span>' : ''}
+          </button>`).join('')}
       </div>
+
+      ${showCallbackFields ? `
+        <div class="drawer-actions-card__detail">
+          <div class="drawer-actions-card__detail-header">
+            <div class="drawer-actions-card__detail-title">Schedule the callback</div>
+            <button type="button" class="drawer-actions-card__cancel" data-lead-action-cancel="SCHEDULE_CALLBACK">Cancel</button>
+          </div>
+          <div class="drawer-actions-card__fields">
+            <label class="drawer-actions-card__field">
+              <span>Callback time</span>
+              <input id="drawer-callback-time" type="text" placeholder="Today 6:30 PM" value="${_escDrawerAttr(callbackDraft)}" ${activeDrawerActionPending === 'SCHEDULE_CALLBACK' ? 'disabled' : ''} />
+            </label>
+            <label class="drawer-actions-card__field drawer-actions-card__field--full">
+              <span>Operator note</span>
+              <textarea id="drawer-action-note" rows="2" placeholder="Optional note for the activity timeline" ${activeDrawerActionPending === 'SCHEDULE_CALLBACK' ? 'disabled' : ''}>${_escDrawer(noteDraft)}</textarea>
+            </label>
+          </div>
+        </div>` : ''}
 
       <p class="drawer-actions-card__hint">Use these after the AI handoff to keep the lead moving and leave a clear trail for your team.</p>
     </div>`;
@@ -1691,9 +1743,6 @@ function _setActiveDrawerTab(target = 'activity') {
 
 function _setDrawerActionButtonsBusy(isBusy) {
   activeDrawerActionBusy = isBusy;
-  document.querySelectorAll('[data-lead-action]').forEach((button) => {
-    button.disabled = isBusy;
-  });
 }
 
 function _leadDrawerActionToast(action) {
@@ -1708,26 +1757,88 @@ function _leadDrawerActionToast(action) {
 async function _runLeadDrawerAction(action) {
   if (!activeDrawerLeadId || activeDrawerActionBusy) return;
 
-  const callbackTime = $('drawer-callback-time')?.value.trim() || '';
-  const note = $('drawer-action-note')?.value.trim() || '';
+  const callbackTime = action === 'SCHEDULE_CALLBACK'
+    ? String(activeDrawerDraft.callbackTime || '').trim()
+    : '';
+  const note = action === 'SCHEDULE_CALLBACK'
+    ? String(activeDrawerDraft.note || '').trim()
+    : '';
 
   try {
+    activeDrawerActionPending = action;
     _setDrawerActionButtonsBusy(true);
-    await api.runLeadAction(activeDrawerLeadId, { action, callbackTime, note });
+    if (activeDrawerData) _renderDrawerTimeline(activeDrawerData);
+
+    const payload = await api.runLeadAction(activeDrawerLeadId, { action, callbackTime, note });
+
+    activeDrawerActionPending = null;
+    activeDrawerSelectedAction = null;
+    activeDrawerDraft = { callbackTime: '', note: '' };
     ui?.showToast(_leadDrawerActionToast(action), 'success');
-    await openLeadDrawer(activeDrawerLeadId, { preserveTab: true });
+    _applyLeadDrawerData(payload);
   } catch (err) {
     console.error('[Dashboard] runLeadAction failed:', err);
+    activeDrawerActionPending = null;
     ui?.showToast(err.message || 'Could not save the lead action.', 'error');
+    if (activeDrawerData) _renderDrawerTimeline(activeDrawerData);
   } finally {
     _setDrawerActionButtonsBusy(false);
   }
+}
+
+function _deriveLeadDrawerDisplayMeta(data) {
+  const activities = data?.activities || [];
+  const classified = activities.find((activity) => activity.type === 'AGENT_CLASSIFIED')?.metadata || {};
+  const prioritized = activities.find((activity) => activity.type === 'AGENT_PRIORITIZED')?.metadata || {};
+  const priorityScore = prioritized.priorityScore ?? 0;
+
+  return {
+    priorityScore,
+    priority: priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW',
+    tags: Array.isArray(classified.tags) ? classified.tags : [],
+    source: classified.source || 'web',
+  };
+}
+
+function _syncDrawerLeadCache(data) {
+  const lead = data?.lead;
+  if (!lead) return;
+
+  const derived = _deriveLeadDrawerDisplayMeta(data);
+  const cached = _allLeads.find((item) => item.id === lead.id);
+
+  if (cached) {
+    Object.assign(cached, {
+      ...cached,
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      message: lead.message,
+      status: lead.status,
+      ...derived,
+    });
+  }
+
+  syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
+}
+
+function _applyLeadDrawerData(data) {
+  if (!data) return;
+  activeDrawerData = data;
+  _syncDrawerLeadCache(data);
+  _renderDrawerTimeline(data);
+  _renderDrawerOverview(data.lead);
 }
 
 async function openLeadDrawer(leadId, { preserveTab = false } = {}) {
   const drawer = $('lead-drawer');
   if (!drawer) return;
   activeDrawerLeadId = leadId;
+  activeDrawerData = null;
+  activeDrawerActionPending = null;
+  activeDrawerActionBusy = false;
+  activeDrawerSelectedAction = null;
+  activeDrawerDraft = { callbackTime: '', note: '' };
   const targetTab = preserveTab ? _getActiveDrawerTab() : 'activity';
 
   /* Populate header from cached lead while we fetch */
@@ -1772,8 +1883,7 @@ async function openLeadDrawer(leadId, { preserveTab = false } = {}) {
   ]);
 
   if (actRes.status === 'fulfilled') {
-    _renderDrawerTimeline(actRes.value);
-    _renderDrawerOverview(actRes.value?.lead ?? cached);
+    _applyLeadDrawerData(actRes.value);
   } else {
     $('drawer-timeline').innerHTML =
       `<p class="drawer-error">Could not load timeline: ${_escDrawer(actRes.reason?.message)}</p>`;
@@ -1800,7 +1910,11 @@ function closeLeadDrawer() {
   drawer.classList.remove('is-open');
   document.body.style.overflow = '';
   activeDrawerLeadId = null;
+  activeDrawerData = null;
   activeDrawerActionBusy = false;
+  activeDrawerActionPending = null;
+  activeDrawerSelectedAction = null;
+  activeDrawerDraft = { callbackTime: '', note: '' };
 }
 
 function _renderDrawerTimeline(data) {
@@ -2000,9 +2114,35 @@ document.querySelectorAll('.drawer__tab').forEach((tab) => {
 });
 
 $('drawer-timeline')?.addEventListener('click', (event) => {
+  const cancelButton = event.target.closest('[data-lead-action-cancel]');
+  if (cancelButton) {
+    activeDrawerSelectedAction = null;
+    activeDrawerDraft = { callbackTime: '', note: '' };
+    if (activeDrawerData) _renderDrawerTimeline(activeDrawerData);
+    return;
+  }
+
   const button = event.target.closest('[data-lead-action]');
   if (!button) return;
-  _runLeadDrawerAction(button.dataset.leadAction);
+  const action = button.dataset.leadAction;
+
+  if (action === 'SCHEDULE_CALLBACK' && activeDrawerSelectedAction !== 'SCHEDULE_CALLBACK') {
+    activeDrawerSelectedAction = 'SCHEDULE_CALLBACK';
+    if (activeDrawerData) _renderDrawerTimeline(activeDrawerData);
+    requestAnimationFrame(() => $('drawer-callback-time')?.focus());
+    return;
+  }
+
+  _runLeadDrawerAction(action);
+});
+
+$('drawer-timeline')?.addEventListener('input', (event) => {
+  if (event.target.id === 'drawer-callback-time') {
+    activeDrawerDraft.callbackTime = event.target.value;
+  }
+  if (event.target.id === 'drawer-action-note') {
+    activeDrawerDraft.note = event.target.value;
+  }
 });
 
 /* ─────────────────────────────────────────────────

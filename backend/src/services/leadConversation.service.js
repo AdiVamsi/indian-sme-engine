@@ -47,6 +47,15 @@ function getWhatsAppActivities(activities = []) {
   return activities.filter((activity) => activity?.metadata?.channel === 'whatsapp');
 }
 
+function getLatestScheduledCallback(activities = []) {
+  return [...activities]
+    .filter((activity) =>
+      activity.type === 'FOLLOW_UP_SCHEDULED'
+      && activity?.metadata?.reason === 'OPERATOR_CALLBACK_SCHEDULED'
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0] || null;
+}
+
 function getLatestConversationState(whatsAppActivities = []) {
   for (const activity of [...whatsAppActivities].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))) {
     if (activity?.metadata?.conversationState) {
@@ -81,13 +90,23 @@ function buildCapturedFields(conversationState, classifiedMeta) {
   };
 }
 
-function buildRecommendedNextAction({ conversationState, capturedFields, classifiedMeta, prioritizedMeta }) {
+function buildRecommendedNextAction({
+  conversationState,
+  capturedFields,
+  classifiedMeta,
+  prioritizedMeta,
+  latestCallback,
+}) {
   const status = conversationState?.status;
   if (status === 'awaiting_user') {
     return PENDING_FIELD_ACTIONS[conversationState.pendingField] || 'Wait for the next WhatsApp reply before handing off.';
   }
 
   if (status === 'handoff') {
+    if (latestCallback?.metadata?.callbackTime) {
+      return `Callback already scheduled for ${latestCallback.metadata.callbackTime}. Follow up then or update the callback plan in Activity.`;
+    }
+
     const primaryIntent = conversationState?.flowIntent || classifiedMeta.bestCategory;
 
     if (primaryIntent === 'CALLBACK_REQUEST') {
@@ -141,6 +160,7 @@ function buildWhatsAppConversationSummary({ lead, activities = [] }) {
 
   const prioritizedMeta = getPrioritizationMeta(activities);
   const conversationState = getLatestConversationState(whatsAppActivities);
+  const latestCallback = getLatestScheduledCallback(activities);
   const primaryIntent = conversationState?.flowIntent || classifiedMeta.bestCategory || null;
   const capturedFields = buildCapturedFields(conversationState, classifiedMeta);
   const transcript = buildTranscript(whatsAppActivities);
@@ -157,8 +177,14 @@ function buildWhatsAppConversationSummary({ lead, activities = [] }) {
       capturedFields,
       classifiedMeta,
       prioritizedMeta,
+      latestCallback,
     }),
     transcript,
+    latestCallback: latestCallback ? {
+      callbackTime: latestCallback.metadata?.callbackTime || null,
+      createdAt: latestCallback.createdAt,
+      note: latestCallback.metadata?.operatorNote || null,
+    } : null,
     latestState: conversationState,
     priorityScore: prioritizedMeta.priorityScore || 0,
     leadDisposition: classifiedMeta.leadDisposition || null,

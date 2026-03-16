@@ -8,6 +8,7 @@
  */
 
 import { DashAPI } from './api.js';
+import { getCallbackCue } from './callbacks.js';
 import { DashUI } from './ui.js';
 import { connectRealtime } from './realtime.js';
 import { BUSINESS_SLUG } from './config.js';
@@ -1650,6 +1651,11 @@ function _resolveDrawerActivityPresentation(act) {
 function _buildWhatsAppSummaryHtml(summary) {
   if (!summary) return '';
 
+  const callbackCue = summary.latestCallback
+    ? getCallbackCue({
+      callbackTime: summary.latestCallback.callbackTime,
+    })
+    : null;
   const fields = Object.entries(summary.capturedFields || {})
     .filter(([, value]) => value)
     .map(([key, value]) => `
@@ -1695,6 +1701,15 @@ function _buildWhatsAppSummaryHtml(summary) {
       </div>
 
       ${fields ? `<div class="wa-summary__fields">${fields}</div>` : '<div class="wa-summary__empty">No captured fields yet. Use the transcript below for context.</div>'}
+
+      ${summary.latestCallback?.callbackTime ? `
+        <div class="wa-summary__next">
+          <span class="wa-summary__next-label">Callback plan</span>
+          <p class="wa-summary__next-text">
+            ${_escDrawer(summary.latestCallback.callbackTime)}
+            ${callbackCue ? `<span class="callback-status-badge callback-status-badge--${_escDrawer(callbackCue.state)}">${_escDrawer(callbackCue.stateLabel)}</span>` : ''}
+          </p>
+        </div>` : ''}
 
       <div class="wa-summary__next">
         <span class="wa-summary__next-label">Recommended next action</span>
@@ -2015,10 +2030,16 @@ function _getLatestCallbackMemory(activities = []) {
 
   if (!latest) return null;
 
+  const cue = getCallbackCue({
+    callbackTime: latest.metadata?.callbackTime || null,
+  });
+
   return {
     callbackTime: latest.metadata?.callbackTime || null,
+    callbackScheduledAt: latest.metadata?.callbackScheduledAt || null,
     note: latest.metadata?.operatorNote || null,
     createdAt: latest.createdAt,
+    cue,
   };
 }
 
@@ -2029,6 +2050,8 @@ function _buildLeadOperatorNotesHtml({ activities = [] }) {
   const latestCallback = _getLatestCallbackMemory(activities);
   const noteDraft = activeDrawerDraft.standaloneNote || '';
   const saveDisabled = activeDrawerActionBusy || !String(noteDraft).trim();
+  const callbackTone = latestCallback?.cue?.state || 'scheduled';
+  const callbackToneLabel = latestCallback?.cue?.badgeLabel || 'Callback scheduled';
 
   return `
     <div class="drawer-notes-card">
@@ -2041,12 +2064,18 @@ function _buildLeadOperatorNotesHtml({ activities = [] }) {
       </div>
 
       ${latestCallback ? `
-        <div class="drawer-notes-card__memory">
-          <div class="drawer-notes-card__memory-label">Latest callback memory</div>
-          <div class="drawer-notes-card__memory-value">${_escDrawer(latestCallback.callbackTime || 'Scheduled callback')}</div>
+        <div class="drawer-notes-card__memory drawer-notes-card__memory--${_escDrawer(callbackTone)}">
+          <div class="drawer-notes-card__memory-head">
+            <div>
+              <div class="drawer-notes-card__memory-label">Latest callback memory</div>
+              <div class="drawer-notes-card__memory-value">${_escDrawer(latestCallback.callbackTime || 'Scheduled callback')}</div>
+            </div>
+            <span class="callback-status-badge callback-status-badge--${_escDrawer(callbackTone)}">${_escDrawer(latestCallback.cue?.stateLabel || 'Scheduled')}</span>
+          </div>
           <div class="drawer-notes-card__memory-sub">
             ${_escDrawer(latestCallback.note || `Last updated on ${_fmtDrawerTime(latestCallback.createdAt)}.`)}
           </div>
+          <div class="drawer-notes-card__memory-meta">${_escDrawer(callbackToneLabel)}</div>
         </div>` : ''}
 
       ${latestNote ? `
@@ -2097,6 +2126,7 @@ function _syncDrawerLeadCache(data) {
   if (!lead) return;
 
   const derived = _deriveLeadDrawerDisplayMeta(data);
+  const latestCallback = _getLatestCallbackMemory(data?.activities || []);
   const cached = _allLeads.find((item) => item.id === lead.id);
 
   if (cached) {
@@ -2107,6 +2137,8 @@ function _syncDrawerLeadCache(data) {
       email: lead.email,
       message: lead.message,
       status: lead.status,
+      callbackTime: latestCallback?.callbackTime || null,
+      callbackScheduledAt: latestCallback?.createdAt || null,
       ...derived,
     });
   }
@@ -2239,7 +2271,14 @@ function _renderDrawerTimeline(data) {
       const score = meta?.priorityScore ?? meta?.score;
       if (score != null) metaHtml = `<div class="dtl-pills"><span class="dtl-pill">Score: ${_escDrawer(score)}</span></div>`;
     } else if (act.type === 'FOLLOW_UP_SCHEDULED' && meta?.callbackTime) {
-      metaHtml = `<div class="dtl-pills"><span class="dtl-pill">Callback: ${_escDrawer(meta.callbackTime)}</span></div>`;
+      const callbackCue = getCallbackCue({
+        callbackTime: meta.callbackTime,
+      });
+      metaHtml = `
+        <div class="dtl-pills">
+          <span class="dtl-pill">Callback: ${_escDrawer(meta.callbackTime)}</span>
+          <span class="dtl-pill dtl-pill--callback-${_escDrawer(callbackCue.state)}">${_escDrawer(callbackCue.stateLabel)}</span>
+        </div>`;
     } else if (meta?.channel === 'whatsapp' && meta?.direction === 'outbound' && meta?.conversationState?.status) {
       metaHtml = `<div class="dtl-pills"><span class="dtl-pill">${_escDrawer(_titleCaseDrawer(meta.conversationState.status))}</span></div>`;
     }
@@ -2288,6 +2327,8 @@ function _renderDrawerOverview(data) {
   const tags = Array.isArray(classified.tags) ? classified.tags : [];
   const capturedFields = Object.entries(whatsappConversation?.capturedFields || {}).filter(([, value]) => value);
   const conversationStatus = whatsappConversation?.conversationStatus || null;
+  const latestCallback = _getLatestCallbackMemory(activities);
+  const callbackCue = latestCallback?.cue || null;
   const lastCustomerActivity = _getLastCustomerActivityText({ lead, activities, source });
   const summaryText = whatsappConversation?.recommendedNextAction
     || classified.suggestedNextAction
@@ -2306,6 +2347,7 @@ function _renderDrawerOverview(data) {
         <div class="drawer-overview__badges">
           <span class="drawer-overview__badge drawer-overview__badge--source">${esc(sourceLabel)}</span>
           <span class="drawer-overview__badge drawer-overview__badge--status">${esc(_titleCaseDrawer(lead.status || 'NEW'))}</span>
+          ${callbackCue ? `<span class="drawer-overview__badge drawer-overview__badge--callback drawer-overview__badge--callback-${esc(callbackCue.state)}">${esc(callbackCue.badgeLabel)}</span>` : ''}
           ${conversationStatus ? `<span class="drawer-overview__badge drawer-overview__badge--conversation">${esc(whatsappConversation.conversationStatusLabel || _titleCaseDrawer(conversationStatus))}</span>` : ''}
         </div>
         <p class="drawer-overview__summary">${esc(summaryText)}</p>
@@ -2332,6 +2374,11 @@ function _renderDrawerOverview(data) {
             <span class="drawer-overview__label">Score</span>
             <strong class="drawer-overview__value">${esc(priorityScore)}</strong>
           </div>
+          ${latestCallback?.callbackTime ? `
+            <div class="drawer-overview__item">
+              <span class="drawer-overview__label">Latest Callback</span>
+              <strong class="drawer-overview__value">${esc(latestCallback.callbackTime)}</strong>
+            </div>` : ''}
         </div>
       </section>
 

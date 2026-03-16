@@ -1146,6 +1146,13 @@ tbody td:last-child  { text-align: right; white-space: nowrap; }
   flex-wrap: wrap;
 }
 
+.lead-row__badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
 .lead-row__sub {
   margin-top: 0.25rem;
   max-width: 220px;
@@ -1154,6 +1161,20 @@ tbody td:last-child  { text-align: right; white-space: nowrap; }
   white-space: nowrap;
   font-size: 0.8em;
   opacity: 0.72;
+}
+
+.lead-row__hint {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.lead-row__hint--callback {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #e2e8f0;
 }
 
 .lead-source-badge {
@@ -1181,6 +1202,39 @@ tbody td:last-child  { text-align: right; white-space: nowrap; }
   border-color: rgba(59, 130, 246, 0.22);
   background: rgba(59, 130, 246, 0.12);
   color: #bfdbfe;
+}
+
+.lead-callback-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.08);
+  color: #e2e8f0;
+}
+
+.lead-callback-badge--scheduled {
+  border-color: rgba(245, 179, 1, 0.2);
+  background: rgba(245, 179, 1, 0.1);
+  color: #fde68a;
+}
+
+.lead-callback-badge--due-soon {
+  border-color: rgba(249, 115, 22, 0.24);
+  background: rgba(249, 115, 22, 0.12);
+  color: #fdba74;
+}
+
+.lead-callback-badge--overdue {
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
 }
 
 .lead-name-link {
@@ -1913,6 +1967,23 @@ td.empty { text-align: center; padding: 3rem 1rem; cursor: default; }
   background: rgba(15, 23, 42, 0.52);
 }
 
+.drawer-notes-card__memory--due-soon {
+  border-color: rgba(249, 115, 22, 0.24);
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.drawer-notes-card__memory--overdue {
+  border-color: rgba(239, 68, 68, 0.26);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.drawer-notes-card__memory-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .drawer-notes-card__memory-label,
 .drawer-notes-card__latest-label {
   display: inline-block;
@@ -1930,12 +2001,54 @@ td.empty { text-align: center; padding: 3rem 1rem; cursor: default; }
   color: var(--text);
 }
 
+.drawer-notes-card__memory-meta {
+  margin-top: 0.45rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f8fafc;
+}
+
 .drawer-notes-card__memory-sub,
 .drawer-notes-card__latest-text {
   margin: 0.3rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.5;
   color: var(--text-2);
+}
+
+.callback-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.22rem 0.58rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.callback-status-badge--scheduled {
+  border-color: rgba(245, 179, 1, 0.2);
+  background: rgba(245, 179, 1, 0.1);
+  color: #fde68a;
+}
+
+.callback-status-badge--due-soon {
+  border-color: rgba(249, 115, 22, 0.24);
+  background: rgba(249, 115, 22, 0.12);
+  color: #fdba74;
+}
+
+.callback-status-badge--overdue {
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
 }
 
 .drawer-note-list {
@@ -2183,6 +2296,11 @@ td.empty { text-align: center; padding: 3rem 1rem; cursor: default; }
   font-size: 0.875rem;
 }
 
+.wa-summary__next-text .callback-status-badge {
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
 .wa-transcript {
   margin-bottom: 1rem;
   padding: 0.95rem 1rem;
@@ -2424,6 +2542,24 @@ td.empty { text-align: center; padding: 3rem 1rem; cursor: default; }
   font-family: var(--font-mono);
 }
 
+.dtl-pill--callback-scheduled {
+  color: #fde68a;
+  background: rgba(245, 179, 1, 0.1);
+  border-color: rgba(245, 179, 1, 0.2);
+}
+
+.dtl-pill--callback-due-soon {
+  color: #fdba74;
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.24);
+}
+
+.dtl-pill--callback-overdue {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.24);
+}
+
 .drawer-loading,
 .drawer-error,
 .drawer-empty {
@@ -2568,6 +2704,28 @@ td.empty { text-align: center; padding: 3rem 1rem; cursor: default; }
   border-color: rgba(34, 197, 94, 0.2);
   background: rgba(34, 197, 94, 0.12);
   color: #bbf7d0;
+}
+
+.drawer-overview__badge--callback {
+  color: #f8fafc;
+}
+
+.drawer-overview__badge--callback-scheduled {
+  border-color: rgba(245, 179, 1, 0.2);
+  background: rgba(245, 179, 1, 0.1);
+  color: #fde68a;
+}
+
+.drawer-overview__badge--callback-due-soon {
+  border-color: rgba(249, 115, 22, 0.24);
+  background: rgba(249, 115, 22, 0.12);
+  color: #fdba74;
+}
+
+.drawer-overview__badge--callback-overdue {
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
 }
 
 .drawer-overview__summary {

@@ -133,6 +133,63 @@ describe('Admin API', () => {
     );
   });
 
+  it('GET /api/admin/leads - returns the latest scheduled callback details for operator follow-up', async () => {
+    const lead = await prisma.lead.create({
+      data: {
+        businessId: ctx.business.id,
+        name: 'Callback Admin Lead',
+        phone: '+91 99999 70011',
+        message: 'Please call in the evening',
+      },
+    });
+
+    await prisma.leadActivity.createMany({
+      data: [
+        {
+          leadId: lead.id,
+          type: 'AGENT_CLASSIFIED',
+          message: 'Lead classified as CALLBACK_REQUEST',
+          metadata: {
+            source: 'whatsapp',
+            bestCategory: 'CALLBACK_REQUEST',
+            tags: ['CALLBACK_REQUEST'],
+          },
+        },
+        {
+          leadId: lead.id,
+          type: 'AGENT_PRIORITIZED',
+          message: 'Priority score assigned: 20 (NORMAL)',
+          metadata: {
+            priorityScore: 20,
+            priorityLabel: 'NORMAL',
+          },
+        },
+        {
+          leadId: lead.id,
+          type: 'FOLLOW_UP_SCHEDULED',
+          message: 'Callback scheduled for Today 6 PM.',
+          metadata: {
+            reason: 'OPERATOR_CALLBACK_SCHEDULED',
+            callbackTime: 'Today 6 PM',
+          },
+        },
+      ],
+    });
+
+    const res = await request(app).get('/api/admin/leads').set(auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: lead.id,
+          callbackTime: 'Today 6 PM',
+          callbackScheduledAt: expect.any(String),
+        }),
+      ])
+    );
+  });
+
   it('GET /api/admin/leads - returns 401 without token', async () => {
     const res = await request(app).get('/api/admin/leads');
     expect(res.status).toBe(401);

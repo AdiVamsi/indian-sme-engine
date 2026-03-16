@@ -2,6 +2,25 @@
 
 const { prisma } = require('../lib/prisma');
 
+function getLatestCallbackDetails(activities = []) {
+  const latest = activities.find((activity) =>
+    activity.type === 'FOLLOW_UP_SCHEDULED'
+    && activity?.metadata?.reason === 'OPERATOR_CALLBACK_SCHEDULED'
+  );
+
+  if (!latest) {
+    return {
+      callbackTime: null,
+      callbackScheduledAt: null,
+    };
+  }
+
+  return {
+    callbackTime: latest.metadata?.callbackTime || null,
+    callbackScheduledAt: latest.createdAt || null,
+  };
+}
+
 const getDashboardSummary = async (businessId) => {
   const [
     totalLeads,
@@ -41,8 +60,9 @@ const getLeads = async (businessId) => {
     orderBy: { createdAt: 'desc' },
     include: {
       activities: {
-        where:  { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
-        select: { type: true, metadata: true },
+        where:  { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED', 'FOLLOW_UP_SCHEDULED'] } },
+        orderBy: { createdAt: 'desc' },
+        select: { type: true, metadata: true, createdAt: true },
       },
     },
   });
@@ -50,6 +70,7 @@ const getLeads = async (businessId) => {
   return leads.map(({ activities, ...lead }) => {
     const classAct = activities.find((a) => a.type === 'AGENT_CLASSIFIED');
     const prioAct  = activities.find((a) => a.type === 'AGENT_PRIORITIZED');
+    const callback = getLatestCallbackDetails(activities);
 
     const tags          = classAct?.metadata?.tags         ?? [];
     const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
@@ -64,6 +85,8 @@ const getLeads = async (businessId) => {
       tags,
       priority,
       source,
+      callbackTime: callback.callbackTime,
+      callbackScheduledAt: callback.callbackScheduledAt,
       hasClassification: Boolean(classAct),
       hasPrioritization: Boolean(prioAct),
     };

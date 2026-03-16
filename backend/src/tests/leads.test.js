@@ -90,6 +90,11 @@ describe('Leads', () => {
     expect(scheduled).toBeTruthy();
     expect(scheduled.metadata.callbackTime).toBe('Today 6 PM');
     expect(scheduled.message).toContain('Parent asked for an evening callback.');
+
+    const list = await request(app).get('/api/leads').set(auth());
+    const listedLead = list.body.find((item) => item.id === created.body.id);
+    expect(listedLead.callbackTime).toBe('Today 6 PM');
+    expect(listedLead.callbackScheduledAt).toEqual(expect.any(String));
   });
 
   it('POST /api/leads/:id/actions - saves a lightweight operator note', async () => {

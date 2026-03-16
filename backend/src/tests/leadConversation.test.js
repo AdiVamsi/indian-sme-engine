@@ -107,4 +107,60 @@ describe('WhatsApp conversation summary builder', () => {
 
     expect(summary).toBeNull();
   });
+
+  it('surfaces the scheduled callback in the WhatsApp handoff summary', () => {
+    const summary = buildWhatsAppConversationSummary({
+      lead: { id: 'lead-3' },
+      activities: [
+        {
+          type: 'AGENT_CLASSIFIED',
+          createdAt: '2026-03-14T10:00:00.000Z',
+          metadata: {
+            source: 'whatsapp',
+            bestCategory: 'CALLBACK_REQUEST',
+          },
+        },
+        {
+          type: 'AGENT_PRIORITIZED',
+          createdAt: '2026-03-14T10:00:01.000Z',
+          metadata: { priorityScore: 20 },
+        },
+        {
+          type: 'AUTOMATION_ALERT',
+          createdAt: '2026-03-14T10:00:03.000Z',
+          metadata: {
+            channel: 'whatsapp',
+            direction: 'outbound',
+            messageText: 'Please share the student class and preferred call time.',
+            replyIntent: 'CALLBACK_REQUEST',
+            conversationState: {
+              flowIntent: 'CALLBACK_REQUEST',
+              pendingField: null,
+              status: 'handoff',
+              collected: {
+                studentClass: 'Class 10',
+                preferredCallTime: 'Today 6 PM',
+              },
+            },
+          },
+        },
+        {
+          type: 'FOLLOW_UP_SCHEDULED',
+          createdAt: '2026-03-14T10:10:00.000Z',
+          metadata: {
+            reason: 'OPERATOR_CALLBACK_SCHEDULED',
+            callbackTime: 'Today 6 PM',
+            operatorNote: 'Parent requested an evening call.',
+          },
+        },
+      ],
+    });
+
+    expect(summary.latestCallback).toEqual({
+      callbackTime: 'Today 6 PM',
+      createdAt: '2026-03-14T10:10:00.000Z',
+      note: 'Parent requested an evening call.',
+    });
+    expect(summary.recommendedNextAction).toContain('Callback already scheduled for Today 6 PM');
+  });
 });

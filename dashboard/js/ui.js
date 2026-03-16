@@ -5,6 +5,8 @@
  * Zero API calls — purely presentation and motion.
  */
 
+import { getCallbackCue } from './callbacks.js';
+
 export function DashUI(config) {
 
   /* ── Formatting helpers ── */
@@ -245,6 +247,19 @@ export function DashUI(config) {
     return `<span class="lead-source-badge lead-source-badge--${esc(normalized)}">${esc(label)}</span>`;
   }
 
+  function buildLeadCallbackBadge(lead) {
+    if (!lead?.callbackTime) return '';
+
+    const cue = getCallbackCue({
+      callbackTime: lead.callbackTime,
+    });
+
+    return `
+      <span class="lead-callback-badge lead-callback-badge--${esc(cue.state)}" title="${esc(cue.title)}">
+        ${esc(cue.stateLabel)}
+      </span>`;
+  }
+
   /* ── Row builders ── */
   function buildLeadRow(lead, isNew = false) {
     const tr = document.createElement('tr');
@@ -259,14 +274,21 @@ export function DashUI(config) {
     const messagePreview = lead.message
       ? `<div class="lead-row__sub"><span class="message-preview" title="${esc(lead.message)}">↳ ${esc(truncateText(lead.message))}</span></div>`
       : '';
+    const callbackHint = lead.callbackTime
+      ? `<div class="lead-row__hint lead-row__hint--callback" title="${esc(`Latest callback: ${lead.callbackTime}`)}">⏰ ${esc(lead.callbackTime)}</div>`
+      : '';
 
     tr.innerHTML = `
       <td>
         <div class="lead-row__primary">
           <button class="lead-name-btn" data-lead-id="${esc(lead.id)}">${esc(lead.name)}</button>
-          ${buildLeadSourceBadge(lead.source)}
+          <div class="lead-row__badges">
+            ${buildLeadSourceBadge(lead.source)}
+            ${buildLeadCallbackBadge(lead)}
+          </div>
         </div>
         ${messagePreview}
+        ${callbackHint}
       </td>
       <td>${esc(lead.phone)}</td>
       <td>${esc(lead.email || '—')}</td>

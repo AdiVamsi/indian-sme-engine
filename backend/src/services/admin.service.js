@@ -53,11 +53,20 @@ const getLeads = async (businessId) => {
 
     const tags          = classAct?.metadata?.tags         ?? [];
     const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
+    const source        = classAct?.metadata?.source       ?? 'web';
     const priority      = priorityScore >= 30 ? 'HIGH'
                         : priorityScore >= 10 ? 'NORMAL'
                         :                       'LOW';
 
-    return { ...lead, priorityScore, tags, priority };
+    return {
+      ...lead,
+      priorityScore,
+      tags,
+      priority,
+      source,
+      hasClassification: Boolean(classAct),
+      hasPrioritization: Boolean(prioAct),
+    };
   });
 };
 

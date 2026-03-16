@@ -11,6 +11,8 @@ function decorateLead(lead, {
   source = 'web',
   externalMessageId = null,
   receivedAt = null,
+  hasClassification = false,
+  hasPrioritization = false,
 } = {}) {
   const priority = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';
 
@@ -22,6 +24,8 @@ function decorateLead(lead, {
     source,
     externalMessageId,
     receivedAt,
+    hasClassification,
+    hasPrioritization,
   };
 }
 
@@ -71,6 +75,8 @@ const saveRawLead = async (businessId, data) => {
     source,
     externalMessageId,
     receivedAt,
+    hasClassification: false,
+    hasPrioritization: false,
   });
 };
 
@@ -133,6 +139,8 @@ const processLeadAfterSave = async (lead, {
     source: leadSource,
     externalMessageId,
     receivedAt,
+    hasClassification: true,
+    hasPrioritization: true,
   });
 };
 
@@ -175,7 +183,15 @@ const findLeadsByBusiness = async (businessId, status) => {
                         : priorityScore >= 10 ? 'NORMAL'
                         :                       'LOW';
 
-    return { ...lead, priorityScore, tags, priority, source };
+    return {
+      ...lead,
+      priorityScore,
+      tags,
+      priority,
+      source,
+      hasClassification: Boolean(classAct),
+      hasPrioritization: Boolean(prioAct),
+    };
   });
 };
 
@@ -317,6 +333,20 @@ const runLeadOperatorAction = async (id, businessId, {
       },
     });
   });
+
+  logger.info(
+    {
+      businessId,
+      leadId: id,
+      action,
+      statusChanged,
+      previousStatus: lead.status,
+      nextStatus,
+      callbackTime: normalizedCallbackTime,
+      hasNote: Boolean(operatorNote),
+    },
+    'Lead operator action completed'
+  );
 
   const refreshed = await getLeadActivity(id, businessId);
   return {

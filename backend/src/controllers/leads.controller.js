@@ -45,6 +45,8 @@ function buildLeadRealtimePayload(lead) {
     priorityScore: lead.priorityScore,
     tags: lead.tags,
     source: lead.source || 'web',
+    hasClassification: Boolean(lead.hasClassification),
+    hasPrioritization: Boolean(lead.hasPrioritization),
     createdAt: lead.createdAt,
     timestamp: lead.createdAt,
   };

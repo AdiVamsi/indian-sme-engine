@@ -95,6 +95,15 @@ function getSharmaShowcaseAgentConfig() {
             sourceLabel: 'Course details',
           },
           {
+            id: 'online_classes',
+            title: 'Online classes',
+            category: 'delivery',
+            intents: ['GENERAL_ENQUIRY', 'COURSE_INFO'],
+            keywords: ['online classes', 'online batch', 'online coaching', 'live class', 'live classes', 'online'],
+            content: 'Sharma JEE Academy can guide students on available online support and live learning options depending on the programme and class. The team confirms the current online format while sharing batch details.',
+            sourceLabel: 'Online class information',
+          },
+          {
             id: 'admission_process',
             title: 'Admission process',
             category: 'admission',

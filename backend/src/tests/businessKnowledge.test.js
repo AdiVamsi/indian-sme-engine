@@ -27,6 +27,14 @@ describe('Business knowledge retrieval', () => {
             keywords: ['branch', 'location', 'address', 'where'],
             content: 'The branch is in Connaught Place, New Delhi.',
           },
+          {
+            id: 'online_classes',
+            title: 'Online classes',
+            category: 'delivery',
+            intents: ['GENERAL_ENQUIRY'],
+            keywords: ['online classes', 'online coaching', 'live class', 'online'],
+            content: 'Online support and live learning options are available depending on the programme and class.',
+          },
         ],
       },
     },
@@ -39,7 +47,7 @@ describe('Business knowledge retrieval', () => {
     });
 
     expect(knowledge.enabled).toBe(true);
-    expect(knowledge.entries).toHaveLength(2);
+    expect(knowledge.entries).toHaveLength(3);
     expect(knowledge.entries[0].id).toBe('fees_overview');
   });
 
@@ -75,5 +83,19 @@ describe('Business knowledge retrieval', () => {
 
     expect(result.shouldAttempt).toBe(false);
     expect(result.matches).toHaveLength(0);
+  });
+
+  it('retrieves online-class information for common academy delivery questions', () => {
+    const result = retrieveBusinessKnowledge({
+      message: 'Do you have online classes for JEE students?',
+      intent: 'GENERAL_ENQUIRY',
+      tags: ['GENERAL_ENQUIRY'],
+      businessIndustry: 'academy',
+      agentConfig,
+    });
+
+    expect(result.shouldAttempt).toBe(true);
+    expect(result.hasConfidentMatch).toBe(true);
+    expect(result.topMatch.id).toBe('online_classes');
   });
 });

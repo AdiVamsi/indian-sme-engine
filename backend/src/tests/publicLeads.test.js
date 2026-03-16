@@ -119,6 +119,8 @@ describe('Public Lead Capture', () => {
         status: 'NEW',
         priority: 'LOW',
         tags: [],
+        hasClassification: false,
+        hasPrioritization: false,
       })
     );
 
@@ -143,6 +145,8 @@ describe('Public Lead Capture', () => {
         phone: '+91 99999 11111',
         priority: expect.any(String),
         tags: expect.any(Array),
+        hasClassification: true,
+        hasPrioritization: true,
       })
     );
   });
@@ -178,6 +182,9 @@ describe('Public Lead Capture', () => {
           status: 'NEW',
           priority: 'LOW',
           tags: [],
+          source: 'web',
+          hasClassification: false,
+          hasPrioritization: false,
         }),
       ])
     );

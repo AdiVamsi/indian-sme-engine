@@ -1,5 +1,6 @@
 'use strict';
 
+const { PrismaClient } = require('@prisma/client');
 const request = require('supertest');
 const app = require('../app');
 const { createTestContext } = require('./_testHelpers');
@@ -7,6 +8,7 @@ const { createTestContext } = require('./_testHelpers');
 describe('Admin API', () => {
   let ctx;
   let token;
+  const prisma = new PrismaClient();
 
   beforeAll(async () => {
     ctx = await createTestContext();
@@ -20,6 +22,7 @@ describe('Admin API', () => {
 
   afterAll(async () => {
     await ctx.cleanup();
+    await prisma.$disconnect();
   });
 
   const auth = () => ({ Authorization: `Bearer ${token}` });
@@ -76,6 +79,58 @@ describe('Admin API', () => {
     const res = await request(app).get('/api/admin/leads').set(auth());
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it('GET /api/admin/leads - preserves the lead source for WhatsApp leads after reload', async () => {
+    const lead = await prisma.lead.create({
+      data: {
+        businessId: ctx.business.id,
+        name: 'WhatsApp Admin Lead',
+        phone: '+91 99999 70001',
+        message: 'fees kitni hai',
+      },
+    });
+
+    await prisma.leadActivity.createMany({
+      data: [
+        {
+          leadId: lead.id,
+          type: 'AGENT_CLASSIFIED',
+          message: 'Lead classified as FEE_ENQUIRY',
+          metadata: {
+            source: 'whatsapp',
+            bestCategory: 'FEE_ENQUIRY',
+            tags: ['FEE_ENQUIRY'],
+          },
+        },
+        {
+          leadId: lead.id,
+          type: 'AGENT_PRIORITIZED',
+          message: 'Priority score assigned: 18 (NORMAL)',
+          metadata: {
+            priorityScore: 18,
+            priorityLabel: 'NORMAL',
+          },
+        },
+      ],
+    });
+
+    const res = await request(app).get('/api/admin/leads').set(auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: lead.id,
+          source: 'whatsapp',
+          priority: 'NORMAL',
+          priorityScore: 18,
+          tags: ['FEE_ENQUIRY'],
+          hasClassification: true,
+          hasPrioritization: true,
+        }),
+      ])
+    );
   });
 
   it('GET /api/admin/leads - returns 401 without token', async () => {

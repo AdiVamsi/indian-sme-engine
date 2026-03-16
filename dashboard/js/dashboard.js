@@ -1284,9 +1284,9 @@ function _buildActivityEvents(leads) {
   const events = [];
   leads.forEach((lead) => {
     events.push({ type: 'LEAD_CREATED', lead, time: lead.createdAt });
-    if (lead.tags?.length)
+    if (lead.hasClassification)
       events.push({ type: 'AGENT_CLASSIFIED', lead, time: lead.createdAt, tags: lead.tags });
-    if (lead.priorityScore != null)
+    if (lead.hasPrioritization)
       events.push({ type: 'AGENT_PRIORITIZED', lead, time: lead.createdAt, score: lead.priorityScore });
   });
   events.sort((a, b) => new Date(b.time) - new Date(a.time));
@@ -1350,6 +1350,7 @@ function startRealtime(token) {
 
 function onNewLead(lead) {
   const existing = _allLeads.find((item) => item.id === lead.id);
+  const isRealtimeUpdate = Boolean(existing);
   if (existing) {
     Object.assign(existing, lead);
   } else {
@@ -1359,16 +1360,29 @@ function onNewLead(lead) {
       ui.updateStat('newLeads', ui.getStat('newLeads') + 1);
   }
 
-  const name = lead.name ? `: ${lead.name}` : '';
-  const toastMsg = lead.priority === 'HIGH'
-    ? `🔥 New High Priority Lead${name}`
-    : lead.priority === 'NORMAL'
-      ? `⭐ New Lead${name}`
-      : (config.notifText?.newLead ?? `New lead${name}`);
+  if (!isRealtimeUpdate) {
+    const name = lead.name ? `: ${lead.name}` : '';
+    const toastMsg = lead.priority === 'HIGH'
+      ? `🔥 New High Priority Lead${name}`
+      : lead.priority === 'NORMAL'
+        ? `⭐ New Lead${name}`
+        : (config.notifText?.newLead ?? `New lead${name}`);
 
-  ui.showToast(toastMsg, lead.priority === 'HIGH' ? 'success' : 'info');
+    ui.showToast(toastMsg, lead.priority === 'HIGH' ? 'success' : 'info');
+  }
 
   syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
+
+  const drawerIsOpen = $('lead-drawer')?.classList.contains('is-open');
+  if (
+    isRealtimeUpdate
+    && drawerIsOpen
+    && activeDrawerLeadId === lead.id
+    && !activeDrawerActionBusy
+    && !activeDrawerSelectedAction
+  ) {
+    void openLeadDrawer(lead.id, { preserveTab: true });
+  }
 }
 
 function onRemoteLeadStatusChange({ id, status }) {
@@ -1509,6 +1523,24 @@ function _resolveDrawerActivityPresentation(act) {
     }
 
     if (meta.channel === 'whatsapp' && meta.direction === 'outbound') {
+      if (meta.replyIntent === 'BUSINESS_KNOWLEDGE_ANSWER' || meta.groundedAnswer) {
+        return {
+          label: 'Business details shared on WhatsApp',
+          icon: '📘',
+          dot: 'dtl-dot--whatsapp-out',
+          message: meta.replyMessage || meta.messageText || act.message || '',
+        };
+      }
+
+      if (meta.replyIntent === 'BUSINESS_KNOWLEDGE_UNCERTAIN') {
+        return {
+          label: 'Question handed to counsellor',
+          icon: '🤝',
+          dot: 'dtl-dot--whatsapp-out',
+          message: meta.replyMessage || meta.messageText || act.message || '',
+        };
+      }
+
       const isHandoff = String(meta.replyIntent || '').includes('HANDOFF');
       return {
         label: isHandoff ? 'Counsellor handoff reply sent' : 'WhatsApp reply sent',
@@ -1791,12 +1823,16 @@ function _deriveLeadDrawerDisplayMeta(data) {
   const classified = activities.find((activity) => activity.type === 'AGENT_CLASSIFIED')?.metadata || {};
   const prioritized = activities.find((activity) => activity.type === 'AGENT_PRIORITIZED')?.metadata || {};
   const priorityScore = prioritized.priorityScore ?? 0;
+  const hasClassification = activities.some((activity) => activity.type === 'AGENT_CLASSIFIED');
+  const hasPrioritization = activities.some((activity) => activity.type === 'AGENT_PRIORITIZED');
 
   return {
     priorityScore,
     priority: priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW',
     tags: Array.isArray(classified.tags) ? classified.tags : [],
     source: classified.source || 'web',
+    hasClassification,
+    hasPrioritization,
   };
 }
 
@@ -1873,7 +1909,7 @@ async function openLeadDrawer(leadId, { preserveTab = false } = {}) {
   $('drawer-outreach').innerHTML = `
     <div class="drawer-loading">
       <div class="drawer-loading__spinner"></div>
-      Drafting message…
+      Preparing suggested reply…
     </div>`;
 
   const [actRes, sugRes, outRes] = await Promise.allSettled([
@@ -1900,7 +1936,7 @@ async function openLeadDrawer(leadId, { preserveTab = false } = {}) {
     _renderDrawerOutreach(outRes.value);
   } else {
     $('drawer-outreach').innerHTML =
-      `<p class="drawer-error">Could not load outreach draft.</p>`;
+      `<p class="drawer-error">Could not load the suggested reply.</p>`;
   }
 }
 
@@ -1930,16 +1966,23 @@ function _renderDrawerTimeline(data) {
   $('drawer-phone').textContent = lead?.phone ?? '';
 
   const prioritized = activities.find((activity) => activity.type === 'AGENT_PRIORITIZED');
+  const classified = activities.find((activity) => activity.type === 'AGENT_CLASSIFIED');
   const priorityScore = prioritized?.metadata?.priorityScore ?? 0;
   const priorityLabel = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';
+  const source = classified?.metadata?.source
+    || _allLeads.find((item) => item.id === lead?.id)?.source
+    || 'web';
+  const sourceLabel = source === 'whatsapp'
+    ? 'WhatsApp'
+    : source === 'web'
+      ? 'Website form'
+      : _titleCaseDrawer(source);
   const headerBadges = [
     `<span class="drawer__meta-badge">Status: <strong>${_escDrawer(lead?.status ?? 'NEW')}</strong></span>`,
     `<span class="drawer__meta-badge">Priority: <strong>${_escDrawer(priorityLabel)}</strong></span>`,
     `<span class="drawer__meta-badge">Score: <strong>${_escDrawer(priorityScore)}</strong></span>`,
+    `<span class="drawer__meta-badge">Source: <strong>${_escDrawer(sourceLabel)}</strong></span>`,
   ];
-  if (whatsappConversation) {
-    headerBadges.push('<span class="drawer__meta-badge">Channel: <strong>WhatsApp</strong></span>');
-  }
   $('drawer-meta').innerHTML = headerBadges.join('');
 
   if (!activities.length) {
@@ -2053,7 +2096,7 @@ function _renderDrawerOutreach(draft) {
   if (!el) return;
 
   if (!draft || !draft.message) {
-    el.innerHTML = `<div class="drawer-empty">✉<br>No suggested message yet.</div>`;
+    el.innerHTML = `<div class="drawer-empty">✉<br>No suggested reply yet.</div>`;
     return;
   }
 
@@ -2074,8 +2117,8 @@ function _renderDrawerOutreach(draft) {
       </div>
       <textarea id="${id}" class="outreach-card__textarea" readonly>${_escDrawer(draft.message)}</textarea>
       <div class="outreach-card__actions">
-        <button class="outreach-card__btn outreach-card__btn--copy" id="outreach-copy-btn">Copy Message</button>
-        <button class="outreach-card__btn outreach-card__btn--edit" id="outreach-edit-btn">Edit Message</button>
+        <button class="outreach-card__btn outreach-card__btn--copy" id="outreach-copy-btn">Copy Reply</button>
+        <button class="outreach-card__btn outreach-card__btn--edit" id="outreach-edit-btn">Edit Reply</button>
       </div>
     </div>`;
 
@@ -2094,7 +2137,7 @@ function _renderDrawerOutreach(draft) {
     const btn = $('outreach-edit-btn');
     const editing = ta.readOnly;
     ta.readOnly = !editing;
-    btn.textContent = editing ? 'Lock Message' : 'Edit Message';
+    btn.textContent = editing ? 'Lock Reply' : 'Edit Reply';
     if (editing) ta.focus();
   });
 }

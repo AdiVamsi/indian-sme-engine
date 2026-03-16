@@ -1434,10 +1434,10 @@ function onRemoteLeadDeleted({ id }) {
 ───────────────────────────────────────────────── */
 const DRAWER_ACTIVITY_MAP = {
   LEAD_CREATED: { label: 'Lead created', icon: '📋', dot: 'dtl-dot--created' },
-  AGENT_CLASSIFIED: { label: 'Lead classified', icon: '🏷️', dot: 'dtl-dot--classified' },
-  AGENT_PRIORITIZED: { label: 'Priority score set', icon: '⚡', dot: 'dtl-dot--prioritized' },
+  AGENT_CLASSIFIED: { label: 'AI classified the lead', icon: '🏷️', dot: 'dtl-dot--classified' },
+  AGENT_PRIORITIZED: { label: 'AI priority updated', icon: '⚡', dot: 'dtl-dot--prioritized' },
   FOLLOW_UP_SCHEDULED: { label: 'Follow-up scheduled', icon: '📅', dot: 'dtl-dot--followup' },
-  STATUS_CHANGED: { label: 'Status updated', icon: '🔄', dot: 'dtl-dot--default' },
+  STATUS_CHANGED: { label: 'Lead status updated', icon: '🔄', dot: 'dtl-dot--default' },
   AUTOMATION_DEMO_INTENT: { label: 'Demo interest detected', icon: '🎓', dot: 'dtl-dot--automation' },
   AUTOMATION_ADMISSION_INTENT: { label: 'Admission interest detected', icon: '📘', dot: 'dtl-dot--automation' },
 };
@@ -1503,6 +1503,9 @@ function _resolveDrawerActivityPresentation(act) {
       label: 'Callback scheduled',
       icon: '📞',
       dot: 'dtl-dot--operator',
+      category: 'operator',
+      categoryLabel: 'Operator',
+      emphasis: 'high',
       message: act.message || '',
     };
   }
@@ -1513,6 +1516,9 @@ function _resolveDrawerActivityPresentation(act) {
         label: 'Marked as called',
         icon: '📞',
         dot: 'dtl-dot--operator',
+        category: 'operator',
+        categoryLabel: 'Operator',
+        emphasis: 'high',
         message: act.message || '',
       };
     }
@@ -1522,6 +1528,9 @@ function _resolveDrawerActivityPresentation(act) {
         label: 'Fee details sent',
         icon: '📄',
         dot: 'dtl-dot--operator',
+        category: 'operator',
+        categoryLabel: 'Operator',
+        emphasis: 'high',
         message: act.message || '',
       };
     }
@@ -1531,6 +1540,9 @@ function _resolveDrawerActivityPresentation(act) {
         label: 'Handoff marked complete',
         icon: '✅',
         dot: 'dtl-dot--operator',
+        category: 'operator',
+        categoryLabel: 'Operator',
+        emphasis: 'high',
         message: act.message || '',
       };
     }
@@ -1540,6 +1552,9 @@ function _resolveDrawerActivityPresentation(act) {
         label: 'Customer message received',
         icon: '💬',
         dot: 'dtl-dot--whatsapp-in',
+        category: 'customer',
+        categoryLabel: 'Customer',
+        emphasis: 'high',
         message: meta.messageText || act.message || '',
       };
     }
@@ -1550,6 +1565,9 @@ function _resolveDrawerActivityPresentation(act) {
           label: 'Business details shared on WhatsApp',
           icon: '📘',
           dot: 'dtl-dot--whatsapp-out',
+          category: 'ai',
+          categoryLabel: 'AI Assistant',
+          emphasis: 'medium',
           message: meta.replyMessage || meta.messageText || act.message || '',
         };
       }
@@ -1559,15 +1577,21 @@ function _resolveDrawerActivityPresentation(act) {
           label: 'Question handed to counsellor',
           icon: '🤝',
           dot: 'dtl-dot--whatsapp-out',
+          category: 'system',
+          categoryLabel: 'Workflow',
+          emphasis: 'high',
           message: meta.replyMessage || meta.messageText || act.message || '',
         };
       }
 
       const isHandoff = String(meta.replyIntent || '').includes('HANDOFF');
       return {
-        label: isHandoff ? 'Counsellor handoff reply sent' : 'WhatsApp reply sent',
+        label: isHandoff ? 'Ready for counsellor handoff' : 'WhatsApp reply sent',
         icon: isHandoff ? '🤝' : '📲',
         dot: 'dtl-dot--whatsapp-out',
+        category: isHandoff ? 'system' : 'ai',
+        categoryLabel: isHandoff ? 'Workflow' : 'AI Assistant',
+        emphasis: isHandoff ? 'high' : 'medium',
         message: meta.replyMessage || meta.messageText || act.message || '',
       };
     }
@@ -1577,6 +1601,9 @@ function _resolveDrawerActivityPresentation(act) {
         label: 'High-priority lead flagged',
         icon: '🚨',
         dot: 'dtl-dot--prioritized',
+        category: 'system',
+        categoryLabel: 'Workflow',
+        emphasis: 'high',
         message: `This lead was flagged for quick follow-up with score ${_escDrawer(meta.score ?? '—')}.`,
       };
     }
@@ -1588,8 +1615,22 @@ function _resolveDrawerActivityPresentation(act) {
     dot: 'dtl-dot--default',
   };
 
+  const categoryDefaults = {
+    LEAD_CREATED: { category: 'system', categoryLabel: 'System', emphasis: 'low' },
+    AGENT_CLASSIFIED: { category: 'ai', categoryLabel: 'AI Assistant', emphasis: 'low' },
+    AGENT_PRIORITIZED: { category: 'ai', categoryLabel: 'AI Assistant', emphasis: 'low' },
+    STATUS_CHANGED: { category: 'system', categoryLabel: 'System', emphasis: 'low' },
+    AUTOMATION_DEMO_INTENT: { category: 'system', categoryLabel: 'Workflow', emphasis: 'medium' },
+    AUTOMATION_ADMISSION_INTENT: { category: 'system', categoryLabel: 'Workflow', emphasis: 'medium' },
+  }[act.type] || {
+    category: 'system',
+    categoryLabel: 'System',
+    emphasis: 'low',
+  };
+
   return {
     ...cfg,
+    ...categoryDefaults,
     message: act.message || '',
   };
 }
@@ -2073,10 +2114,13 @@ function _renderDrawerTimeline(data) {
     }
 
     return `
-      <div class="dtl-item" style="--i:${i}">
+      <div class="dtl-item dtl-item--${_escDrawer(cfg.category || 'system')} dtl-item--${_escDrawer(cfg.emphasis || 'low')}" style="--i:${i}">
         <div class="dtl-dot ${_escDrawer(cfg.dot)}">${cfg.icon}</div>
         <div class="dtl-content">
-          <div class="dtl-title">${_escDrawer(cfg.label)}</div>
+          <div class="dtl-header-row">
+            <span class="dtl-kind dtl-kind--${_escDrawer(cfg.category || 'system')}">${_escDrawer(cfg.categoryLabel || 'System')}</span>
+            <div class="dtl-title">${_escDrawer(cfg.label)}</div>
+          </div>
           <div class="dtl-time">${_escDrawer(_fmtDrawerTime(act.createdAt))}</div>
           ${cfg.message ? `<div class="dtl-msg">${_escDrawer(cfg.message)}</div>` : ''}
           ${metaHtml}

@@ -234,6 +234,17 @@ export function DashUI(config) {
     return `<span class="priority-badge ${cls}">${esc(priority || 'LOW')}</span>`;
   }
 
+  function buildLeadSourceBadge(source) {
+    const normalized = String(source || 'web').toLowerCase();
+    const label = normalized === 'whatsapp'
+      ? 'WhatsApp'
+      : normalized === 'web'
+        ? 'Website Form'
+        : normalized.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+
+    return `<span class="lead-source-badge lead-source-badge--${esc(normalized)}">${esc(label)}</span>`;
+  }
+
   /* ── Row builders ── */
   function buildLeadRow(lead, isNew = false) {
     const tr = document.createElement('tr');
@@ -246,12 +257,15 @@ export function DashUI(config) {
       : '';
 
     const messagePreview = lead.message
-      ? `<div class="cell-sub" style="opacity:0.7;font-size:0.8em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;"><span class="message-preview" title="${esc(lead.message)}">↳ ${esc(truncateText(lead.message))}</span></div>`
+      ? `<div class="lead-row__sub"><span class="message-preview" title="${esc(lead.message)}">↳ ${esc(truncateText(lead.message))}</span></div>`
       : '';
 
     tr.innerHTML = `
       <td>
-        <button class="lead-name-btn" data-lead-id="${esc(lead.id)}">${esc(lead.name)}</button>
+        <div class="lead-row__primary">
+          <button class="lead-name-btn" data-lead-id="${esc(lead.id)}">${esc(lead.name)}</button>
+          ${buildLeadSourceBadge(lead.source)}
+        </div>
         ${messagePreview}
       </td>
       <td>${esc(lead.phone)}</td>

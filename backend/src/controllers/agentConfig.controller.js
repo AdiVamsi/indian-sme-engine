@@ -3,7 +3,9 @@
 const {
   KNOWLEDGE_CATEGORIES,
   SUPPORTED_KNOWLEDGE_INTENTS,
+  normalizeBusinessKnowledgeConfig,
 } = require('../services/businessKnowledge.service');
+const { previewBusinessKnowledgeAnswer } = require('../services/businessKnowledgePreview.service');
 const { getResolved, update } = require('../services/agentConfig.service');
 
 const WHATSAPP_REPLY_INTENTS = new Set([
@@ -193,6 +195,56 @@ const getConfig = async (req, res) => {
 };
 
 /**
+ * POST /api/agent/knowledge-preview
+ * Runs a dry business-knowledge preview for the authenticated business.
+ * Does not create leads, activities, or outbound messages.
+ */
+const previewKnowledge = async (req, res) => {
+  const { message, businessKnowledge } = req.body || {};
+
+  if (typeof message !== 'string' || !message.trim() || message.trim().length > 500) {
+    return res.status(400).json({ error: 'message must be a non-empty string up to 500 characters' });
+  }
+
+  if (businessKnowledge !== undefined && !isValidBusinessKnowledge(businessKnowledge)) {
+    return res.status(400).json({ error: 'businessKnowledge must be a valid knowledge config, null, or undefined' });
+  }
+
+  try {
+    const {
+      config,
+      industry,
+      businessName,
+    } = await getResolved(req.user.businessId);
+
+    const previewAgentConfig = {
+      ...config,
+      classificationRules: {
+        ...(config.classificationRules || {}),
+      },
+    };
+
+    if (businessKnowledge === null) {
+      delete previewAgentConfig.classificationRules.businessKnowledge;
+    } else if (businessKnowledge !== undefined) {
+      previewAgentConfig.classificationRules.businessKnowledge = normalizeBusinessKnowledgeConfig(businessKnowledge);
+    }
+
+    const preview = await previewBusinessKnowledgeAnswer({
+      businessName,
+      businessIndustry: industry,
+      agentConfig: previewAgentConfig,
+      message,
+    });
+
+    return res.json(preview);
+  } catch (err) {
+    console.error('[AgentConfig] POST knowledge preview failed:', err.message);
+    return res.status(500).json({ error: 'Failed to preview business knowledge' });
+  }
+};
+
+/**
  * PUT /api/agent/config
  * Updates followUpMinutes, classificationRules, priorityRules.
  * Validates structure before writing. Rejects malformed payloads with 400.
@@ -258,4 +310,4 @@ const updateConfig = async (req, res) => {
   }
 };
 
-module.exports = { getConfig, updateConfig };
+module.exports = { getConfig, previewKnowledge, updateConfig };

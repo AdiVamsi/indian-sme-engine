@@ -28,7 +28,7 @@ const getResolved = async (businessId) => {
   const config = await getOrCreate(businessId);
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { industry: true },
+    select: { industry: true, name: true },
   });
   const industry = business?.industry || 'other';
   const preset = getAgentConfigPreset(industry);
@@ -45,6 +45,7 @@ const getResolved = async (businessId) => {
   return {
     config,
     industry,
+    businessName: business?.name || 'This business',
     preset,
     whatsappReplyPreset: preset?.classificationRules?.whatsappReplyConfig || {},
     whatsappReplyConfig: resolveWhatsAppReplyConfig({

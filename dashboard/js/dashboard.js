@@ -1455,6 +1455,8 @@ const DRAWER_INTENT_LABELS = {
   JUNK: 'Junk',
 };
 
+const TERMINAL_LEAD_STATUSES = new Set(['WON', 'LOST']);
+
 function _escDrawer(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -1494,6 +1496,17 @@ function _formatDrawerFieldLabel(key) {
     recentMarks: 'Recent Marks',
   };
   return labels[key] || _titleCaseDrawer(key);
+}
+
+function _isTerminalLead(lead) {
+  return TERMINAL_LEAD_STATUSES.has(String(lead?.status || '').toUpperCase());
+}
+
+function _getLeadClosureLabel(lead) {
+  const status = String(lead?.status || '').toUpperCase();
+  if (status === 'WON') return 'Lead closed as Won';
+  if (status === 'LOST') return 'Lead closed as Lost';
+  return 'Lead closed';
 }
 
 function _resolveDrawerActivityPresentation(act) {
@@ -1648,8 +1661,9 @@ function _resolveDrawerActivityPresentation(act) {
   };
 }
 
-function _buildWhatsAppSummaryHtml(summary) {
+function _buildWhatsAppSummaryHtml(summary, { leadStatus = null } = {}) {
   if (!summary) return '';
+  const isTerminal = TERMINAL_LEAD_STATUSES.has(String(leadStatus || '').toUpperCase());
 
   const callbackCue = summary.latestCallback
     ? getCallbackCue({
@@ -1689,10 +1703,10 @@ function _buildWhatsAppSummaryHtml(summary) {
     </div>`;
 
   return `
-    <div class="wa-summary">
+    <div class="wa-summary${isTerminal ? ' wa-summary--closed' : ''}">
       <div class="wa-summary__header">
         <div>
-          <div class="wa-summary__eyebrow">WhatsApp handoff</div>
+          <div class="wa-summary__eyebrow">${_escDrawer(isTerminal ? 'WhatsApp history' : 'WhatsApp handoff')}</div>
           <div class="wa-summary__intent">${_escDrawer(summary.primaryIntentLabel || 'WhatsApp lead')}</div>
         </div>
         <span class="wa-summary__status wa-summary__status--${_escDrawer(summary.conversationStatus || 'captured')}">
@@ -1704,16 +1718,20 @@ function _buildWhatsAppSummaryHtml(summary) {
 
       ${summary.latestCallback?.callbackTime ? `
         <div class="wa-summary__next">
-          <span class="wa-summary__next-label">Callback plan</span>
+          <span class="wa-summary__next-label">${isTerminal ? 'Latest callback plan' : 'Callback plan'}</span>
           <p class="wa-summary__next-text">
             ${_escDrawer(summary.latestCallback.callbackTime)}
-            ${callbackCue ? `<span class="callback-status-badge callback-status-badge--${_escDrawer(callbackCue.state)}">${_escDrawer(callbackCue.stateLabel)}</span>` : ''}
+            ${(!isTerminal && callbackCue) ? `<span class="callback-status-badge callback-status-badge--${_escDrawer(callbackCue.state)}">${_escDrawer(callbackCue.stateLabel)}</span>` : ''}
           </p>
         </div>` : ''}
 
       <div class="wa-summary__next">
-        <span class="wa-summary__next-label">Recommended next action</span>
-        <p class="wa-summary__next-text">${_escDrawer(summary.recommendedNextAction || 'Review the WhatsApp conversation and continue manually.')}</p>
+        <span class="wa-summary__next-label">${isTerminal ? 'Closure status' : 'Recommended next action'}</span>
+        <p class="wa-summary__next-text">${_escDrawer(
+          isTerminal
+            ? `${_getLeadClosureLabel({ status: leadStatus })}. No further follow-up is currently recommended.`
+            : (summary.recommendedNextAction || 'Review the WhatsApp conversation and continue manually.')
+        )}</p>
       </div>
     </div>
     ${transcriptHtml}`;
@@ -1955,8 +1973,33 @@ function _getLastCustomerActivityText({ lead, activities = [], source }) {
   return 'No recent customer activity yet.';
 }
 
+function _buildDrawerOverviewSummary({
+  lead,
+  hasClassification,
+  primaryIntentLabel,
+  sourceLabel,
+  classified,
+  whatsappConversation,
+}) {
+  if (_isTerminalLead(lead)) {
+    if (primaryIntentLabel && primaryIntentLabel !== 'Pending AI classification') {
+      return `${_getLeadClosureLabel(lead)}. Lead was classified as ${primaryIntentLabel.toLowerCase()}.`;
+    }
+    return `${_getLeadClosureLabel(lead)}. Original enquiry and timeline are shown below for reference.`;
+  }
+
+  return whatsappConversation?.recommendedNextAction
+    || classified.suggestedNextAction
+    || (!hasClassification
+      ? 'AI is still processing this lead. Review the message now or wait a moment for tags and priority.'
+      : sourceLabel === 'WhatsApp'
+        ? 'Review the WhatsApp context in Activity and continue the operator follow-up from there.'
+        : 'Review the lead details and take the next operator action from the Activity tab.');
+}
+
 function _buildLeadFocusCardHtml({ lead, activities, whatsappConversation }) {
   if (!lead) return '';
+  if (_isTerminalLead(lead)) return '';
   if (whatsappConversation) return '';
 
   const classified = _getDrawerClassificationMeta(activities);
@@ -1991,6 +2034,31 @@ function _buildLeadFocusCardHtml({ lead, activities, whatsappConversation }) {
       <div class="drawer-focus-card__eyebrow">${_escDrawer(eyebrow)}</div>
       <div class="drawer-focus-card__title">${_escDrawer(title)}</div>
       <p class="drawer-focus-card__text">${_escDrawer(text)}</p>
+    </div>`;
+}
+
+function _buildLeadClosureCardHtml({ lead, activities = [], whatsappConversation = null }) {
+  if (!lead || !_isTerminalLead(lead)) return '';
+
+  const classified = _getDrawerClassificationMeta(activities);
+  const primaryIntent = whatsappConversation?.primaryIntent || classified.bestCategory || null;
+  const primaryIntentLabel = primaryIntent ? _formatDrawerIntentLabel(primaryIntent).toLowerCase() : null;
+  const lastCustomerActivity = _getLastCustomerActivityText({
+    lead,
+    activities,
+    source: classified.source || 'web',
+  });
+
+  return `
+    <div class="drawer-closure-card drawer-closure-card--${_escDrawer(String(lead.status || '').toLowerCase())}">
+      <div class="drawer-closure-card__eyebrow">Closed lead</div>
+      <div class="drawer-closure-card__title">${_escDrawer(_getLeadClosureLabel(lead))}</div>
+      <p class="drawer-closure-card__text">${_escDrawer(
+        primaryIntentLabel
+          ? `This lead was classified as ${primaryIntentLabel}. Timeline and conversation details below are shown for reference only.`
+          : 'Timeline and conversation details below are shown for reference only.'
+      )}</p>
+      <div class="drawer-closure-card__hint">${_escDrawer(`${lastCustomerActivity} No further follow-up is currently recommended.`)}</div>
     </div>`;
 }
 
@@ -2043,7 +2111,7 @@ function _getLatestCallbackMemory(activities = []) {
   };
 }
 
-function _buildLeadOperatorNotesHtml({ activities = [] }) {
+function _buildLeadOperatorNotesHtml({ lead = null, activities = [] }) {
   const notes = _getLeadOperatorNotes(activities).slice(0, 3);
   const latestNote = notes[0] || null;
   const olderNotes = latestNote ? notes.slice(1) : notes;
@@ -2052,30 +2120,35 @@ function _buildLeadOperatorNotesHtml({ activities = [] }) {
   const saveDisabled = activeDrawerActionBusy || !String(noteDraft).trim();
   const callbackTone = latestCallback?.cue?.state || 'scheduled';
   const callbackToneLabel = latestCallback?.cue?.badgeLabel || 'Callback scheduled';
+  const isTerminal = _isTerminalLead(lead);
 
   return `
-    <div class="drawer-notes-card">
+    <div class="drawer-notes-card${isTerminal ? ' drawer-notes-card--historical' : ''}">
       <div class="drawer-notes-card__header">
         <div>
-          <div class="drawer-notes-card__eyebrow">Operator notes</div>
-          <div class="drawer-notes-card__title">Keep useful human follow-up context on this lead</div>
+          <div class="drawer-notes-card__eyebrow">${_escDrawer(isTerminal ? 'Operator notes history' : 'Operator notes')}</div>
+          <div class="drawer-notes-card__title">${_escDrawer(
+            isTerminal
+              ? 'Callback plans and notes recorded before this lead was closed'
+              : 'Keep useful human follow-up context on this lead'
+          )}</div>
         </div>
-        <span class="drawer-notes-card__badge">Internal</span>
+        <span class="drawer-notes-card__badge">${_escDrawer(isTerminal ? 'Read only' : 'Internal')}</span>
       </div>
 
       ${latestCallback ? `
         <div class="drawer-notes-card__memory drawer-notes-card__memory--${_escDrawer(callbackTone)}">
           <div class="drawer-notes-card__memory-head">
             <div>
-              <div class="drawer-notes-card__memory-label">Latest callback memory</div>
+              <div class="drawer-notes-card__memory-label">${_escDrawer(isTerminal ? 'Last callback plan' : 'Latest callback memory')}</div>
               <div class="drawer-notes-card__memory-value">${_escDrawer(latestCallback.callbackTime || 'Scheduled callback')}</div>
             </div>
-            <span class="callback-status-badge callback-status-badge--${_escDrawer(callbackTone)}">${_escDrawer(latestCallback.cue?.stateLabel || 'Scheduled')}</span>
+            ${!isTerminal ? `<span class="callback-status-badge callback-status-badge--${_escDrawer(callbackTone)}">${_escDrawer(latestCallback.cue?.stateLabel || 'Scheduled')}</span>` : ''}
           </div>
           <div class="drawer-notes-card__memory-sub">
             ${_escDrawer(latestCallback.note || `Last updated on ${_fmtDrawerTime(latestCallback.createdAt)}.`)}
           </div>
-          <div class="drawer-notes-card__memory-meta">${_escDrawer(callbackToneLabel)}</div>
+          <div class="drawer-notes-card__memory-meta">${_escDrawer(isTerminal ? 'Recorded before closure' : callbackToneLabel)}</div>
         </div>` : ''}
 
       ${latestNote ? `
@@ -2096,9 +2169,14 @@ function _buildLeadOperatorNotesHtml({ activities = [] }) {
             </div>`).join('')}
         </div>` : !latestNote ? `
         <div class="drawer-notes-card__empty">
-          No operator notes yet. Add small reminders like “prefers Hindi” or “asked about Class 11 batch”.
+          ${_escDrawer(
+            isTerminal
+              ? 'No operator notes were recorded before this lead was closed.'
+              : 'No operator notes yet. Add small reminders like “prefers Hindi” or “asked about Class 11 batch”.'
+          )}
         </div>` : ''}
 
+      ${!isTerminal ? `
       <div class="drawer-notes-card__composer">
         <label class="drawer-notes-card__field">
           <span>New note</span>
@@ -2117,7 +2195,7 @@ function _buildLeadOperatorNotesHtml({ activities = [] }) {
         >
           ${activeDrawerActionPending === 'ADD_NOTE' ? 'Saving…' : 'Save note'}
         </button>
-      </div>
+      </div>` : ''}
     </div>`;
 }
 
@@ -2254,9 +2332,10 @@ function _renderDrawerTimeline(data) {
   if (!activities.length) {
     $('drawer-timeline').innerHTML = `
       ${_buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })}
-      ${_buildLeadOperatorNotesHtml({ activities })}
+      ${_buildLeadClosureCardHtml({ lead, activities, whatsappConversation })}
+      ${_buildLeadOperatorNotesHtml({ lead, activities })}
       ${_buildLeadFocusCardHtml({ lead, activities, whatsappConversation })}
-      ${_buildWhatsAppSummaryHtml(whatsappConversation)}
+      ${_buildWhatsAppSummaryHtml(whatsappConversation, { leadStatus: lead?.status })}
       <div class="drawer-empty">📭<br>No activity recorded yet.</div>`;
     return;
   }
@@ -2303,9 +2382,10 @@ function _renderDrawerTimeline(data) {
 
   $('drawer-timeline').innerHTML = `
     ${_buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })}
-    ${_buildLeadOperatorNotesHtml({ activities })}
+    ${_buildLeadClosureCardHtml({ lead, activities, whatsappConversation })}
+    ${_buildLeadOperatorNotesHtml({ lead, activities })}
     ${_buildLeadFocusCardHtml({ lead, activities, whatsappConversation })}
-    ${_buildWhatsAppSummaryHtml(whatsappConversation)}
+    ${_buildWhatsAppSummaryHtml(whatsappConversation, { leadStatus: lead?.status })}
     <div class="drawer-timeline">${html}</div>`;
 }
 
@@ -2333,11 +2413,14 @@ function _renderDrawerOverview(data) {
   const latestCallback = _getLatestCallbackMemory(activities);
   const callbackCue = latestCallback?.cue || null;
   const lastCustomerActivity = _getLastCustomerActivityText({ lead, activities, source });
-  const summaryText = whatsappConversation?.recommendedNextAction
-    || classified.suggestedNextAction
-    || (!hasClassification
-      ? 'AI is still processing this lead. Review the message now or wait a moment for tags and priority.'
-      : 'Review the lead details and take the next operator action from the Activity tab.');
+  const summaryText = _buildDrawerOverviewSummary({
+    lead,
+    hasClassification,
+    primaryIntentLabel,
+    sourceLabel,
+    classified,
+    whatsappConversation,
+  });
   const dispositionLabel = hasClassification
     ? _titleCaseDrawer(classified.leadDisposition || 'valid')
     : 'Pending AI';
@@ -2348,9 +2431,9 @@ function _renderDrawerOverview(data) {
         <div class="drawer-overview__eyebrow">Lead snapshot</div>
         <div class="drawer-overview__headline">${esc(primaryIntentLabel)}</div>
         <div class="drawer-overview__badges">
-          <span class="drawer-overview__badge drawer-overview__badge--status">${esc(_titleCaseDrawer(lead.status || 'NEW'))}</span>
-          ${callbackCue ? `<span class="drawer-overview__badge drawer-overview__badge--callback drawer-overview__badge--callback-${esc(callbackCue.state)}">${esc(callbackCue.badgeLabel)}</span>` : ''}
+          <span class="drawer-overview__badge drawer-overview__badge--status drawer-overview__badge--status-${esc(String(lead.status || 'new').toLowerCase())}">${esc(_titleCaseDrawer(lead.status || 'NEW'))}</span>
           ${conversationStatus ? `<span class="drawer-overview__badge drawer-overview__badge--conversation">${esc(whatsappConversation.conversationStatusLabel || _titleCaseDrawer(conversationStatus))}</span>` : ''}
+          ${(!_isTerminalLead(lead) && callbackCue) ? `<span class="drawer-overview__badge drawer-overview__badge--callback drawer-overview__badge--callback-${esc(callbackCue.state)}">${esc(callbackCue.badgeLabel)}</span>` : ''}
           <span class="drawer-overview__badge drawer-overview__badge--source">${esc(sourceLabel)}</span>
         </div>
         <p class="drawer-overview__summary">${esc(summaryText)}</p>
@@ -2379,7 +2462,7 @@ function _renderDrawerOverview(data) {
           </div>
           ${latestCallback?.callbackTime ? `
             <div class="drawer-overview__item">
-              <span class="drawer-overview__label">Latest Callback</span>
+              <span class="drawer-overview__label">${esc(_isTerminalLead(lead) ? 'Last Callback' : 'Latest Callback')}</span>
               <strong class="drawer-overview__value">${esc(latestCallback.callbackTime)}</strong>
             </div>` : ''}
         </div>

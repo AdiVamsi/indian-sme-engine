@@ -160,6 +160,7 @@ function scoreKnowledgeEntry(entry, { message, intent = null, tags = [] }) {
 
   let score = 0;
   let keywordHits = 0;
+  const matchedKeywords = [];
 
   if (entry.intents.includes(normalizedIntent)) score += 8;
   if (entry.intents.some((entryIntent) => normalizedTags.has(entryIntent))) score += 4;
@@ -168,6 +169,7 @@ function scoreKnowledgeEntry(entry, { message, intent = null, tags = [] }) {
     if (normalizedMessage.includes(keyword)) {
       keywordHits += 1;
       score += 6;
+      matchedKeywords.push(keyword);
     }
   }
 
@@ -183,6 +185,7 @@ function scoreKnowledgeEntry(entry, { message, intent = null, tags = [] }) {
     ...entry,
     score,
     keywordHits,
+    matchedKeywords,
     snippet: entry.content,
   };
 }

@@ -7,13 +7,20 @@ const { createTestContext } = require('./_testHelpers');
 
 describe('AgentConfig API', () => {
   let ctx;
+  let originalFetch;
 
   beforeAll(async () => {
     ctx = await createTestContext();
+    originalFetch = global.fetch;
   }, 15000);
 
   afterAll(async () => {
+    global.fetch = originalFetch;
     await ctx.cleanup();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
   async function loginAndGetToken() {
@@ -192,6 +199,95 @@ describe('AgentConfig API', () => {
     expect(reset.status).toBe(200);
     expect(reset.body.businessKnowledgeUsesPreset).toBe(true);
     expect(reset.body.businessKnowledgeConfig).toEqual(reset.body.businessKnowledgePreset);
+  });
+
+  it('previews a grounded business knowledge answer without saving config', async () => {
+    const token = await loginAndGetToken();
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                grounded: true,
+                confidence: 0.91,
+                reply: 'Our classroom batches start from INR 78,000 per year depending on class and batch.',
+                usedEntryIds: ['fees_preview'],
+                reason: 'Fee structure entry directly answers the customer question.',
+              }),
+            },
+          },
+        ],
+      }),
+    }));
+
+    const res = await request(app)
+      .post('/api/agent/knowledge-preview')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        message: 'fees kitni hai?',
+        businessKnowledge: {
+          enabled: true,
+          entries: [
+            {
+              id: 'fees_preview',
+              title: 'Fee structure',
+              category: 'fees',
+              intents: ['FEE_ENQUIRY'],
+              keywords: ['fees', 'fee structure', 'cost'],
+              content: 'Our classroom batches start from INR 78,000 per year depending on class and batch.',
+              sourceLabel: 'Front desk fee note',
+            },
+          ],
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.previewOnly).toBe(true);
+    expect(res.body.inferredIntent).toBe('FEE_ENQUIRY');
+    expect(res.body.retrieval.signalLabel).toBe('Strong match');
+    expect(res.body.retrieval.topMatch).toEqual(expect.objectContaining({
+      id: 'fees_preview',
+      title: 'Fee structure',
+      category: 'fees',
+    }));
+    expect(res.body.outcome).toEqual(expect.objectContaining({
+      mode: 'grounded_answer',
+      wouldUseGroundedAnswer: true,
+      previewAnswer: 'Our classroom batches start from INR 78,000 per year depending on class and batch.',
+    }));
+  });
+
+  it('returns a safe handoff preview when no strong match is found', async () => {
+    const token = await loginAndGetToken();
+
+    const res = await request(app)
+      .post('/api/agent/knowledge-preview')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        message: 'hostel facility hai kya?',
+        businessKnowledge: {
+          enabled: true,
+          entries: [
+            {
+              title: 'Fee structure',
+              category: 'fees',
+              intents: ['FEE_ENQUIRY'],
+              keywords: ['fees'],
+              content: 'Our classroom batches start from INR 78,000 per year.',
+            },
+          ],
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.previewOnly).toBe(true);
+    expect(res.body.retrieval.hasConfidentMatch).toBe(false);
+    expect(res.body.outcome.mode).toBe('handoff');
+    expect(res.body.outcome.fallbackMessage).toContain('likely hand it to a human');
   });
 
   it('updates WhatsApp reply config through the existing agent config API', async () => {

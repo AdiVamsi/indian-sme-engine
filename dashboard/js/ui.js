@@ -270,12 +270,15 @@ export function DashUI(config) {
     const tr = document.createElement('tr');
     tr.dataset.leadId = lead.id;
     if (isNew) tr.classList.add('row-enter');
+    const isTerminal = ['WON', 'LOST'].includes(String(lead.status || '').toUpperCase());
 
-    const callbackCue = lead.callbackTime
+    const callbackCue = !isTerminal && lead.callbackTime
       ? getCallbackCue({ callbackTime: lead.callbackTime })
       : null;
 
-    if (callbackCue?.state === 'overdue') {
+    if (isTerminal) {
+      tr.classList.add('lead-row--closed');
+    } else if (callbackCue?.state === 'overdue') {
       tr.classList.add('lead-row--attention-critical');
     } else if (callbackCue?.state === 'due-soon') {
       tr.classList.add('lead-row--attention-high');
@@ -295,7 +298,7 @@ export function DashUI(config) {
       : '';
     const callbackHint = callbackCue
       ? `<div class="lead-row__hint lead-row__hint--callback lead-row__hint--${esc(callbackCue.state)}" title="${esc(callbackCue.title)}">⏰ ${esc(callbackCue.stateLabel)}${lead.callbackTime ? ` · ${esc(lead.callbackTime)}` : ''}</div>`
-      : lead.handoffReady
+      : !isTerminal && lead.handoffReady
         ? '<div class="lead-row__hint lead-row__hint--handoff">🤝 Ready for counsellor follow-up</div>'
       : '';
 
@@ -304,16 +307,16 @@ export function DashUI(config) {
         <div class="lead-row__primary">
           <button class="lead-name-btn" data-lead-id="${esc(lead.id)}">${esc(lead.name)}</button>
           <div class="lead-row__badges">
-            ${buildLeadCallbackBadge(lead)}
-            ${buildLeadWorkflowBadge(lead)}
+            ${isTerminal ? '' : buildLeadCallbackBadge(lead)}
+            ${isTerminal ? '' : buildLeadWorkflowBadge(lead)}
             ${buildLeadSourceBadge(lead.source)}
           </div>
         </div>
         ${messagePreview}
         ${callbackHint}
       </td>
-      <td>${esc(lead.phone)}</td>
-      <td>${esc(lead.email || '—')}</td>
+      <td><span class="lead-row__contact">${esc(lead.phone)}</span></td>
+      <td><span class="lead-row__contact lead-row__contact--email">${esc(lead.email || '—')}</span></td>
       <td>${buildStatusSelect(lead.id, lead.status, config.leadStatuses)}</td>
       <td>${buildPriorityBadge(lead.priority)}</td>
       <td><span class="score-val score-val--${(lead.priorityScore ?? 0) >= 40 ? 'high' : (lead.priorityScore ?? 0) >= 20 ? 'mid' : 'low'}">${esc(String(lead.priorityScore ?? 0))}</span>${tagHtml}</td>

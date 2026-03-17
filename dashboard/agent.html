@@ -663,6 +663,138 @@
       gap: 0.65rem;
     }
 
+    .kb-preview {
+      margin: 1rem 0 1.25rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .kb-preview__head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .kb-preview__title {
+      margin: 0 0 0.25rem;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #EDEFF2;
+    }
+
+    .kb-preview__sub {
+      margin: 0;
+      color: #9AA4B2;
+      font-size: 0.78125rem;
+      line-height: 1.5;
+    }
+
+    .kb-preview__badge {
+      flex-shrink: 0;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7DD3FC;
+      background: rgba(125,211,252,0.12);
+      border: 1px solid rgba(125,211,252,0.2);
+      border-radius: 999px;
+      padding: 0.18rem 0.55rem;
+    }
+
+    .kb-preview__controls {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .kb-preview__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.65rem;
+    }
+
+    .kb-preview__result {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      padding-top: 0.25rem;
+    }
+
+    .kb-preview__result[hidden] {
+      display: none;
+    }
+
+    .kb-preview__summary,
+    .kb-preview__meta,
+    .kb-preview__match-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+    }
+
+    .kb-preview__card,
+    .kb-preview__fallback,
+    .kb-preview__answer {
+      background: rgba(11,13,16,0.72);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 0.85rem 0.95rem;
+    }
+
+    .kb-preview__answer {
+      border-color: rgba(52,211,153,0.2);
+      background: rgba(52,211,153,0.08);
+    }
+
+    .kb-preview__fallback {
+      border-color: rgba(245,179,1,0.22);
+      background: rgba(245,179,1,0.08);
+    }
+
+    .kb-preview__label {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9AA4B2;
+      margin-bottom: 0.35rem;
+    }
+
+    .kb-preview__entry-title {
+      margin: 0 0 0.35rem;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #EDEFF2;
+    }
+
+    .kb-preview__why,
+    .kb-preview__text,
+    .kb-preview__match-item {
+      margin: 0;
+      font-size: 0.8125rem;
+      line-height: 1.55;
+      color: #D7DEE7;
+    }
+
+    .kb-preview__match-item {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 0.55rem 0.7rem;
+    }
+
+    .kb-preview__match-item strong {
+      color: #EDEFF2;
+    }
+
     @media (max-width: 720px) {
       .wa-form-grid,
       .wa-textarea-grid,
@@ -683,6 +815,11 @@
 
       .kb-toolbar__actions {
         width: 100%;
+      }
+
+      .kb-preview__head,
+      .kb-preview__actions {
+        flex-direction: column;
       }
     }
   </style>
@@ -898,6 +1035,33 @@
       <p class="wa-field__help" id="kb-preset-note">
         Preset fallback is preserved. If you reset this section, the business will go back to using the default knowledge entries for its industry.
       </p>
+
+      <div class="kb-preview">
+        <div class="kb-preview__head">
+          <div>
+            <h3 class="kb-preview__title">Knowledge test preview</h3>
+            <p class="kb-preview__sub">
+              Preview only. Nothing is sent, saved, or logged. Use this to test questions like “fees kitni hai?”, “online classes hai kya?”, or “branch kahan hai?” against the business knowledge shown on this page.
+            </p>
+          </div>
+          <span class="kb-preview__badge">Simulation only</span>
+        </div>
+
+        <div class="kb-preview__controls">
+          <div class="wa-field wa-field--full" style="margin:0">
+            <label for="kb-preview-message">Sample customer question</label>
+            <textarea id="kb-preview-message" rows="3" placeholder="fees kitni hai?"></textarea>
+            <p class="wa-field__help">Preview uses the current entries shown below. If you are editing a new entry, save that entry locally first so it can be included in the preview.</p>
+          </div>
+
+          <div class="kb-preview__actions">
+            <button class="btn-secondary" id="btn-clear-kb-preview" type="button">Clear</button>
+            <button class="btn-secondary" id="btn-run-kb-preview" type="button">Run preview</button>
+          </div>
+        </div>
+
+        <div class="kb-preview__result" id="kb-preview-result" hidden></div>
+      </div>
 
       <div class="kb-list" id="kb-list"></div>
       <div class="kb-empty" id="kb-empty" hidden>

@@ -121,6 +121,21 @@ async function saveConfig(body) {
   return data;
 }
 
+async function previewKnowledge(body) {
+  const res = await fetch(`${API_BASE_URL}/api/agent/knowledge-preview`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) {
+    localStorage.removeItem('dash_token');
+    window.location.href = '/dashboard/';
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
 const $ = (id) => document.getElementById(id);
 
 function esc(str) {
@@ -372,6 +387,10 @@ function formatKnowledgeCategory(category) {
     || category.replace(/_/g, ' ');
 }
 
+function formatKnowledgeIntent(intent, fallback = 'General enquiry') {
+  return KNOWLEDGE_INTENT_LABELS[intent] || intent || fallback;
+}
+
 function readKnowledgeIntents() {
   return [...$('kb-intents').querySelectorAll('input[type="checkbox"]')]
     .filter((input) => input.checked)
@@ -404,6 +423,7 @@ function populateBusinessKnowledgeConfig(effective, preset, usesPreset) {
 
   renderKnowledgeStatus();
   renderKnowledgeList();
+  clearKnowledgePreview({ preserveMessage: true });
   closeKnowledgeEditor();
 }
 
@@ -497,6 +517,7 @@ function persistKnowledgeEntry() {
 
   renderKnowledgeStatus();
   renderKnowledgeList();
+  clearKnowledgePreview({ preserveMessage: true });
   closeKnowledgeEditor();
   showStatus('Knowledge entry saved locally. Save changes to apply it to grounded answers.', 'ok');
 }
@@ -573,6 +594,79 @@ function readBusinessKnowledgeConfig() {
       enabled: entry.enabled !== false,
     })),
   };
+}
+
+function clearKnowledgePreview({ preserveMessage = true } = {}) {
+  const result = $('kb-preview-result');
+  result.hidden = true;
+  result.innerHTML = '';
+  if (!preserveMessage) $('kb-preview-message').value = '';
+}
+
+function formatKnowledgePreviewReason(match) {
+  const reasons = [];
+  if (match.intentMatched) reasons.push(`intent: ${formatKnowledgeIntent(match.intents?.[0])}`);
+  if (Array.isArray(match.matchedKeywords) && match.matchedKeywords.length) {
+    reasons.push(`keywords: ${match.matchedKeywords.slice(0, 3).join(', ')}`);
+  }
+  if (!reasons.length && match.keywordHits) reasons.push(`${match.keywordHits} keyword hit${match.keywordHits === 1 ? '' : 's'}`);
+  return reasons.join(' • ');
+}
+
+function renderKnowledgePreviewResult(result) {
+  const container = $('kb-preview-result');
+  const matches = Array.isArray(result?.retrieval?.matches) ? result.retrieval.matches : [];
+  const topMatch = result?.retrieval?.topMatch || null;
+  const topMatchHtml = topMatch ? `
+    <div class="kb-preview__card">
+      <span class="kb-preview__label">Likely matched entry</span>
+      <h4 class="kb-preview__entry-title">${esc(topMatch.title)}</h4>
+      <div class="kb-preview__meta">
+        <span class="kb-chip kb-chip--category">${esc(formatKnowledgeCategory(topMatch.category))}</span>
+        <span class="kb-chip kb-chip--intent">${esc(result?.retrieval?.signalLabel || 'Possible match')}</span>
+        <span class="kb-chip kb-chip--keyword">${esc(topMatch.sourceLabel || topMatch.title)}</span>
+      </div>
+      <p class="kb-preview__why">${esc(formatKnowledgePreviewReason(topMatch) || 'Matched from the current grounded business knowledge.')}</p>
+      <p class="kb-preview__text">${esc(truncateText(topMatch.contentPreview, 220))}</p>
+    </div>
+  ` : '';
+  const otherMatches = matches.slice(topMatch ? 1 : 0, 3);
+  const otherMatchesHtml = otherMatches.length ? `
+    <div class="kb-preview__card">
+      <span class="kb-preview__label">Other possible matches</span>
+      <div class="kb-preview__match-list">
+        ${otherMatches.map((match) => `
+          <div class="kb-preview__match-item">
+            <strong>${esc(match.title)}</strong><br />
+            ${esc(formatKnowledgeCategory(match.category))}${formatKnowledgePreviewReason(match) ? ` • ${esc(formatKnowledgePreviewReason(match))}` : ''}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+  const outcomeHtml = result?.outcome?.wouldUseGroundedAnswer ? `
+    <div class="kb-preview__answer">
+      <span class="kb-preview__label">Likely grounded answer</span>
+      <p class="kb-preview__text">${esc(result.outcome.previewAnswer)}</p>
+    </div>
+  ` : `
+    <div class="kb-preview__fallback">
+      <span class="kb-preview__label">Likely fallback</span>
+      <p class="kb-preview__text">${esc(result?.outcome?.fallbackMessage || 'The system would likely hand this question to a human.')}</p>
+    </div>
+  `;
+
+  container.innerHTML = `
+    <div class="kb-preview__summary">
+      <span class="kb-chip kb-chip--category">${esc(result?.retrieval?.signalLabel || 'Preview')}</span>
+      <span class="kb-chip kb-chip--intent">Inferred intent: ${esc(formatKnowledgeIntent(result?.inferredIntent, 'Not detected'))}</span>
+      <span class="kb-chip kb-chip--keyword">${result?.outcome?.wouldUseGroundedAnswer ? 'Grounded answer likely' : 'Human handoff likely'}</span>
+    </div>
+    ${topMatchHtml}
+    ${outcomeHtml}
+    ${otherMatchesHtml}
+  `;
+  container.hidden = false;
 }
 
 function validateBusinessKnowledgeConfig(config) {
@@ -660,10 +754,53 @@ $('btn-reset-knowledge').addEventListener('click', () => {
   showStatus('Business knowledge reset to the industry preset. Save changes to apply it.', 'ok');
 });
 
+$('btn-clear-kb-preview').addEventListener('click', () => {
+  clearKnowledgePreview({ preserveMessage: false });
+});
+
+$('btn-run-kb-preview').addEventListener('click', async () => {
+  const message = $('kb-preview-message').value.trim();
+  if (!message) {
+    showStatus('Please enter a sample customer question for the preview.', 'err');
+    $('kb-preview-message').focus();
+    return;
+  }
+
+  const businessKnowledge = readBusinessKnowledgeConfig();
+  const knowledgeValidationError = validateBusinessKnowledgeConfig(businessKnowledge);
+  if (knowledgeValidationError) {
+    showStatus(knowledgeValidationError, 'err');
+    return;
+  }
+
+  const button = $('btn-run-kb-preview');
+  const clearButton = $('btn-clear-kb-preview');
+  button.disabled = true;
+  clearButton.disabled = true;
+  button.textContent = 'Previewing…';
+
+  try {
+    const preview = await previewKnowledge({
+      message,
+      businessKnowledge,
+    });
+    renderKnowledgePreviewResult(preview);
+  } catch (err) {
+    console.error('[agent.js] knowledge preview failed:', err);
+    clearKnowledgePreview({ preserveMessage: true });
+    showStatus(err.message || 'Knowledge preview failed. Check console.', 'err');
+  } finally {
+    button.disabled = false;
+    clearButton.disabled = false;
+    button.textContent = 'Run preview';
+  }
+});
+
 $('kb-enabled').addEventListener('change', (event) => {
   knowledgeUsesPreset = false;
   knowledgeEnabled = event.target.checked;
   renderKnowledgeStatus();
+  clearKnowledgePreview({ preserveMessage: true });
 });
 
 $('kb-search').addEventListener('input', renderKnowledgeList);
@@ -688,6 +825,7 @@ $('kb-list').addEventListener('click', (event) => {
     );
     renderKnowledgeStatus();
     renderKnowledgeList();
+    clearKnowledgePreview({ preserveMessage: true });
     return;
   }
 
@@ -697,6 +835,7 @@ $('kb-list').addEventListener('click', (event) => {
     if (activeKnowledgeEntryId === entry.id) closeKnowledgeEditor();
     renderKnowledgeStatus();
     renderKnowledgeList();
+    clearKnowledgePreview({ preserveMessage: true });
   }
 });
 

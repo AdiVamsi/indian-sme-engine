@@ -1,0 +1,38 @@
+{
+  "sourceLabel": "Aarohan JEE Academy courses and batches",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "class_11_two_year_batch",
+      "title": "Class 11 two-year JEE batch",
+      "category": "courses",
+      "intents": ["COURSE_INFO", "ADMISSION", "GENERAL_ENQUIRY"],
+      "keywords": ["class 11 batch", "11th batch", "two year program", "2 year program", "foundation batch"],
+      "content": "For Class 11 students, Aarohan runs a two-year JEE foundation and advanced preparation track. The usual structure includes 4 to 5 classroom teaching days each week, weekly problem-practice sheets, periodic tests, and a weekend doubt window. This batch is meant for students starting serious JEE preparation from Class 11."
+    },
+    {
+      "id": "class_12_target_batch",
+      "title": "Class 12 target batch",
+      "category": "courses",
+      "intents": ["COURSE_INFO", "ADMISSION", "GENERAL_ENQUIRY"],
+      "keywords": ["class 12 batch", "12th batch", "one year program", "target batch", "board plus jee"],
+      "content": "For Class 12 students, Aarohan offers a one-year target batch that balances board exam pressure with JEE Main and Advanced preparation. The plan typically combines weekday subject classes, chapter tests, board-aligned revision blocks, and focused problem-solving for Physics, Chemistry, and Mathematics."
+    },
+    {
+      "id": "dropper_rank_improvement_batch",
+      "title": "Dropper rank-improvement batch",
+      "category": "courses",
+      "intents": ["COURSE_INFO", "ADMISSION", "GENERAL_ENQUIRY"],
+      "keywords": ["dropper batch", "droppers", "repeaters", "rank improvement", "drop year"],
+      "content": "Dropper batches are designed for students taking a repeat attempt after Class 12. These batches are usually more intensive, with faster syllabus coverage, scheduled test analysis, rank-improvement planning, and mentor check-ins for consistency. The counsellor generally confirms current seat availability before promising a specific dropper batch."
+    },
+    {
+      "id": "hybrid_learning_support",
+      "title": "Hybrid and online academic support",
+      "category": "online_classes",
+      "intents": ["GENERAL_ENQUIRY", "COURSE_INFO"],
+      "keywords": ["online classes", "hybrid", "recorded lectures", "live doubt", "online support"],
+      "content": "Aarohan is not a fully recorded self-paced platform. Classroom students receive hybrid support such as live doubt sessions, revision handouts, attendance follow-up, and limited access to online recap material when a class is missed. The admissions counsellor confirms the exact mix of classroom and online support for the selected batch."
+    }
+  ]
+}

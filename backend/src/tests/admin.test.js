@@ -241,6 +241,68 @@ describe('Admin API', () => {
     );
   });
 
+  it('GET /api/admin/leads - surfaces failed outbound WhatsApp replies for operator attention', async () => {
+    const lead = await prisma.lead.create({
+      data: {
+        businessId: ctx.business.id,
+        name: 'WhatsApp Failure Lead',
+        phone: '+91 99999 70031',
+        message: 'Need admission details',
+      },
+    });
+
+    await prisma.leadActivity.createMany({
+      data: [
+        {
+          leadId: lead.id,
+          type: 'AGENT_CLASSIFIED',
+          message: 'Lead classified as ADMISSION',
+          metadata: {
+            source: 'whatsapp',
+            bestCategory: 'ADMISSION',
+            tags: ['ADMISSION'],
+          },
+        },
+        {
+          leadId: lead.id,
+          type: 'AUTOMATION_ALERT',
+          message: 'WhatsApp reply failed: Meta access token expired',
+          metadata: {
+            channel: 'whatsapp',
+            direction: 'outbound',
+            deliveryStatus: 'failed',
+            failureTitle: 'Meta access token expired',
+            failureDetail: 'Reconnect or refresh the Meta WhatsApp access token.',
+            failureCategory: 'META_TOKEN_EXPIRED',
+            operatorActionRequired: 'Refresh the Meta access token and follow up manually.',
+            conversationState: {
+              status: 'send_failed',
+            },
+          },
+        },
+      ],
+    });
+
+    const res = await request(app).get('/api/admin/leads').set(auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: lead.id,
+          conversationStatus: 'send_failed',
+          handoffReady: false,
+          whatsappDeliveryStatus: 'failed',
+          whatsappNeedsAttention: true,
+          whatsappFailureTitle: 'Meta access token expired',
+          whatsappFailureCategory: 'META_TOKEN_EXPIRED',
+          whatsappFailureDetail: 'Reconnect or refresh the Meta WhatsApp access token.',
+          whatsappOperatorActionRequired: 'Refresh the Meta access token and follow up manually.',
+        }),
+      ])
+    );
+  });
+
   it('GET /api/admin/leads - returns 401 without token', async () => {
     const res = await request(app).get('/api/admin/leads');
     expect(res.status).toBe(401);

@@ -5,6 +5,7 @@ const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
 const SUPPORTED_KNOWLEDGE_INTENTS = new Set([
   'ADMISSION',
   'BATCH_TIMING',
+  'CALLBACK_REQUEST',
   'COURSE_INFO',
   'DEMO_REQUEST',
   'FEE_ENQUIRY',
@@ -23,6 +24,20 @@ const KNOWLEDGE_CATEGORIES = [
   'courses',
   'general',
 ];
+
+const KNOWLEDGE_CATEGORY_ALIASES = {
+  course: 'courses',
+  courses: 'courses',
+  demo: 'demo_class',
+  demo_class: 'demo_class',
+  delivery: 'online_classes',
+  online: 'online_classes',
+  online_classes: 'online_classes',
+  location: 'branch_location',
+  branch_location: 'branch_location',
+  faq: 'general',
+  general: 'general',
+};
 
 const KNOWLEDGE_QUERY_TERMS = [
   'fee',
@@ -55,6 +70,13 @@ const KNOWLEDGE_QUERY_TERMS = [
   'admission process',
   'how to join',
   'admission',
+  'hindi',
+  'english',
+  'language',
+  'callback',
+  'call back',
+  'call',
+  'phone',
 ];
 
 const STOPWORDS = new Set([
@@ -78,6 +100,13 @@ function slugify(value = '') {
     .slice(0, 48);
 }
 
+function normalizeKnowledgeCategory(value = '') {
+  const category = String(value || '').trim().toLowerCase();
+  if (!category) return null;
+  if (KNOWLEDGE_CATEGORIES.includes(category)) return category;
+  return KNOWLEDGE_CATEGORY_ALIASES[category] || null;
+}
+
 function tokenize(text = '') {
   return String(text || '')
     .toLowerCase()
@@ -93,13 +122,14 @@ function normalizeKnowledgeEntry(entry = {}, index = 0) {
       ? entry.answer.trim()
       : '';
   const title = String(entry.title || entry.question || `Knowledge ${index + 1}`).trim();
-  const category = String(entry.category || 'general').trim().toLowerCase();
+  const rawCategory = String(entry.category || 'general').trim().toLowerCase();
+  const category = normalizeKnowledgeCategory(rawCategory) || 'general';
   const fallbackId = slugify(`${category}_${title}`) || `knowledge_${index + 1}`;
 
   return {
     id: String(entry.id || fallbackId),
     title,
-    category: KNOWLEDGE_CATEGORIES.includes(category) ? category : 'general',
+    category,
     intents: normalizeStringArray(entry.intents || []).map((value) => value.toUpperCase()),
     keywords: normalizeStringArray(entry.keywords || []).map((value) => value.toLowerCase()),
     content,
@@ -237,6 +267,7 @@ function retrieveBusinessKnowledge({
 
 module.exports = {
   KNOWLEDGE_CATEGORIES,
+  normalizeKnowledgeCategory,
   KNOWLEDGE_QUERY_TERMS,
   SUPPORTED_KNOWLEDGE_INTENTS,
   isPotentialBusinessKnowledgeQuestion,

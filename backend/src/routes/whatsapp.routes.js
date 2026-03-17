@@ -80,17 +80,23 @@ async function processIncomingMessages(incomingMessages, log) {
         });
         processed += 1;
 
-        log.info(
-          {
-            businessId: business.id,
-            slug: business.slug,
-            leadId: existingLead.id,
-            replySent: continuationResult.replySent,
-            replyReason: continuationResult.replyReason || null,
-            conversationState: continuationResult.conversationState || null,
-          },
-          'WhatsApp continuation handled'
-        );
+        const continuationLogContext = {
+          businessId: business.id,
+          slug: business.slug,
+          leadId: existingLead.id,
+          replySent: continuationResult.replySent,
+          replyFailed: continuationResult.replyFailed || false,
+          replyReason: continuationResult.replyReason || null,
+          failureCategory: continuationResult.failureCategory || null,
+          failureTitle: continuationResult.failureTitle || null,
+          conversationState: continuationResult.conversationState || null,
+        };
+
+        if (continuationResult.replyFailed) {
+          log.warn(continuationLogContext, 'WhatsApp continuation handled with outbound reply failure');
+        } else {
+          log.info(continuationLogContext, 'WhatsApp continuation handled');
+        }
         continue;
       }
 
@@ -131,17 +137,23 @@ async function processIncomingMessages(incomingMessages, log) {
       emitLeadCreated(business.id, processedLead);
       processed += 1;
 
-      log.info(
-        {
-          businessId: business.id,
-          slug: business.slug,
-          leadId: processedLead.id,
-          priority: processedLead.priority,
-          priorityScore: processedLead.priorityScore,
-          tags: processedLead.tags,
-        },
-        'WhatsApp lead processed and broadcast'
-      );
+      const processedLeadLogContext = {
+        businessId: business.id,
+        slug: business.slug,
+        leadId: processedLead.id,
+        priority: processedLead.priority,
+        priorityScore: processedLead.priorityScore,
+        tags: processedLead.tags,
+        whatsappNeedsAttention: processedLead.whatsappNeedsAttention || false,
+        whatsappFailureTitle: processedLead.whatsappFailureTitle || null,
+        whatsappFailureCategory: processedLead.whatsappFailureCategory || null,
+      };
+
+      if (processedLead.whatsappNeedsAttention) {
+        log.warn(processedLeadLogContext, 'WhatsApp lead processed but outbound reply failed');
+      } else {
+        log.info(processedLeadLogContext, 'WhatsApp lead processed and broadcast');
+      }
     } catch (err) {
       log.error(
         {

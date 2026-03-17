@@ -1,0 +1,38 @@
+{
+  "sourceLabel": "Aarohan JEE Academy fees and payment",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "class_11_fee_range",
+      "title": "Class 11 fee range",
+      "category": "fees",
+      "intents": ["FEE_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["class 11", "class 11 fees", "11th fees", "2 year fee", "class 11 fee", "fees"],
+      "content": "For the imagined Aarohan sample setup, Class 11 classroom batches usually fall between INR 1,18,000 and INR 1,32,000 for the first academic year, depending on the batch intensity, test-plan variant, and scholarship slab. The team normally shares the exact payable fee only after confirming whether the student is joining the regular, advanced, or scholarship-linked track."
+    },
+    {
+      "id": "class_12_and_dropper_fee_range",
+      "title": "Class 12 and dropper fee range",
+      "category": "fees",
+      "intents": ["FEE_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["class 12", "class 12 fees", "12th fees", "dropper fees", "repeater fees", "drop year fee", "fees"],
+      "content": "Class 12 target batches typically fall around INR 1,05,000 to INR 1,22,000 for the year, while dropper rank-improvement batches are usually around INR 1,28,000 to INR 1,48,000 depending on programme depth and test support. These figures are sample front-desk ranges, not a promise of final billing without counsellor confirmation."
+    },
+    {
+      "id": "installment_and_payment_options",
+      "title": "Installment and payment options",
+      "category": "fees",
+      "intents": ["FEE_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["installment", "emi", "payment plan", "monthly payment", "lump sum"],
+      "content": "Aarohan usually allows a one-time payment option and a split-payment plan in 2 or 3 instalments for eligible admissions. Registration is typically taken first, and later instalment dates are shared in writing at the time of admission. EMI availability, if any, depends on the payment partner or guardian card facility rather than a blanket academy promise."
+    },
+    {
+      "id": "refund_and_cancellation_boundary",
+      "title": "Refund and cancellation boundary",
+      "category": "fees",
+      "intents": ["FEE_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["refund", "cancel", "cancellation", "refund policy", "registration amount"],
+      "content": "The admissions team can explain cancellation and refund terms, but the sample policy does not promise a full refund after several classes have already been attended. Registration or seat-blocking amounts are usually treated separately from tuition. For an exact refund case, the counsellor reviews the admission date, batch start date, and classes consumed before confirming anything."
+    }
+  ]
+}

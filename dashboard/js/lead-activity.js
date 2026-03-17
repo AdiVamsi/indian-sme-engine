@@ -66,6 +66,11 @@ const ACTIVITY_MAP = {
     icon: '🔄',
     dotClass: 'tl-dot--default',
   },
+  AUTOMATION_ALERT: {
+    label: 'Automation event',
+    icon: '🤖',
+    dotClass: 'tl-dot--default',
+  },
 };
 
 function resolveType(type) {
@@ -74,6 +79,36 @@ function resolveType(type) {
     icon: '●',
     dotClass: 'tl-dot--default',
   };
+}
+
+function resolveActivityPresentation(activity) {
+  const meta = activity?.metadata || {};
+
+  if (activity?.type === 'AUTOMATION_ALERT' && meta.reason === 'WHATSAPP_AUTO_REPLY_FAILED') {
+    return {
+      label: 'WhatsApp reply failed',
+      icon: '⚠️',
+      dotClass: 'tl-dot--error',
+    };
+  }
+
+  if (activity?.type === 'AUTOMATION_ALERT' && meta.channel === 'whatsapp' && meta.direction === 'inbound') {
+    return {
+      label: 'WhatsApp message received',
+      icon: '💬',
+      dotClass: 'tl-dot--default',
+    };
+  }
+
+  if (activity?.type === 'AUTOMATION_ALERT' && meta.channel === 'whatsapp' && meta.direction === 'outbound') {
+    return {
+      label: meta.deliveryStatus === 'failed' ? 'WhatsApp reply failed' : 'WhatsApp reply sent',
+      icon: meta.deliveryStatus === 'failed' ? '⚠️' : '📲',
+      dotClass: meta.deliveryStatus === 'failed' ? 'tl-dot--error' : 'tl-dot--followup',
+    };
+  }
+
+  return resolveType(activity?.type);
 }
 
 /* ── Metadata rendering ─────────────────────────────────────────────────── */
@@ -88,6 +123,30 @@ function resolveType(type) {
  */
 function renderMeta(type, meta) {
   if (!meta || typeof meta !== 'object') return '';
+
+  if (type === 'AUTOMATION_ALERT' && meta.reason === 'WHATSAPP_AUTO_REPLY_FAILED') {
+    const parts = [];
+    if (meta.failureTitle) {
+      parts.push(`<span class="tl-meta__kv">
+        <span class="tl-meta__kv-label">Failure:</span>
+        <span class="tl-meta__kv-value">${escHtml(String(meta.failureTitle))}</span>
+      </span>`);
+    }
+    if (meta.operatorActionRequired) {
+      parts.push(`<span class="tl-meta__kv">
+        <span class="tl-meta__kv-label">Action:</span>
+        <span class="tl-meta__kv-value">${escHtml(String(meta.operatorActionRequired))}</span>
+      </span>`);
+    }
+    if (meta.providerStatus != null) {
+      parts.push(`<span class="tl-meta__kv">
+        <span class="tl-meta__kv-label">Meta status:</span>
+        <span class="tl-meta__kv-value">${escHtml(String(meta.providerStatus))}</span>
+      </span>`);
+    }
+    if (!parts.length) return '';
+    return `<div class="tl-meta">${parts.join('')}</div>`;
+  }
 
   /* AGENT_CLASSIFIED — show tags as pills */
   if (type === 'AGENT_CLASSIFIED') {
@@ -165,7 +224,7 @@ function buildTimeline(activities) {
   );
 
   return sorted.map((act, i) => {
-    const { label, icon, dotClass } = resolveType(act.type);
+    const { label, icon, dotClass } = resolveActivityPresentation(act);
     const time = formatDateTime(act.createdAt);
     const metaHtml = renderMeta(act.type, act.metadata);
 

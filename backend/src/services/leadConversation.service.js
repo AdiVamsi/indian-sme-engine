@@ -25,6 +25,7 @@ const STATUS_LABELS = {
   awaiting_user: 'Waiting for customer reply',
   handoff: 'Ready for counsellor handoff',
   closed: 'Conversation closed',
+  send_failed: 'Reply failed - operator attention needed',
 };
 
 const PENDING_FIELD_ACTIONS = {
@@ -65,6 +66,15 @@ function getLatestConversationState(whatsAppActivities = []) {
   return null;
 }
 
+function getLatestFailedWhatsAppReply(whatsAppActivities = []) {
+  return [...whatsAppActivities]
+    .filter((activity) =>
+      activity?.metadata?.direction === 'outbound'
+      && activity?.metadata?.deliveryStatus === 'failed'
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0] || null;
+}
+
 function formatIntentLabel(intent) {
   return INTENT_LABELS[intent] || intent?.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()) || 'Unknown';
 }
@@ -96,8 +106,15 @@ function buildRecommendedNextAction({
   classifiedMeta,
   prioritizedMeta,
   latestCallback,
+  latestFailedReply,
 }) {
   const status = conversationState?.status;
+  if (status === 'send_failed') {
+    const failureTitle = latestFailedReply?.metadata?.failureTitle || 'WhatsApp reply failed';
+    const operatorActionRequired = latestFailedReply?.metadata?.operatorActionRequired || 'Refresh the Meta connection and follow up with the lead manually.';
+    return `${failureTitle}. ${operatorActionRequired}`.replace(/\s+/g, ' ').trim();
+  }
+
   if (status === 'awaiting_user') {
     return PENDING_FIELD_ACTIONS[conversationState.pendingField] || 'Wait for the next WhatsApp reply before handing off.';
   }
@@ -138,7 +155,11 @@ function buildRecommendedNextAction({
 
 function buildTranscript(whatsAppActivities = []) {
   return whatsAppActivities
-    .filter((activity) => activity?.metadata?.direction && activity?.metadata?.messageText)
+    .filter((activity) =>
+      activity?.metadata?.direction
+      && activity?.metadata?.messageText
+      && !(activity?.metadata?.direction === 'outbound' && activity?.metadata?.deliveryStatus === 'failed')
+    )
     .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
     .map((activity) => ({
       direction: activity.metadata.direction,
@@ -161,6 +182,7 @@ function buildWhatsAppConversationSummary({ lead, activities = [] }) {
   const prioritizedMeta = getPrioritizationMeta(activities);
   const conversationState = getLatestConversationState(whatsAppActivities);
   const latestCallback = getLatestScheduledCallback(activities);
+  const latestFailedReply = getLatestFailedWhatsAppReply(whatsAppActivities);
   const primaryIntent = conversationState?.flowIntent || classifiedMeta.bestCategory || null;
   const capturedFields = buildCapturedFields(conversationState, classifiedMeta);
   const transcript = buildTranscript(whatsAppActivities);
@@ -178,8 +200,17 @@ function buildWhatsAppConversationSummary({ lead, activities = [] }) {
       classifiedMeta,
       prioritizedMeta,
       latestCallback,
+      latestFailedReply,
     }),
     transcript,
+    latestFailedReply: latestFailedReply ? {
+      title: latestFailedReply.metadata?.failureTitle || 'WhatsApp reply failed',
+      detail: latestFailedReply.metadata?.failureDetail || latestFailedReply.message || null,
+      category: latestFailedReply.metadata?.failureCategory || null,
+      operatorActionRequired: latestFailedReply.metadata?.operatorActionRequired || null,
+      attemptedMessage: latestFailedReply.metadata?.replyMessage || latestFailedReply.metadata?.messageText || null,
+      createdAt: latestFailedReply.createdAt,
+    } : null,
     latestCallback: latestCallback ? {
       callbackTime: latestCallback.metadata?.callbackTime || null,
       createdAt: latestCallback.createdAt,

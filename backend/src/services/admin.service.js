@@ -1,34 +1,7 @@
 'use strict';
 
 const { prisma } = require('../lib/prisma');
-
-function getLatestCallbackDetails(activities = []) {
-  const latest = activities.find((activity) =>
-    activity.type === 'FOLLOW_UP_SCHEDULED'
-    && activity?.metadata?.reason === 'OPERATOR_CALLBACK_SCHEDULED'
-  );
-
-  if (!latest) {
-    return {
-      callbackTime: null,
-      callbackScheduledAt: null,
-    };
-  }
-
-  return {
-    callbackTime: latest.metadata?.callbackTime || null,
-    callbackScheduledAt: latest.createdAt || null,
-  };
-}
-
-function getLatestConversationStatus(activities = []) {
-  const latest = activities.find((activity) => {
-    const metadata = activity?.metadata || {};
-    return metadata.channel === 'whatsapp' && metadata.conversationState?.status;
-  });
-
-  return latest?.metadata?.conversationState?.status || null;
-}
+const { buildLeadActivitySummary } = require('./leads.service');
 
 const getDashboardSummary = async (businessId) => {
   const [
@@ -77,30 +50,9 @@ const getLeads = async (businessId) => {
   });
 
   return leads.map(({ activities, ...lead }) => {
-    const classAct = activities.find((a) => a.type === 'AGENT_CLASSIFIED');
-    const prioAct  = activities.find((a) => a.type === 'AGENT_PRIORITIZED');
-    const callback = getLatestCallbackDetails(activities);
-    const conversationStatus = getLatestConversationStatus(activities);
-
-    const tags          = classAct?.metadata?.tags         ?? [];
-    const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
-    const source        = classAct?.metadata?.source       ?? 'web';
-    const priority      = priorityScore >= 30 ? 'HIGH'
-                        : priorityScore >= 10 ? 'NORMAL'
-                        :                       'LOW';
-
     return {
       ...lead,
-      priorityScore,
-      tags,
-      priority,
-      source,
-      callbackTime: callback.callbackTime,
-      callbackScheduledAt: callback.callbackScheduledAt,
-      conversationStatus,
-      handoffReady: conversationStatus === 'handoff',
-      hasClassification: Boolean(classAct),
-      hasPrioritization: Boolean(prioAct),
+      ...buildLeadActivitySummary(activities),
     };
   });
 };

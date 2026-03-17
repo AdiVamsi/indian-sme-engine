@@ -141,6 +141,7 @@ async function waitForLeadByPhone(businessId, phone, predicate = null) {
 describe('WhatsApp webhook integration', () => {
   let ctx;
   let originalFetch;
+  let defaultFetchImpl;
   const testPhones = ['+919876543210', '+919800000001', '+919811111111'];
 
   beforeAll(async () => {
@@ -254,8 +255,7 @@ describe('WhatsApp webhook integration', () => {
       },
     });
 
-    originalFetch = global.fetch;
-    global.fetch = jest.fn(async (url, options = {}) => {
+    defaultFetchImpl = async (url, options = {}) => {
       if (String(url).includes('/chat/completions')) {
         const payload = JSON.parse(options.body || '{}');
         const userMessage = payload.messages?.find((entry) => entry.role === 'user')?.content || '{}';
@@ -309,7 +309,10 @@ describe('WhatsApp webhook integration', () => {
       }
 
       throw new Error(`Unexpected fetch URL: ${url}`);
-    });
+    };
+
+    originalFetch = global.fetch;
+    global.fetch = jest.fn(defaultFetchImpl);
   }, 15000);
 
   afterAll(async () => {
@@ -325,6 +328,9 @@ describe('WhatsApp webhook integration', () => {
         phone: { in: testPhones },
       },
     });
+    if (global.fetch?.mockImplementation) {
+      global.fetch.mockImplementation(defaultFetchImpl);
+    }
   });
 
   afterEach(() => {
@@ -392,6 +398,89 @@ describe('WhatsApp webhook integration', () => {
         phone,
         source: 'whatsapp',
         tags: expect.arrayContaining(['ADMISSION']),
+      })
+    );
+  });
+
+  it('records an operator-visible failure activity when Meta rejects the outbound WhatsApp reply because the access token expired', async () => {
+    const phone = '+919822222222';
+    testPhones.push(phone);
+
+    global.fetch.mockImplementation(async (url, options = {}) => {
+      if (String(url).includes('graph.facebook.com')) {
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({
+            error: {
+              message: 'Error validating access token: Session has expired.',
+              type: 'OAuthException',
+              code: 190,
+              error_subcode: 463,
+            },
+          }),
+        };
+      }
+
+      return defaultFetchImpl(url, options);
+    });
+
+    const res = await request(app)
+      .post('/api/webhooks/whatsapp')
+      .send(buildWebhookPayload({
+        phone,
+        message: 'I need coaching immediately',
+        messageId: 'wamid.message.expired-token',
+      }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true, accepted: 1 });
+
+    const lead = await waitForLeadByPhone(ctx.business.id, phone, (candidate) =>
+      candidate.activities.some((activity) =>
+        activity.type === 'AUTOMATION_ALERT'
+        && activity.metadata?.reason === 'WHATSAPP_AUTO_REPLY_FAILED'
+      )
+    );
+
+    expect(lead).toBeTruthy();
+
+    const classified = lead.activities.find((activity) => activity.type === 'AGENT_CLASSIFIED');
+    const prioritized = lead.activities.find((activity) => activity.type === 'AGENT_PRIORITIZED');
+    const outboundFailure = lead.activities.find((activity) =>
+      activity.type === 'AUTOMATION_ALERT'
+      && activity.metadata?.reason === 'WHATSAPP_AUTO_REPLY_FAILED'
+    );
+    const outboundSuccess = lead.activities.find((activity) =>
+      activity.type === 'AUTOMATION_ALERT'
+      && activity.metadata?.reason === 'WHATSAPP_AUTO_REPLY'
+    );
+
+    expect(classified).toBeTruthy();
+    expect(prioritized).toBeTruthy();
+    expect(outboundFailure).toBeTruthy();
+    expect(outboundSuccess).toBeUndefined();
+    expect(outboundFailure.message).toBe('WhatsApp reply failed: Meta access token expired');
+    expect(outboundFailure.metadata.deliveryStatus).toBe('failed');
+    expect(outboundFailure.metadata.failureCategory).toBe('META_TOKEN_EXPIRED');
+    expect(outboundFailure.metadata.failureTitle).toBe('Meta access token expired');
+    expect(outboundFailure.metadata.failureDetail).toContain('Automated WhatsApp replies are not being delivered');
+    expect(outboundFailure.metadata.operatorActionRequired).toContain('Refresh the Meta access token');
+    expect(outboundFailure.metadata.providerStatus).toBe(401);
+    expect(outboundFailure.metadata.providerCode).toBe(190);
+    expect(outboundFailure.metadata.providerSubcode).toBe(463);
+    expect(outboundFailure.metadata.conversationState.status).toBe('send_failed');
+    expect(outboundFailure.metadata.conversationState.pendingField).toBe('student_class');
+    expect(outboundFailure.metadata.replyMessage).toContain('Admissions are open');
+
+    expect(broadcast).toHaveBeenCalledWith(
+      ctx.business.id,
+      'lead:new',
+      expect.objectContaining({
+        phone,
+        source: 'whatsapp',
+        whatsappNeedsAttention: true,
+        whatsappFailureTitle: 'Meta access token expired',
       })
     );
   });

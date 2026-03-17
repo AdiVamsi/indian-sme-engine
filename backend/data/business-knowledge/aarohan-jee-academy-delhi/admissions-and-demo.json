@@ -1,0 +1,30 @@
+{
+  "sourceLabel": "Aarohan JEE Academy admissions and demo",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "admission_process",
+      "title": "Admission process",
+      "category": "admission",
+      "intents": ["ADMISSION", "GENERAL_ENQUIRY"],
+      "keywords": ["admission process", "how to join", "enrollment", "enrolment", "join"],
+      "content": "The normal admission flow is counselling first, then batch mapping, then fee explanation, and then seat confirmation. Aarohan usually asks for the student's class, target exam year, recent academic background, and preferred timing before recommending a batch. Once the parent agrees, the team shares the admission form, document list, payment steps, and start-date guidance."
+    },
+    {
+      "id": "demo_class_policy",
+      "title": "Demo class policy",
+      "category": "demo_class",
+      "intents": ["DEMO_REQUEST", "GENERAL_ENQUIRY"],
+      "keywords": ["demo class", "trial class", "demo", "trial", "orientation session"],
+      "content": "Demo classes are available for serious JEE enquiries, but they are usually scheduled in fixed slots rather than on-demand at any hour. The counsellor first checks the student's class and suitable programme, then suggests the next available demo or orientation window. A demo class is meant to help the family evaluate teaching style, not to guarantee seat locking or scholarship approval."
+    },
+    {
+      "id": "callback_support",
+      "title": "Callback support",
+      "category": "general",
+      "intents": ["CALLBACK_REQUEST", "GENERAL_ENQUIRY"],
+      "keywords": ["call", "callback", "phone", "counsellor call", "call kar sakte ho"],
+      "content": "If a parent or student asks for a call, Aarohan's admissions desk tries to return the call within normal working hours, usually between 10:00 AM and 7:30 PM. Urgent same-day callbacks are attempted when a counsellor is free, but an exact minute-by-minute callback promise should not be overcommitted on WhatsApp. Families can still leave their preferred call time and language preference."
+    }
+  ]
+}

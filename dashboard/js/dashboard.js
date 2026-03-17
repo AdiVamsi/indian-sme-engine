@@ -791,6 +791,7 @@ function renderLeads(leads) {
 function syncLeadDerivedViews({ rerenderTable = false } = {}) {
   if (rerenderTable) _applyLeadFilters();
   ui?.renderDonutChart(_allLeads);
+  renderWhatsAppHealthAlert(_allLeads);
   renderActionCenter();
   if (activeTab === 'overview') renderOverviewActivity(_allLeads);
   if (activeTab === 'automations') renderAutomations(_allLeads);
@@ -1289,6 +1290,13 @@ function _buildActivityEvents(leads) {
       events.push({ type: 'AGENT_CLASSIFIED', lead, time: lead.createdAt, tags: lead.tags });
     if (lead.hasPrioritization)
       events.push({ type: 'AGENT_PRIORITIZED', lead, time: lead.createdAt, score: lead.priorityScore });
+    if (lead.whatsappNeedsAttention)
+      events.push({
+        type: 'WHATSAPP_REPLY_FAILED',
+        lead,
+        time: lead.whatsappFailureAt || lead.createdAt,
+        failureTitle: lead.whatsappFailureTitle,
+      });
   });
   events.sort((a, b) => new Date(b.time) - new Date(a.time));
   return events;
@@ -1308,9 +1316,10 @@ function _renderActivityInto(containerId, events, limit) {
     let detail = _escDrawer(ev.lead.name ?? 'Unknown');
     if (ev.type === 'AGENT_CLASSIFIED') detail += ` — ${_escDrawer(ev.tags.join(', '))}`;
     if (ev.type === 'AGENT_PRIORITIZED') detail += ` — Score: ${_escDrawer(ev.score)}`;
+    if (ev.type === 'WHATSAPP_REPLY_FAILED') detail += ` — ${_escDrawer(ev.failureTitle || 'Operator attention needed')}`;
 
     return `
-      <div class="auto-event">
+      <div class="auto-event${cfg.tone ? ` auto-event--${cfg.tone}` : ''}">
         <span class="auto-event__icon">${cfg.icon}</span>
         <div class="auto-event__body">
           <span class="auto-event__label">${cfg.label}</span>
@@ -1332,10 +1341,55 @@ const AUTO_EVENT_CFG = {
   LEAD_CREATED: { icon: '📋', label: 'New enquiry received' },
   AGENT_CLASSIFIED: { icon: '🏷️', label: 'Lead classified' },
   AGENT_PRIORITIZED: { icon: '⚡', label: 'Priority scored' },
+  WHATSAPP_REPLY_FAILED: { icon: '⚠️', label: 'WhatsApp reply failed', tone: 'critical' },
 };
 
 function renderAutomations(leads) {
   _renderActivityInto('automations-feed', _buildActivityEvents(leads), 50);
+}
+
+function deriveWhatsAppHealth(leads = []) {
+  const failingLeads = [...leads]
+    .filter((lead) => lead?.whatsappNeedsAttention)
+    .sort((a, b) => new Date(b.whatsappFailureAt || b.createdAt) - new Date(a.whatsappFailureAt || a.createdAt));
+
+  if (!failingLeads.length) {
+    return null;
+  }
+
+  const latest = failingLeads[0];
+  return {
+    title: latest.whatsappFailureTitle || 'WhatsApp sending is unhealthy',
+    detail: latest.whatsappFailureDetail || 'An outbound WhatsApp reply failed and needs operator attention.',
+    failureAt: latest.whatsappFailureAt || latest.createdAt,
+    leadName: latest.name || 'Unknown lead',
+    affectedLeadCount: failingLeads.length,
+  };
+}
+
+function renderWhatsAppHealthAlert(leads = []) {
+  const container = $('whatsapp-health-alert');
+  if (!container) return;
+
+  const health = deriveWhatsAppHealth(leads);
+  if (!health) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const affectedLabel = health.affectedLeadCount > 1
+    ? `${health.affectedLeadCount} leads affected`
+    : `Lead: ${health.leadName}`;
+
+  container.innerHTML = `
+    <div class="health-alert">
+      <div class="health-alert__body">
+        <div class="health-alert__eyebrow">WhatsApp sending warning</div>
+        <div class="health-alert__title">${_escDrawer(health.title)}</div>
+        <p class="health-alert__detail">${_escDrawer(health.detail)}</p>
+      </div>
+      <span class="health-alert__meta">${_escDrawer(affectedLabel)}</span>
+    </div>`;
 }
 
 /* ─────────────────────────────────────────────────
@@ -1363,13 +1417,17 @@ function onNewLead(lead) {
 
   if (!isRealtimeUpdate) {
     const name = lead.name ? `: ${lead.name}` : '';
-    const toastMsg = lead.priority === 'HIGH'
-      ? `🔥 New High Priority Lead${name}`
-      : lead.priority === 'NORMAL'
-        ? `⭐ New Lead${name}`
-        : (config.notifText?.newLead ?? `New lead${name}`);
+    if (lead.whatsappNeedsAttention) {
+      ui.showToast(`WhatsApp reply failed${name} — ${lead.whatsappFailureTitle || 'operator attention needed'}`, 'error');
+    } else {
+      const toastMsg = lead.priority === 'HIGH'
+        ? `🔥 New High Priority Lead${name}`
+        : lead.priority === 'NORMAL'
+          ? `⭐ New Lead${name}`
+          : (config.notifText?.newLead ?? `New lead${name}`);
 
-    ui.showToast(toastMsg, lead.priority === 'HIGH' ? 'success' : 'info');
+      ui.showToast(toastMsg, lead.priority === 'HIGH' ? 'success' : 'info');
+    }
   }
 
   syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
@@ -1525,6 +1583,18 @@ function _resolveDrawerActivityPresentation(act) {
   }
 
   if (act.type === 'AUTOMATION_ALERT') {
+    if (meta.reason === 'WHATSAPP_AUTO_REPLY_FAILED') {
+      return {
+        label: 'WhatsApp reply failed',
+        icon: '⚠️',
+        dot: 'dtl-dot--error',
+        category: 'system',
+        categoryLabel: 'Workflow',
+        emphasis: 'high',
+        message: [meta.failureTitle, meta.failureDetail].filter(Boolean).join('. ') || act.message || '',
+      };
+    }
+
     if (meta.reason === 'OPERATOR_MARKED_CALLED') {
       return {
         label: 'Marked as called',
@@ -1664,6 +1734,7 @@ function _resolveDrawerActivityPresentation(act) {
 function _buildWhatsAppSummaryHtml(summary, { leadStatus = null } = {}) {
   if (!summary) return '';
   const isTerminal = TERMINAL_LEAD_STATUSES.has(String(leadStatus || '').toUpperCase());
+  const hasFailedReply = Boolean(summary.latestFailedReply);
 
   const callbackCue = summary.latestCallback
     ? getCallbackCue({
@@ -1703,7 +1774,7 @@ function _buildWhatsAppSummaryHtml(summary, { leadStatus = null } = {}) {
     </div>`;
 
   return `
-    <div class="wa-summary${isTerminal ? ' wa-summary--closed' : ''}">
+    <div class="wa-summary${isTerminal ? ' wa-summary--closed' : ''}${hasFailedReply ? ' wa-summary--error' : ''}">
       <div class="wa-summary__header">
         <div>
           <div class="wa-summary__eyebrow">${_escDrawer(isTerminal ? 'WhatsApp history' : 'WhatsApp handoff')}</div>
@@ -1713,6 +1784,15 @@ function _buildWhatsAppSummaryHtml(summary, { leadStatus = null } = {}) {
           ${_escDrawer(summary.conversationStatusLabel || 'Conversation captured')}
         </span>
       </div>
+
+      ${summary.latestFailedReply ? `
+        <div class="wa-summary__failure">
+          <div class="wa-summary__failure-title">Latest outbound failure</div>
+          <p class="wa-summary__failure-text">${_escDrawer(
+            [summary.latestFailedReply.title, summary.latestFailedReply.detail].filter(Boolean).join('. ')
+            || 'The latest WhatsApp reply attempt failed.'
+          )}</p>
+        </div>` : ''}
 
       ${fields ? `<div class="wa-summary__fields">${fields}</div>` : '<div class="wa-summary__empty">No captured fields yet. Use the transcript below for context.</div>'}
 
@@ -1934,6 +2014,13 @@ function _deriveLeadDrawerDisplayMeta(data) {
   const activities = data?.activities || [];
   const classified = activities.find((activity) => activity.type === 'AGENT_CLASSIFIED')?.metadata || {};
   const prioritized = activities.find((activity) => activity.type === 'AGENT_PRIORITIZED')?.metadata || {};
+  const latestFailedReply = [...activities]
+    .filter((activity) =>
+      activity?.metadata?.channel === 'whatsapp'
+      && activity?.metadata?.direction === 'outbound'
+      && activity?.metadata?.deliveryStatus === 'failed'
+    )
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0] || null;
   const priorityScore = prioritized.priorityScore ?? 0;
   const hasClassification = activities.some((activity) => activity.type === 'AGENT_CLASSIFIED');
   const hasPrioritization = activities.some((activity) => activity.type === 'AGENT_PRIORITIZED');
@@ -1945,6 +2032,13 @@ function _deriveLeadDrawerDisplayMeta(data) {
     source: classified.source || 'web',
     hasClassification,
     hasPrioritization,
+    whatsappDeliveryStatus: latestFailedReply ? 'failed' : null,
+    whatsappNeedsAttention: Boolean(latestFailedReply),
+    whatsappFailureTitle: latestFailedReply?.metadata?.failureTitle || null,
+    whatsappFailureDetail: latestFailedReply?.metadata?.failureDetail || null,
+    whatsappFailureCategory: latestFailedReply?.metadata?.failureCategory || null,
+    whatsappFailureAt: latestFailedReply?.createdAt || null,
+    whatsappOperatorActionRequired: latestFailedReply?.metadata?.operatorActionRequired || null,
   };
 }
 
@@ -2362,7 +2456,13 @@ function _renderDrawerTimeline(data) {
           <span class="dtl-pill dtl-pill--callback-${_escDrawer(callbackCue.state)}">${_escDrawer(callbackCue.stateLabel)}</span>
         </div>`;
     } else if (meta?.channel === 'whatsapp' && meta?.direction === 'outbound' && meta?.conversationState?.status) {
-      metaHtml = `<div class="dtl-pills"><span class="dtl-pill">${_escDrawer(_titleCaseDrawer(meta.conversationState.status))}</span></div>`;
+      const pills = [
+        `<span class="dtl-pill">${_escDrawer(_titleCaseDrawer(meta.conversationState.status))}</span>`,
+      ];
+      if (meta?.deliveryStatus === 'failed' && meta?.failureTitle) {
+        pills.push(`<span class="dtl-pill dtl-pill--callback-overdue">${_escDrawer(meta.failureTitle)}</span>`);
+      }
+      metaHtml = `<div class="dtl-pills">${pills.join('')}</div>`;
     }
 
     return `
@@ -2432,7 +2532,7 @@ function _renderDrawerOverview(data) {
         <div class="drawer-overview__headline">${esc(primaryIntentLabel)}</div>
         <div class="drawer-overview__badges">
           <span class="drawer-overview__badge drawer-overview__badge--status drawer-overview__badge--status-${esc(String(lead.status || 'new').toLowerCase())}">${esc(_titleCaseDrawer(lead.status || 'NEW'))}</span>
-          ${conversationStatus ? `<span class="drawer-overview__badge drawer-overview__badge--conversation">${esc(whatsappConversation.conversationStatusLabel || _titleCaseDrawer(conversationStatus))}</span>` : ''}
+          ${conversationStatus ? `<span class="drawer-overview__badge drawer-overview__badge--conversation drawer-overview__badge--conversation-${esc(conversationStatus)}">${esc(whatsappConversation.conversationStatusLabel || _titleCaseDrawer(conversationStatus))}</span>` : ''}
           ${(!_isTerminalLead(lead) && callbackCue) ? `<span class="drawer-overview__badge drawer-overview__badge--callback drawer-overview__badge--callback-${esc(callbackCue.state)}">${esc(callbackCue.badgeLabel)}</span>` : ''}
           <span class="drawer-overview__badge drawer-overview__badge--source">${esc(sourceLabel)}</span>
         </div>

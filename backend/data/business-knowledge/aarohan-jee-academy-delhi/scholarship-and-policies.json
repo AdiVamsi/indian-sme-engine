@@ -1,0 +1,30 @@
+{
+  "sourceLabel": "Aarohan JEE Academy scholarship and policies",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "scholarship_guidance",
+      "title": "Scholarship guidance",
+      "category": "scholarship",
+      "intents": ["SCHOLARSHIP_ENQUIRY", "FEE_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["scholarship", "concession", "discount", "merit scholarship", "fee concession"],
+      "content": "Scholarship guidance is available for students with strong board performance, internal test results, olympiad background, or a good entrance-screening result. The team generally asks for recent marks, exam history, and the intended batch before discussing concession bands. Final scholarship approval is usually linked to the institute's current policy and seat planning."
+    },
+    {
+      "id": "scholarship_no_guarantee",
+      "title": "No guaranteed full scholarship",
+      "category": "scholarship",
+      "intents": ["SCHOLARSHIP_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["full scholarship", "100 scholarship", "guarantee", "guaranteed scholarship"],
+      "content": "Aarohan does not promise a guaranteed 100% scholarship only from a WhatsApp chat. Full or very high concessions, if any, are exceptional and subject to internal criteria, verification, and management approval. The safest front-desk answer is to explain the scholarship process and invite the family for screening or document review."
+    },
+    {
+      "id": "batch_change_policy",
+      "title": "Batch change policy",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY", "ADMISSION"],
+      "keywords": ["batch change", "switch batch", "timing change", "change timing"],
+      "content": "Batch changes can sometimes be considered if timing, school load, or academic level is clearly mismatched, but they depend on seat availability and the academic team's approval. The sample policy does not promise an automatic shift to any requested batch once classes are underway. The counsellor usually reviews the request before confirming a change."
+    }
+  ]
+}

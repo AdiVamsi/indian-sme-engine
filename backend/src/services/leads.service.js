@@ -13,6 +13,14 @@ function decorateLead(lead, {
   receivedAt = null,
   hasClassification = false,
   hasPrioritization = false,
+  conversationStatus = null,
+  whatsappDeliveryStatus = null,
+  whatsappNeedsAttention = false,
+  whatsappFailureTitle = null,
+  whatsappFailureDetail = null,
+  whatsappFailureCategory = null,
+  whatsappFailureAt = null,
+  whatsappOperatorActionRequired = null,
 } = {}) {
   const priority = priorityScore >= 30 ? 'HIGH' : priorityScore >= 10 ? 'NORMAL' : 'LOW';
 
@@ -26,11 +34,24 @@ function decorateLead(lead, {
     receivedAt,
     hasClassification,
     hasPrioritization,
+    conversationStatus,
+    handoffReady: conversationStatus === 'handoff',
+    whatsappDeliveryStatus,
+    whatsappNeedsAttention,
+    whatsappFailureTitle,
+    whatsappFailureDetail,
+    whatsappFailureCategory,
+    whatsappFailureAt,
+    whatsappOperatorActionRequired,
   };
 }
 
+function getSortedActivitiesNewestFirst(activities = []) {
+  return [...activities].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
 function getLatestWhatsAppConversationState(activities = []) {
-  for (const activity of activities) {
+  for (const activity of getSortedActivitiesNewestFirst(activities)) {
     const metadata = activity?.metadata || {};
     if (metadata.channel === 'whatsapp' && metadata.conversationState) {
       return metadata.conversationState;
@@ -60,12 +81,72 @@ function getLatestCallbackDetails(activities = []) {
 }
 
 function getLatestConversationStatus(activities = []) {
-  const latest = activities.find((activity) => {
+  const latest = getSortedActivitiesNewestFirst(activities).find((activity) => {
     const metadata = activity?.metadata || {};
     return metadata.channel === 'whatsapp' && metadata.conversationState?.status;
   });
 
   return latest?.metadata?.conversationState?.status || null;
+}
+
+function getLatestWhatsAppDeliveryIssue(activities = []) {
+  const latestOutbound = getLatestWhatsAppOutboundActivity(activities);
+
+  if (!latestOutbound || latestOutbound?.metadata?.deliveryStatus !== 'failed') {
+    return null;
+  }
+
+  return {
+    deliveryStatus: 'failed',
+    failureTitle: latestOutbound.metadata?.failureTitle || 'WhatsApp reply failed',
+    failureDetail: latestOutbound.metadata?.failureDetail || latestOutbound.message || null,
+    failureCategory: latestOutbound.metadata?.failureCategory || null,
+    failureAt: latestOutbound.createdAt || null,
+    operatorActionRequired: latestOutbound.metadata?.operatorActionRequired || null,
+  };
+}
+
+function getLatestWhatsAppOutboundActivity(activities = []) {
+  return getSortedActivitiesNewestFirst(activities).find((activity) => {
+    const metadata = activity?.metadata || {};
+    return metadata.channel === 'whatsapp' && metadata.direction === 'outbound';
+  });
+}
+
+function buildLeadActivitySummary(activities = []) {
+  const classAct = activities.find((a) => a.type === 'AGENT_CLASSIFIED');
+  const prioAct = activities.find((a) => a.type === 'AGENT_PRIORITIZED');
+  const callback = getLatestCallbackDetails(activities);
+  const conversationStatus = getLatestConversationStatus(activities);
+  const latestOutbound = getLatestWhatsAppOutboundActivity(activities);
+  const whatsappDeliveryIssue = getLatestWhatsAppDeliveryIssue(activities);
+
+  const tags = classAct?.metadata?.tags ?? [];
+  const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
+  const source = classAct?.metadata?.source ?? 'web';
+  const priority = priorityScore >= 30 ? 'HIGH'
+    : priorityScore >= 10 ? 'NORMAL'
+      : 'LOW';
+
+  return {
+    tags,
+    priorityScore,
+    source,
+    priority,
+    callbackTime: callback.callbackTime,
+    callbackScheduledAt: callback.callbackScheduledAt,
+    conversationStatus,
+    handoffReady: conversationStatus === 'handoff',
+    hasClassification: Boolean(classAct),
+    hasPrioritization: Boolean(prioAct),
+    whatsappDeliveryStatus: whatsappDeliveryIssue?.deliveryStatus || latestOutbound?.metadata?.deliveryStatus || null,
+    whatsappNeedsAttention: Boolean(whatsappDeliveryIssue),
+    whatsappFailureTitle: whatsappDeliveryIssue?.failureTitle || null,
+    whatsappFailureDetail: whatsappDeliveryIssue?.failureDetail || null,
+    whatsappFailureCategory: whatsappDeliveryIssue?.failureCategory || null,
+    whatsappFailureAt: whatsappDeliveryIssue?.failureAt || null,
+    whatsappOperatorActionRequired: whatsappDeliveryIssue?.operatorActionRequired || null,
+  };
 }
 
 function mergeConversationState(baseState = null, {
@@ -126,7 +207,7 @@ const findActiveWhatsAppLead = async (businessId, phone) => {
 
   return leads.find((lead) => {
     const state = getLatestWhatsAppConversationState(lead.activities);
-    return state && ['awaiting_user', 'handoff'].includes(state.status);
+    return state && ['awaiting_user', 'handoff', 'send_failed'].includes(state.status);
   }) || null;
 };
 
@@ -139,6 +220,14 @@ const processLeadAfterSave = async (lead, {
   let priorityScore = 0;
   let tags = [];
   let leadSource = source;
+  let conversationStatus = null;
+  let whatsappDeliveryStatus = null;
+  let whatsappNeedsAttention = false;
+  let whatsappFailureTitle = null;
+  let whatsappFailureDetail = null;
+  let whatsappFailureCategory = null;
+  let whatsappFailureAt = null;
+  let whatsappOperatorActionRequired = null;
 
   /* Run agent pipeline; capture scores for broadcast payload.
    * Errors are logged but never fail the caller. */
@@ -153,6 +242,18 @@ const processLeadAfterSave = async (lead, {
   priorityScore = result.priorityScore ?? 0;
   tags = result.tags ?? [];
   leadSource = result.source ?? source;
+  conversationStatus = result.conversationState?.status || null;
+  whatsappDeliveryStatus = result.whatsappReplyFailed
+    ? 'failed'
+    : result.whatsappReplySent
+      ? 'sent'
+      : null;
+  whatsappNeedsAttention = Boolean(result.whatsappReplyFailed);
+  whatsappFailureTitle = result.whatsappFailure?.title || null;
+  whatsappFailureDetail = result.whatsappFailure?.detail || null;
+  whatsappFailureCategory = result.whatsappFailure?.category || null;
+  whatsappFailureAt = result.whatsappFailureAt || null;
+  whatsappOperatorActionRequired = result.whatsappFailure?.operatorActionRequired || null;
 
   /* Advance lifecycle stage on the first successful lead — "lead workflow is now active".
    * updateMany with stage: 'STARTING' in the where clause is a no-op for all other stages. */
@@ -169,6 +270,14 @@ const processLeadAfterSave = async (lead, {
     receivedAt,
     hasClassification: true,
     hasPrioritization: true,
+    conversationStatus,
+    whatsappDeliveryStatus,
+    whatsappNeedsAttention,
+    whatsappFailureTitle,
+    whatsappFailureDetail,
+    whatsappFailureCategory,
+    whatsappFailureAt,
+    whatsappOperatorActionRequired,
   });
 };
 
@@ -201,30 +310,9 @@ const findLeadsByBusiness = async (businessId, status) => {
   });
 
   return leads.map(({ activities, ...lead }) => {
-    const classAct = activities.find((a) => a.type === 'AGENT_CLASSIFIED');
-    const prioAct  = activities.find((a) => a.type === 'AGENT_PRIORITIZED');
-    const callback = getLatestCallbackDetails(activities);
-    const conversationStatus = getLatestConversationStatus(activities);
-
-    const tags          = classAct?.metadata?.tags         ?? [];
-    const priorityScore = prioAct?.metadata?.priorityScore ?? 0;
-    const source        = classAct?.metadata?.source       ?? 'web';
-    const priority      = priorityScore >= 30 ? 'HIGH'
-                        : priorityScore >= 10 ? 'NORMAL'
-                        :                       'LOW';
-
     return {
       ...lead,
-      priorityScore,
-      tags,
-      priority,
-      source,
-      callbackTime: callback.callbackTime,
-      callbackScheduledAt: callback.callbackScheduledAt,
-      conversationStatus,
-      handoffReady: conversationStatus === 'handoff',
-      hasClassification: Boolean(classAct),
-      hasPrioritization: Boolean(prioAct),
+      ...buildLeadActivitySummary(activities),
     };
   });
 };
@@ -493,6 +581,7 @@ const getLeadForOutreach = async (id, businessId) => {
 };
 
 module.exports = {
+  buildLeadActivitySummary,
   createLead,
   saveRawLead,
   processLeadAfterSave,

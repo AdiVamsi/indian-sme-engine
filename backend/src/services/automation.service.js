@@ -3,7 +3,7 @@
 const { prisma } = require('../lib/prisma');
 const { logger } = require('../lib/logger');
 const { getOrCreate: getOrCreateAgentConfig } = require('./agentConfig.service');
-const { sendWhatsAppMessage } = require('./whatsapp.service');
+const { normalizeWhatsAppSendError, sendWhatsAppMessage } = require('./whatsapp.service');
 const { retrieveBusinessKnowledge } = require('./businessKnowledge.service');
 const { generateGroundedWhatsAppReply } = require('./groundedReply.service');
 const {
@@ -843,6 +843,27 @@ function getLeadConversationContext(lead) {
   };
 }
 
+function buildFailedConversationState(replyPlan, failure) {
+  const baseState = replyPlan?.conversationState || createConversationState({
+    flowIntent: null,
+    stage: 'HANDOFF_QUEUED',
+    pendingField: null,
+    collected: {},
+    status: 'handoff',
+  });
+
+  return {
+    ...baseState,
+    stage: 'REPLY_FAILED',
+    status: 'send_failed',
+    lastFailure: {
+      category: failure.category,
+      title: failure.title,
+      detail: failure.detail,
+    },
+  };
+}
+
 async function logWhatsAppActivity(leadId, {
   direction,
   phone = null,
@@ -856,6 +877,18 @@ async function logWhatsAppActivity(leadId, {
   conversationMode = 'continuation',
   conversationState = null,
   timestamp = null,
+  deliveryStatus = 'sent',
+  failureCategory = null,
+  failureTitle = null,
+  failureDetail = null,
+  healthSeverity = null,
+  operatorActionRequired = null,
+  providerStatus = null,
+  providerCode = null,
+  providerSubcode = null,
+  providerType = null,
+  providerMessage = null,
+  activityMessage = null,
 } = {}) {
   const createdAt = timestamp ? new Date(timestamp) : undefined;
   const metadata = {
@@ -863,6 +896,7 @@ async function logWhatsAppActivity(leadId, {
     source: 'whatsapp',
     channel: 'whatsapp',
     direction,
+    ...(direction === 'outbound' ? { deliveryStatus } : {}),
     ...(phone ? { phone } : {}),
     ...(messageText ? { messageText } : {}),
     ...(messageId ? { messageId } : {}),
@@ -871,16 +905,34 @@ async function logWhatsAppActivity(leadId, {
     ...(direction === 'outbound' ? { replyMessage: messageText } : {}),
     ...(direction === 'outbound' ? { groundedAnswer } : {}),
     ...(direction === 'outbound' && knowledgeRetrieval ? { knowledgeRetrieval } : {}),
+    ...(failureCategory ? { failureCategory } : {}),
+    ...(failureTitle ? { failureTitle } : {}),
+    ...(failureDetail ? { failureDetail } : {}),
+    ...(healthSeverity ? { healthSeverity } : {}),
+    ...(operatorActionRequired ? { operatorActionRequired } : {}),
+    ...(providerStatus != null ? { providerStatus } : {}),
+    ...(providerCode != null ? { providerCode } : {}),
+    ...(providerSubcode != null ? { providerSubcode } : {}),
+    ...(providerType ? { providerType } : {}),
+    ...(providerMessage ? { providerMessage } : {}),
     ...(conversationMode ? { conversationMode } : {}),
     ...(conversationState ? { conversationState } : {}),
     ...(createdAt ? { timestamp: createdAt.toISOString() } : {}),
   };
 
+  const resolvedMessage = activityMessage || (
+    direction === 'inbound'
+      ? 'WhatsApp inbound message received'
+      : deliveryStatus === 'failed'
+        ? `WhatsApp reply failed${failureTitle ? `: ${failureTitle}` : ''}`
+        : 'Automation: WhatsApp reply sent'
+  );
+
   return prisma.leadActivity.create({
     data: {
       leadId,
       type: 'AUTOMATION_ALERT',
-      message: direction === 'inbound' ? 'WhatsApp inbound message received' : 'Automation: WhatsApp reply sent',
+      message: resolvedMessage,
       metadata,
       ...(createdAt ? { createdAt } : {}),
     },
@@ -908,35 +960,102 @@ async function recordWhatsAppInboundTurn(leadId, {
 }
 
 async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
-  const replyResult = await sendWhatsAppMessage(phone, replyPlan.message);
-  const providerMessageId = replyResult?.messages?.[0]?.id || null;
+  try {
+    const replyResult = await sendWhatsAppMessage(phone, replyPlan.message);
+    const providerMessageId = replyResult?.messages?.[0]?.id || null;
+    const sentAt = new Date().toISOString();
 
-  logger.info(
-    {
-      leadId,
+    logger.info(
+      {
+        leadId,
+        phone,
+        replyReason: replyPlan.reason,
+        groundedAnswer: Boolean(replyPlan.groundedAnswer),
+        knowledgeSourceIds: replyPlan.knowledgeRetrieval?.sourceIds || [],
+        providerMessageId,
+      },
+      'WhatsApp automation reply sent'
+    );
+
+    await logWhatsAppActivity(leadId, {
+      direction: 'outbound',
       phone,
-      replyReason: replyPlan.reason,
-      groundedAnswer: Boolean(replyPlan.groundedAnswer),
-      knowledgeSourceIds: replyPlan.knowledgeRetrieval?.sourceIds || [],
+      messageText: replyPlan.message,
       providerMessageId,
-    },
-    'WhatsApp automation reply sent'
-  );
+      reason: 'WHATSAPP_AUTO_REPLY',
+      replyIntent: replyPlan.reason,
+      conversationMode: replyPlan.conversationMode || 'initial',
+      conversationState: replyPlan.conversationState || null,
+      groundedAnswer: Boolean(replyPlan.groundedAnswer),
+      knowledgeRetrieval: replyPlan.knowledgeRetrieval || null,
+      deliveryStatus: 'sent',
+      timestamp: sentAt,
+    });
 
-  await logWhatsAppActivity(leadId, {
-    direction: 'outbound',
-    phone,
-    messageText: replyPlan.message,
-    providerMessageId,
-    reason: 'WHATSAPP_AUTO_REPLY',
-    replyIntent: replyPlan.reason,
-    conversationMode: replyPlan.conversationMode || 'initial',
-    conversationState: replyPlan.conversationState || null,
-    groundedAnswer: Boolean(replyPlan.groundedAnswer),
-    knowledgeRetrieval: replyPlan.knowledgeRetrieval || null,
-  });
+    return {
+      sent: true,
+      providerMessageId,
+      failure: null,
+      conversationState: replyPlan.conversationState || null,
+      timestamp: sentAt,
+    };
+  } catch (err) {
+    const failure = normalizeWhatsAppSendError(err);
+    const failedConversationState = buildFailedConversationState(replyPlan, failure);
+    const failureAt = new Date().toISOString();
 
-  return { providerMessageId };
+    logger.error(
+      {
+        err,
+        leadId,
+        phone,
+        replyReason: replyPlan.reason,
+        groundedAnswer: Boolean(replyPlan.groundedAnswer),
+        failureCategory: failure.category,
+        failureTitle: failure.title,
+        healthSeverity: failure.healthSeverity,
+        providerStatus: failure.status,
+        providerCode: failure.providerCode,
+        providerSubcode: failure.providerSubcode,
+        providerType: failure.providerType,
+        retryable: failure.retryable,
+      },
+      'WhatsApp automation reply failed'
+    );
+
+    await logWhatsAppActivity(leadId, {
+      direction: 'outbound',
+      phone,
+      messageText: replyPlan.message,
+      reason: 'WHATSAPP_AUTO_REPLY_FAILED',
+      replyIntent: replyPlan.reason,
+      conversationMode: replyPlan.conversationMode || 'initial',
+      conversationState: failedConversationState,
+      groundedAnswer: Boolean(replyPlan.groundedAnswer),
+      knowledgeRetrieval: replyPlan.knowledgeRetrieval || null,
+      deliveryStatus: 'failed',
+      failureCategory: failure.category,
+      failureTitle: failure.title,
+      failureDetail: failure.detail,
+      healthSeverity: failure.healthSeverity,
+      operatorActionRequired: failure.operatorActionRequired,
+      providerStatus: failure.status,
+      providerCode: failure.providerCode,
+      providerSubcode: failure.providerSubcode,
+      providerType: failure.providerType,
+      providerMessage: failure.providerMessage,
+      activityMessage: `WhatsApp reply failed: ${failure.title}`,
+      timestamp: failureAt,
+    });
+
+    return {
+      sent: false,
+      providerMessageId: null,
+      failure,
+      conversationState: failedConversationState,
+      timestamp: failureAt,
+    };
+  }
 }
 
 async function continueWhatsAppConversation(leadId, {
@@ -999,14 +1118,17 @@ async function continueWhatsAppConversation(leadId, {
     };
   }
 
-  const { providerMessageId } = await sendAndLogWhatsAppReply(leadId, phone, replyPlan);
+  const sendResult = await sendAndLogWhatsAppReply(leadId, phone, replyPlan);
   return {
     leadId,
     continued: true,
-    replySent: true,
-    providerMessageId,
-    conversationState: replyPlan.conversationState,
+    replySent: sendResult.sent,
+    replyFailed: !sendResult.sent,
+    providerMessageId: sendResult.providerMessageId,
+    conversationState: sendResult.conversationState,
     replyReason: replyPlan.reason,
+    failureCategory: sendResult.failure?.category || null,
+    failureTitle: sendResult.failure?.title || null,
   };
 }
 
@@ -1098,19 +1220,26 @@ async function runLeadAutomations(leadId, {
   }
 
   let whatsappReplySent = false;
+  let whatsappReplyFailed = false;
+  let whatsappFailure = null;
+  let whatsappFailureAt = null;
+  let whatsappConversationState = replyPlan?.conversationState || null;
   if (shouldSendWhatsAppReply) {
-    try {
-      await sendAndLogWhatsAppReply(leadId, phone, replyPlan);
-      whatsappReplySent = true;
-    } catch (err) {
-      logger.error({ err, leadId, phone }, 'WhatsApp automation reply failed');
-    }
+    const sendResult = await sendAndLogWhatsAppReply(leadId, phone, replyPlan);
+    whatsappReplySent = sendResult.sent;
+    whatsappReplyFailed = !sendResult.sent;
+    whatsappFailure = sendResult.failure;
+    whatsappFailureAt = sendResult.sent ? null : sendResult.timestamp || null;
+    whatsappConversationState = sendResult.conversationState;
   }
 
   return {
-    triggered: creates.length + (whatsappReplySent ? 1 : 0),
+    triggered: creates.length + ((whatsappReplySent || whatsappReplyFailed) ? 1 : 0),
     whatsappReplySent,
-    conversationState: replyPlan?.conversationState || null,
+    whatsappReplyFailed,
+    whatsappFailure,
+    whatsappFailureAt,
+    conversationState: whatsappConversationState,
   };
 }
 

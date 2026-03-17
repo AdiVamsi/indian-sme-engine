@@ -1,0 +1,30 @@
+{
+  "sourceLabel": "Aarohan JEE Academy location and timings",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "pitampura_branch_location",
+      "title": "Pitampura branch location",
+      "category": "branch_location",
+      "intents": ["GENERAL_ENQUIRY"],
+      "keywords": ["branch", "location", "address", "pitampura", "where"],
+      "content": "The imagined Aarohan branch is in Pitampura, Delhi, near the Netaji Subhash Place and Kohat Enclave side of the area. For front-desk answers, it is safe to say the centre is reachable from Pitampura and NSP metro connectivity, and the exact visit map pin can be shared by the counsellor on WhatsApp before the visit."
+    },
+    {
+      "id": "classroom_batch_timings",
+      "title": "Classroom batch timings",
+      "category": "timings",
+      "intents": ["BATCH_TIMING", "GENERAL_ENQUIRY"],
+      "keywords": ["timings", "batch timings", "schedule", "morning batch", "evening batch", "weekend doubt"],
+      "content": "Weekday classroom batches are generally planned in after-school and evening windows for Class 11 and Class 12 students, while droppers may get longer morning or afternoon blocks. Aarohan also keeps weekend doubt or test-review support for many batches. Exact slot timings depend on the programme, seat availability, and current academic calendar."
+    },
+    {
+      "id": "landmark_and_distance_boundary",
+      "title": "Landmark and travel guidance boundary",
+      "category": "branch_location",
+      "intents": ["GENERAL_ENQUIRY"],
+      "keywords": ["landmark", "distance", "nearest metro", "how far", "travel time"],
+      "content": "The team can share the nearest landmark, gate guidance, and visit slot once the family is ready to come, but it should avoid promising exact walking distance or travel time for every locality over chat. Travel time changes with traffic, metro exit used, and guardian starting point. For precise directions, the counsellor shares a live map or callback guidance."
+    }
+  ]
+}

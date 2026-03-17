@@ -11,6 +11,7 @@ const META_TEST_PHONE_NUMBER_ID_TO_SLUG = {
 const META_TEST_DISPLAY_PHONE_TO_SLUG = {
   [normalizePhoneNumber('15556451322')]: 'sharma-jee-academy-delhi',
 };
+const META_TOKEN_ERROR_CODE = 190;
 
 function getWhatsAppConfig() {
   return {
@@ -18,6 +19,174 @@ function getWhatsAppConfig() {
     phoneNumberId: process.env.WHATSAPP_PHONE_ID,
     verifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
   };
+}
+
+function createWhatsAppSendFailure({
+  category = 'WHATSAPP_SEND_FAILED',
+  title = 'WhatsApp reply failed',
+  detail = 'The WhatsApp reply could not be sent. Review the Meta connection and follow up manually.',
+  healthSeverity = 'warning',
+  retryable = false,
+  status = null,
+  providerCode = null,
+  providerSubcode = null,
+  providerType = null,
+  providerMessage = null,
+  operatorActionRequired = null,
+} = {}) {
+  return {
+    category,
+    title,
+    detail,
+    healthSeverity,
+    retryable,
+    status,
+    providerCode,
+    providerSubcode,
+    providerType,
+    providerMessage,
+    operatorActionRequired,
+  };
+}
+
+function classifyWhatsAppResponseFailure({ status = null, payload = {} } = {}) {
+  const providerError = payload?.error || {};
+  const providerMessage = String(providerError.message || '').trim() || null;
+  const normalizedProviderMessage = String(providerMessage || '').toLowerCase();
+  const providerCode = providerError.code ?? null;
+  const providerSubcode = providerError.error_subcode ?? null;
+  const providerType = providerError.type ?? null;
+
+  const isTokenExpired = providerCode === META_TOKEN_ERROR_CODE
+    || /access token.*expired|session has expired|error validating access token|invalid oauth access token/.test(normalizedProviderMessage);
+
+  if (isTokenExpired) {
+    return createWhatsAppSendFailure({
+      category: 'META_TOKEN_EXPIRED',
+      title: 'Meta access token expired',
+      detail: 'Reconnect or refresh the Meta WhatsApp access token. Automated WhatsApp replies are not being delivered.',
+      healthSeverity: 'critical',
+      retryable: false,
+      status,
+      providerCode,
+      providerSubcode,
+      providerType,
+      providerMessage,
+      operatorActionRequired: 'Refresh the Meta access token and follow up with the lead manually until sending recovers.',
+    });
+  }
+
+  if (status === 401 || status === 403) {
+    return createWhatsAppSendFailure({
+      category: 'META_AUTH_FAILED',
+      title: 'Meta authentication failed',
+      detail: 'Meta rejected the WhatsApp send request. Check the active access token and app permissions.',
+      healthSeverity: 'critical',
+      retryable: false,
+      status,
+      providerCode,
+      providerSubcode,
+      providerType,
+      providerMessage,
+      operatorActionRequired: 'Verify the Meta app credentials and refresh the access token before retrying outbound replies.',
+    });
+  }
+
+  if (status === 429 || providerCode === 4 || providerCode === 80007) {
+    return createWhatsAppSendFailure({
+      category: 'META_RATE_LIMITED',
+      title: 'Meta rate limited WhatsApp sending',
+      detail: 'Meta temporarily rate limited outbound WhatsApp replies. Retry after the rate limit window resets.',
+      healthSeverity: 'warning',
+      retryable: true,
+      status,
+      providerCode,
+      providerSubcode,
+      providerType,
+      providerMessage,
+      operatorActionRequired: 'Retry the reply later and handle urgent leads manually in the meantime.',
+    });
+  }
+
+  if (status >= 500) {
+    return createWhatsAppSendFailure({
+      category: 'META_PROVIDER_UNAVAILABLE',
+      title: 'Meta WhatsApp API is unavailable',
+      detail: 'Meta returned a server-side failure while sending the WhatsApp reply.',
+      healthSeverity: 'warning',
+      retryable: true,
+      status,
+      providerCode,
+      providerSubcode,
+      providerType,
+      providerMessage,
+      operatorActionRequired: 'Retry the reply later or follow up manually if the lead is time-sensitive.',
+    });
+  }
+
+  return createWhatsAppSendFailure({
+    category: 'WHATSAPP_SEND_FAILED',
+    title: 'WhatsApp reply failed',
+    detail: 'Meta did not accept the outbound WhatsApp reply. Review the provider error details and follow up manually if needed.',
+    healthSeverity: 'warning',
+    retryable: false,
+    status,
+    providerCode,
+    providerSubcode,
+    providerType,
+    providerMessage,
+    operatorActionRequired: 'Check the Meta error details and retry the reply after fixing the issue.',
+  });
+}
+
+function normalizeWhatsAppSendError(err) {
+  if (err?.failureCategory && err?.operatorTitle) {
+    return createWhatsAppSendFailure({
+      category: err.failureCategory,
+      title: err.operatorTitle,
+      detail: err.operatorDetail,
+      healthSeverity: err.healthSeverity,
+      retryable: Boolean(err.retryable),
+      status: err.status ?? null,
+      providerCode: err.providerCode ?? null,
+      providerSubcode: err.providerSubcode ?? null,
+      providerType: err.providerType ?? null,
+      providerMessage: err.providerMessage ?? err.message ?? null,
+      operatorActionRequired: err.operatorActionRequired ?? null,
+    });
+  }
+
+  if (err?.message === 'WhatsApp API credentials are not configured') {
+    return createWhatsAppSendFailure({
+      category: 'WHATSAPP_NOT_CONFIGURED',
+      title: 'WhatsApp sending is not configured',
+      detail: 'The WhatsApp token or phone number ID is missing. Automated replies cannot be sent until configuration is fixed.',
+      healthSeverity: 'critical',
+      retryable: false,
+      operatorActionRequired: 'Set the WhatsApp API token and phone number ID, then retry the follow-up manually.',
+    });
+  }
+
+  if (err?.message === 'Invalid WhatsApp recipient phone number') {
+    return createWhatsAppSendFailure({
+      category: 'INVALID_WHATSAPP_RECIPIENT',
+      title: 'WhatsApp recipient number is invalid',
+      detail: 'The lead phone number could not be normalized for a WhatsApp send attempt.',
+      healthSeverity: 'warning',
+      retryable: false,
+      operatorActionRequired: 'Fix the lead phone number and retry the reply manually.',
+    });
+  }
+
+  return createWhatsAppSendFailure({
+    category: 'WHATSAPP_SEND_FAILED',
+    title: 'WhatsApp reply failed',
+    detail: 'The outbound WhatsApp request did not complete successfully.',
+    healthSeverity: 'warning',
+    retryable: false,
+    providerMessage: err?.message || null,
+    operatorActionRequired: 'Review the server logs and follow up manually if the lead needs a response now.',
+  });
 }
 
 function extractIncomingMessages(payload = {}) {
@@ -190,16 +359,48 @@ async function sendWhatsAppMessage(phone, message) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    logger.error({ payload }, 'WhatsApp API request failed');
-    throw new Error(payload?.error?.message || `WhatsApp API error ${response.status}`);
+    const failure = classifyWhatsAppResponseFailure({
+      status: response.status,
+      payload,
+    });
+
+    logger.error(
+      {
+        status: response.status,
+        failureCategory: failure.category,
+        failureTitle: failure.title,
+        providerCode: failure.providerCode,
+        providerSubcode: failure.providerSubcode,
+        providerType: failure.providerType,
+        payload,
+      },
+      'WhatsApp API request failed'
+    );
+
+    const err = new Error(failure.providerMessage || `WhatsApp API error ${response.status}`);
+    err.name = 'WhatsAppSendError';
+    err.failureCategory = failure.category;
+    err.operatorTitle = failure.title;
+    err.operatorDetail = failure.detail;
+    err.healthSeverity = failure.healthSeverity;
+    err.retryable = failure.retryable;
+    err.status = failure.status;
+    err.providerCode = failure.providerCode;
+    err.providerSubcode = failure.providerSubcode;
+    err.providerType = failure.providerType;
+    err.providerMessage = failure.providerMessage;
+    err.operatorActionRequired = failure.operatorActionRequired;
+    throw err;
   }
 
   return payload;
 }
 
 module.exports = {
+  classifyWhatsAppResponseFailure,
   extractIncomingMessages,
   findBusinessForWhatsAppInbound,
   getWhatsAppConfig,
+  normalizeWhatsAppSendError,
   sendWhatsAppMessage,
 };

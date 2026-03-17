@@ -116,6 +116,11 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
 
   /* 6. Run rule-based automations; failures are logged, never propagated. */
   let automationsTriggered = 0;
+  let whatsappReplySent = false;
+  let whatsappReplyFailed = false;
+  let whatsappFailure = null;
+  let whatsappFailureAt = null;
+  let conversationState = null;
   try {
     const automationResult = await runLeadAutomations(lead.id, {
       businessId,
@@ -132,6 +137,11 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
       agentConfig: config,
     });
     automationsTriggered = automationResult.triggered;
+    whatsappReplySent = Boolean(automationResult.whatsappReplySent);
+    whatsappReplyFailed = Boolean(automationResult.whatsappReplyFailed);
+    whatsappFailure = automationResult.whatsappFailure || null;
+    whatsappFailureAt = automationResult.whatsappFailureAt || null;
+    conversationState = automationResult.conversationState || null;
     console.log(`[AgentEngine] Automations triggered for lead ${lead.id}: ${automationsTriggered}`);
   } catch (err) {
     console.error(`[AgentEngine] runLeadAutomations failed for lead ${lead.id} —`, err.message);
@@ -149,6 +159,11 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
     followUpAt: followUpAt.toISOString(),
     activitiesCreated: 3,
     automationsTriggered,
+    whatsappReplySent,
+    whatsappReplyFailed,
+    whatsappFailure,
+    whatsappFailureAt,
+    conversationState,
   };
 }
 

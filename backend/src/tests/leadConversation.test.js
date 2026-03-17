@@ -163,4 +163,57 @@ describe('WhatsApp conversation summary builder', () => {
     });
     expect(summary.recommendedNextAction).toContain('Callback already scheduled for Today 6 PM');
   });
+
+  it('surfaces failed outbound replies that need operator attention', () => {
+    const summary = buildWhatsAppConversationSummary({
+      lead: { id: 'lead-4' },
+      activities: [
+        {
+          type: 'AGENT_CLASSIFIED',
+          createdAt: '2026-03-14T10:00:00.000Z',
+          metadata: {
+            source: 'whatsapp',
+            bestCategory: 'ADMISSION',
+          },
+        },
+        {
+          type: 'AGENT_PRIORITIZED',
+          createdAt: '2026-03-14T10:00:01.000Z',
+          metadata: { priorityScore: 35 },
+        },
+        {
+          type: 'AUTOMATION_ALERT',
+          createdAt: '2026-03-14T10:00:05.000Z',
+          metadata: {
+            channel: 'whatsapp',
+            direction: 'outbound',
+            deliveryStatus: 'failed',
+            replyMessage: 'Please share the student class so we can guide you further.',
+            failureTitle: 'Meta access token expired',
+            failureDetail: 'Reconnect or refresh the Meta WhatsApp access token.',
+            operatorActionRequired: 'Refresh the Meta access token and follow up with the lead manually until sending recovers.',
+            conversationState: {
+              flowIntent: 'ADMISSION',
+              pendingField: 'student_class',
+              status: 'send_failed',
+              collected: {},
+            },
+          },
+        },
+      ],
+    });
+
+    expect(summary.conversationStatus).toBe('send_failed');
+    expect(summary.conversationStatusLabel).toBe('Reply failed - operator attention needed');
+    expect(summary.latestFailedReply).toEqual({
+      title: 'Meta access token expired',
+      detail: 'Reconnect or refresh the Meta WhatsApp access token.',
+      category: null,
+      operatorActionRequired: 'Refresh the Meta access token and follow up with the lead manually until sending recovers.',
+      attemptedMessage: 'Please share the student class so we can guide you further.',
+      createdAt: '2026-03-14T10:00:05.000Z',
+    });
+    expect(summary.recommendedNextAction).toContain('Meta access token expired');
+    expect(summary.transcript).toHaveLength(0);
+  });
 });

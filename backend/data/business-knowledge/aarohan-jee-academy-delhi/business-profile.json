@@ -1,0 +1,38 @@
+{
+  "sourceLabel": "Aarohan JEE Academy business profile",
+  "enabled": true,
+  "business": {
+    "name": "Aarohan JEE Academy",
+    "slug": "aarohan-jee-academy-delhi",
+    "industry": "academy",
+    "city": "Delhi",
+    "area": "Pitampura",
+    "focus": "IIT-JEE Main and Advanced coaching"
+  },
+  "entries": [
+    {
+      "id": "academy_overview",
+      "title": "Academy overview",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY", "COURSE_INFO", "ADMISSION"],
+      "keywords": ["aarohan", "academy overview", "jee coaching", "iit jee coaching", "pitampura coaching"],
+      "content": "Aarohan JEE Academy is an imagined IIT-JEE focused coaching centre in Pitampura, Delhi. The centre primarily supports Class 11, Class 12, and dropper students preparing for JEE Main and JEE Advanced. The teaching model is classroom-first, with structured test practice, doubt support, hybrid follow-up for missed lessons, and counsellor guidance in both Hindi and English."
+    },
+    {
+      "id": "language_support",
+      "title": "Hindi and English support",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY", "CALLBACK_REQUEST"],
+      "keywords": ["hindi", "english", "language", "hindi mein", "english support"],
+      "content": "Front-desk counselling and routine academic guidance can be explained in Hindi or English. Parents who prefer Hindi can speak to the admissions counsellor on WhatsApp or call. Formal fee receipts and admission forms are usually issued in English, but the team explains the steps bilingually."
+    },
+    {
+      "id": "non_jee_scope_clarification",
+      "title": "Non-JEE scope clarification",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY", "COURSE_INFO"],
+      "keywords": ["neet", "cuet", "upsc", "ias", "non jee", "other exams"],
+      "content": "Aarohan JEE Academy mainly focuses on IIT-JEE Main and Advanced preparation. The team can clarify whether a student profile fits Class 11, Class 12, or dropper JEE batches, but it does not promise full counselling for NEET, UPSC, CUET-only, or government-job exam coaching. If the enquiry is outside JEE preparation, the counsellor will usually clarify scope instead of overcommitting."
+    }
+  ]
+}

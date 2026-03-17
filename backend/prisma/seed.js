@@ -13,6 +13,7 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const { getAgentConfigPreset } = require('../src/constants/agentConfig.presets');
+const { buildAgentConfigFromBusinessKnowledgeFiles } = require('../src/services/businessKnowledgeFileLoader.service');
 
 const prisma = new PrismaClient();
 const SHARMA_SHOWCASE = {
@@ -28,6 +29,22 @@ const SHARMA_SHOWCASE = {
   currency: 'INR',
   ownerEmail: 'owner@sharmajeeacademy.in',
   ownerName: 'Owner',
+};
+
+const AAROHAN_SHOWCASE = {
+  name: 'Aarohan JEE Academy',
+  slug: 'aarohan-jee-academy-delhi',
+  phone: '+91 98111 22334',
+  email: 'hello@aarohanjeeacademy.in',
+  address: 'Pitampura, Delhi',
+  industry: 'academy',
+  city: 'Delhi',
+  country: 'India',
+  timezone: 'Asia/Kolkata',
+  currency: 'INR',
+  ownerEmail: 'owner@aarohanjeeacademy.in',
+  ownerName: 'Aarohan Owner',
+  stage: 'AUTOMATION_ACTIVE',
 };
 
 function getSharmaShowcaseAgentConfig() {
@@ -61,7 +78,7 @@ function getSharmaShowcaseAgentConfig() {
           {
             id: 'demo_class',
             title: 'Demo class availability',
-            category: 'demo',
+            category: 'demo_class',
             intents: ['DEMO_REQUEST', 'GENERAL_ENQUIRY'],
             keywords: ['demo', 'trial class', 'demo class', 'trial'],
             content: 'Sharma JEE Academy offers scheduled demo classes for serious enquiries. The team confirms the next available demo slot after checking the student class and preferred batch.',
@@ -79,7 +96,7 @@ function getSharmaShowcaseAgentConfig() {
           {
             id: 'branch_location',
             title: 'Branch location',
-            category: 'location',
+            category: 'branch_location',
             intents: ['GENERAL_ENQUIRY'],
             keywords: ['branch', 'location', 'address', 'where', 'map'],
             content: 'The Sharma JEE Academy demo branch is shown as Connaught Place, New Delhi. The admissions team shares detailed directions and visit timing support on request.',
@@ -88,7 +105,7 @@ function getSharmaShowcaseAgentConfig() {
           {
             id: 'course_details',
             title: 'Course details',
-            category: 'course',
+            category: 'courses',
             intents: ['GENERAL_ENQUIRY', 'COURSE_INFO', 'ADMISSION'],
             keywords: ['course', 'programme', 'program', 'jee main', 'jee advanced', 'syllabus'],
             content: 'Sharma JEE Academy focuses on IIT-JEE preparation with classroom guidance for foundation, Class 11, Class 12, and drop-year aspirants. Course guidance is shared after understanding the student class and target exam timeline.',
@@ -97,7 +114,7 @@ function getSharmaShowcaseAgentConfig() {
           {
             id: 'online_classes',
             title: 'Online classes',
-            category: 'delivery',
+            category: 'online_classes',
             intents: ['GENERAL_ENQUIRY', 'COURSE_INFO'],
             keywords: ['online classes', 'online batch', 'online coaching', 'live class', 'live classes', 'online'],
             content: 'Sharma JEE Academy can guide students on available online support and live learning options depending on the programme and class. The team confirms the current online format while sharing batch details.',
@@ -116,6 +133,19 @@ function getSharmaShowcaseAgentConfig() {
       },
     },
   };
+}
+
+async function getAarohanShowcaseAgentConfig() {
+  const { agentConfig, knowledgeBundle } = await buildAgentConfigFromBusinessKnowledgeFiles({
+    businessSlug: AAROHAN_SHOWCASE.slug,
+    industry: AAROHAN_SHOWCASE.industry,
+  });
+
+  console.log(
+    `[seed] Loaded ${knowledgeBundle.entryCount} business knowledge entries from ${knowledgeBundle.folderPath}`
+  );
+
+  return agentConfig;
 }
 
 /* ── Deterministic helpers ──────────────────────────────────────────────── */
@@ -530,6 +560,60 @@ async function main() {
     create: { businessId: primaryBiz.id, ...getSharmaShowcaseAgentConfig() },
   });
 
+  const aarohanBusiness = await prisma.business.upsert({
+    where: { slug: AAROHAN_SHOWCASE.slug },
+    update: {
+      name: AAROHAN_SHOWCASE.name,
+      slug: AAROHAN_SHOWCASE.slug,
+      phone: AAROHAN_SHOWCASE.phone,
+      email: AAROHAN_SHOWCASE.email,
+      address: AAROHAN_SHOWCASE.address,
+      industry: AAROHAN_SHOWCASE.industry,
+      city: AAROHAN_SHOWCASE.city,
+      country: AAROHAN_SHOWCASE.country,
+      timezone: AAROHAN_SHOWCASE.timezone,
+      currency: AAROHAN_SHOWCASE.currency,
+      stage: AAROHAN_SHOWCASE.stage,
+    },
+    create: {
+      name: AAROHAN_SHOWCASE.name,
+      slug: AAROHAN_SHOWCASE.slug,
+      phone: AAROHAN_SHOWCASE.phone,
+      email: AAROHAN_SHOWCASE.email,
+      address: AAROHAN_SHOWCASE.address,
+      industry: AAROHAN_SHOWCASE.industry,
+      city: AAROHAN_SHOWCASE.city,
+      country: AAROHAN_SHOWCASE.country,
+      timezone: AAROHAN_SHOWCASE.timezone,
+      currency: AAROHAN_SHOWCASE.currency,
+      stage: AAROHAN_SHOWCASE.stage,
+    },
+  });
+
+  const aarohanPwHash = await bcrypt.hash('Admin@12345', 12);
+  await prisma.user.upsert({
+    where: { businessId_email: { businessId: aarohanBusiness.id, email: AAROHAN_SHOWCASE.ownerEmail } },
+    update: {
+      name: AAROHAN_SHOWCASE.ownerName,
+      passwordHash: aarohanPwHash,
+      role: 'OWNER',
+    },
+    create: {
+      businessId: aarohanBusiness.id,
+      name: AAROHAN_SHOWCASE.ownerName,
+      email: AAROHAN_SHOWCASE.ownerEmail,
+      passwordHash: aarohanPwHash,
+      role: 'OWNER',
+    },
+  });
+
+  const aarohanAgentConfig = await getAarohanShowcaseAgentConfig();
+  await prisma.agentConfig.upsert({
+    where: { businessId: aarohanBusiness.id },
+    update: aarohanAgentConfig,
+    create: { businessId: aarohanBusiness.id, ...aarohanAgentConfig },
+  });
+
   const demoAcademy = await prisma.business.upsert({
     where: { slug: 'demo-academy' },
     update: {
@@ -643,11 +727,12 @@ async function main() {
 
   /* ── Summary ── */
   console.log('\n✓ Seed complete');
-  console.log(`  Businesses : ${DEMO_BUSINESSES.length + 2} total (2 existing + ${DEMO_BUSINESSES.length} demo)`);
+  console.log(`  Businesses : ${DEMO_BUSINESSES.length + 3} total (3 primary/demo + ${DEMO_BUSINESSES.length} demo)`);
   console.log(`  Leads      : ${totalLeads}`);
   console.log(`  Activities : ${totalActivities}`);
   console.log('\n  Credentials (all demo businesses): Admin@12345');
   console.log('  Primary business: owner@sharmajeeacademy.in / Admin@12345');
+  console.log('  File-backed sample: owner@aarohanjeeacademy.in / Admin@12345');
   console.log('  Demo academy    : demo@smeengine.com / Demo@123');
 }
 

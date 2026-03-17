@@ -11,7 +11,8 @@ const PREVIEW_INTENT_HINTS = [
   { intent: 'BATCH_TIMING', terms: ['timing', 'timings', 'schedule', 'slot', 'batch time'] },
   { intent: 'ADMISSION', terms: ['admission', 'join', 'enrol', 'enroll', 'admission process', 'how to join'] },
   { intent: 'COURSE_INFO', terms: ['course', 'courses', 'program', 'programme', 'syllabus'] },
-  { intent: 'GENERAL_ENQUIRY', terms: ['branch', 'location', 'address', 'where', 'online', 'live class', 'live classes'] },
+  { intent: 'CALLBACK_REQUEST', terms: ['call', 'callback', 'phone'] },
+  { intent: 'GENERAL_ENQUIRY', terms: ['branch', 'location', 'address', 'where', 'online', 'live class', 'live classes', 'hindi', 'english', 'language'] },
 ];
 
 function inferKnowledgePreviewIntent(message = '') {

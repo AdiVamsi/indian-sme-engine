@@ -265,6 +265,12 @@ export function DashUI(config) {
     return `<span class="lead-workflow-badge" title="The AI handoff is ready for an operator follow-up.">Handoff ready</span>`;
   }
 
+  function buildLeadWhatsAppFailureBadge(lead) {
+    if (!lead?.whatsappNeedsAttention) return '';
+    const title = lead.whatsappFailureTitle || 'WhatsApp reply failed';
+    return `<span class="lead-workflow-badge lead-workflow-badge--error" title="${esc(title)}">WhatsApp failed</span>`;
+  }
+
   /* ── Row builders ── */
   function buildLeadRow(lead, isNew = false) {
     const tr = document.createElement('tr');
@@ -278,6 +284,8 @@ export function DashUI(config) {
 
     if (isTerminal) {
       tr.classList.add('lead-row--closed');
+    } else if (lead.whatsappNeedsAttention) {
+      tr.classList.add('lead-row--attention-critical');
     } else if (callbackCue?.state === 'overdue') {
       tr.classList.add('lead-row--attention-critical');
     } else if (callbackCue?.state === 'due-soon') {
@@ -296,7 +304,9 @@ export function DashUI(config) {
     const messagePreview = lead.message
       ? `<div class="lead-row__sub"><span class="message-preview" title="${esc(lead.message)}">↳ ${esc(truncateText(lead.message))}</span></div>`
       : '';
-    const callbackHint = callbackCue
+    const callbackHint = !isTerminal && lead.whatsappNeedsAttention
+      ? `<div class="lead-row__hint lead-row__hint--whatsapp-error">⚠ ${esc(lead.whatsappFailureTitle || 'WhatsApp reply failed')}${lead.whatsappFailureDetail ? ` · ${esc(truncateText(lead.whatsappFailureDetail, 72))}` : ''}</div>`
+      : callbackCue
       ? `<div class="lead-row__hint lead-row__hint--callback lead-row__hint--${esc(callbackCue.state)}" title="${esc(callbackCue.title)}">⏰ ${esc(callbackCue.stateLabel)}${lead.callbackTime ? ` · ${esc(lead.callbackTime)}` : ''}</div>`
       : !isTerminal && lead.handoffReady
         ? '<div class="lead-row__hint lead-row__hint--handoff">🤝 Ready for counsellor follow-up</div>'
@@ -308,6 +318,7 @@ export function DashUI(config) {
           <button class="lead-name-btn" data-lead-id="${esc(lead.id)}">${esc(lead.name)}</button>
           <div class="lead-row__badges">
             ${isTerminal ? '' : buildLeadCallbackBadge(lead)}
+            ${isTerminal ? '' : buildLeadWhatsAppFailureBadge(lead)}
             ${isTerminal ? '' : buildLeadWorkflowBadge(lead)}
             ${buildLeadSourceBadge(lead.source)}
           </div>

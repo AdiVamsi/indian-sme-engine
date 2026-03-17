@@ -1,0 +1,30 @@
+{
+  "sourceLabel": "Aarohan JEE Academy FAQs",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "online_classes_availability",
+      "title": "Online and hybrid availability",
+      "category": "online_classes",
+      "intents": ["GENERAL_ENQUIRY", "COURSE_INFO"],
+      "keywords": ["classes online bhi hai kya", "online bhi", "online batch", "online coaching", "live class"],
+      "content": "Yes, Aarohan can support selected students through hybrid or online academic follow-up, especially for revision, doubt resolution, and missed-class continuity. Purely online-only admission may not be open for every batch at all times, so the counsellor confirms the currently active online-supported options before promising a seat."
+    },
+    {
+      "id": "contact_and_whatsapp_support",
+      "title": "WhatsApp and callback support",
+      "category": "general",
+      "intents": ["CALLBACK_REQUEST", "GENERAL_ENQUIRY"],
+      "keywords": ["call kar sakte ho", "callback", "whatsapp support", "phone support", "contact support"],
+      "content": "Parents can communicate on WhatsApp for fee questions, demo planning, callback requests, and visit coordination. If the family is more comfortable in Hindi, the counsellor can continue the explanation in Hindi during chat or call. For detailed academic planning, the team may still recommend a phone call or in-person counselling."
+    },
+    {
+      "id": "hostel_and_transport_boundary",
+      "title": "Hostel and transport boundary",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY"],
+      "keywords": ["hostel", "transport", "bus", "pickup", "stay facility"],
+      "content": "This sample business knowledge does not include hostel or transport as a standard academy promise. If a family needs PG, hostel, or transport guidance, the counsellor can suggest nearby options informally but should not present them as in-house facilities without confirmation."
+    }
+  ]
+}

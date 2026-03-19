@@ -19,6 +19,14 @@ const FEE_TAGS = new Set(['FEE_ENQUIRY', 'FEES']);
 const SCHOLARSHIP_TAGS = new Set(['SCHOLARSHIP_ENQUIRY', 'SCHOLARSHIP']);
 const WRONG_FIT_TAGS = new Set(['WRONG_FIT']);
 const CALLBACK_TAGS = new Set(['CALLBACK_REQUEST']);
+const STRUCTURED_ACADEMY_REPLY_REASONS = new Set([
+  'ADMISSION',
+  'DEMO_REQUEST',
+  'FEE_ENQUIRY',
+  'CALLBACK_REQUEST',
+  'SCHOLARSHIP_ENQUIRY',
+  'GENERAL_ENQUIRY',
+]);
 
 function formatList(items = []) {
   const values = items.filter(Boolean);
@@ -51,6 +59,12 @@ function getGeneralOfferingsPrompt(replyConfig = {}) {
   return offerings.length ? formatList(offerings.slice(0, 3)) : 'fee details, a demo class, or admission guidance';
 }
 
+function getCourseInterestPrompt(replyConfig = {}) {
+  const offerings = Array.isArray(replyConfig?.supportedOfferings) ? replyConfig.supportedOfferings : [];
+  if (!offerings.length) return 'the course or programme you need';
+  return `the course or programme you need, such as ${formatList(offerings.slice(0, 3))}`;
+}
+
 function getPendingFieldForIntent(intent, requiredFields = []) {
   const normalizedIntent = String(intent || '').trim().toUpperCase();
   const fieldSet = new Set(requiredFields);
@@ -59,6 +73,7 @@ function getPendingFieldForIntent(intent, requiredFields = []) {
   if (normalizedIntent === 'SCHOLARSHIP_ENQUIRY' || fieldSet.has('recentMarks')) return 'recent_marks';
   if (normalizedIntent === 'CALLBACK_REQUEST' || fieldSet.has('preferredCallTime')) return 'callback_details';
   if (normalizedIntent === 'GENERAL_ENQUIRY' || fieldSet.has('topic')) return 'general_enquiry_details';
+  if (fieldSet.has('courseInterest')) return 'course_interest';
   if (fieldSet.has('studentClass')) return 'student_class';
   return null;
 }
@@ -160,6 +175,66 @@ function buildKnowledgeFollowUpState({ flowIntent, collected = {} } = {}) {
     collected,
     status: 'awaiting_user',
   });
+}
+
+function isLikelyFactualAcademyQuestion({ message = '', structuredReason = null } = {}) {
+  const text = String(message || '').trim().toLowerCase();
+  if (!text) return false;
+
+  const hasWorkflowTerms = /\b(urgent|immediately|asap|join|joining|admission|enroll|enrol|demo|trial|call|callback|phone call)\b/.test(text);
+  if (hasWorkflowTerms) return false;
+
+  switch (structuredReason) {
+    case 'FEE_ENQUIRY':
+      return /\b(fee|fees|price|cost|charges|kitni|fee structure)\b/.test(text);
+    case 'SCHOLARSHIP_ENQUIRY':
+      return /\b(scholarship|discount|concession|offer|merit)\b/.test(text);
+    case 'GENERAL_ENQUIRY':
+      return /\b(branch|location|address|where|online|language|hindi|english|course|courses|program|programme|syllabus|timing|timings|schedule|visa|band score|mock test)\b/.test(text);
+    default:
+      return false;
+  }
+}
+
+function selectPreferredAcademyReplyPlan({
+  businessIndustry = 'other',
+  message = '',
+  structuredReplyPlan = null,
+  groundedReplyPlan = null,
+} = {}) {
+  if (businessIndustry !== 'academy') {
+    return groundedReplyPlan || structuredReplyPlan;
+  }
+
+  if (!groundedReplyPlan) {
+    return structuredReplyPlan;
+  }
+
+  const structuredReason = structuredReplyPlan?.reason || null;
+  if (!structuredReason || !STRUCTURED_ACADEMY_REPLY_REASONS.has(structuredReason)) {
+    return groundedReplyPlan || structuredReplyPlan;
+  }
+
+  if (groundedReplyPlan.reason === 'BUSINESS_KNOWLEDGE_ANSWER') {
+    return isLikelyFactualAcademyQuestion({ message, structuredReason })
+      ? groundedReplyPlan
+      : structuredReplyPlan;
+  }
+
+  if (groundedReplyPlan.reason === 'BUSINESS_KNOWLEDGE_UNCERTAIN') {
+    return structuredReplyPlan;
+  }
+
+  return groundedReplyPlan || structuredReplyPlan;
+}
+
+function shouldSkipKnowledgeForStructuredContinuation(conversationState = null) {
+  return Boolean(
+    conversationState
+    && conversationState.status === 'awaiting_user'
+    && conversationState.pendingField
+    && conversationState.pendingField !== 'knowledge_follow_up'
+  );
 }
 
 async function maybeBuildGroundedKnowledgeReplyPlan({
@@ -329,11 +404,13 @@ function buildAcademyFirstReplyPlan({
       }
       return {
         reason: 'DEMO_REQUEST',
-        message: `Certainly. Please share the student's class, and ${institutionPhrase} will help you with the right demo class.${languageSupportSuffix}`,
+        message: pendingField === 'course_interest'
+          ? `Certainly. Please share ${getCourseInterestPrompt(replyConfig)}, and ${institutionPhrase} will help you with the right demo or counselling slot.${languageSupportSuffix}`
+          : `Certainly. Please share the student's class, and ${institutionPhrase} will help you with the right demo class.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'DEMO_REQUEST',
-          stage: 'AWAITING_STUDENT_CLASS',
+          stage: pendingField === 'course_interest' ? 'AWAITING_COURSE_INTEREST' : 'AWAITING_STUDENT_CLASS',
           pendingField,
           collected: {},
           status: 'awaiting_user',
@@ -351,11 +428,13 @@ function buildAcademyFirstReplyPlan({
       }
       return {
         reason: 'SCHOLARSHIP_ENQUIRY',
-        message: `Certainly. Please share the student's recent marks or percentage so that ${institutionPhrase} can guide you on scholarship options.${languageSupportSuffix}`,
+        message: pendingField === 'course_interest'
+          ? `Certainly. Please share ${getCourseInterestPrompt(replyConfig)} so that ${institutionPhrase} can guide you on current discount or offer options.${languageSupportSuffix}`
+          : `Certainly. Please share the student's recent marks or percentage so that ${institutionPhrase} can guide you on scholarship options.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'SCHOLARSHIP_ENQUIRY',
-          stage: 'AWAITING_RECENT_MARKS',
+          stage: pendingField === 'course_interest' ? 'AWAITING_COURSE_INTEREST' : 'AWAITING_RECENT_MARKS',
           pendingField,
           collected: {},
           status: 'awaiting_user',
@@ -373,11 +452,13 @@ function buildAcademyFirstReplyPlan({
       }
       return {
         reason: 'FEE_ENQUIRY',
-        message: `Certainly. Please share the student's class, and ${institutionPhrase} will help with the fee details and batch timings.${languageSupportSuffix}`,
+        message: pendingField === 'course_interest'
+          ? `Certainly. Please share ${getCourseInterestPrompt(replyConfig)}, and ${institutionPhrase} will help with the fee details and batch timings.${languageSupportSuffix}`
+          : `Certainly. Please share the student's class, and ${institutionPhrase} will help with the fee details and batch timings.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'FEE_ENQUIRY',
-          stage: 'AWAITING_STUDENT_CLASS',
+          stage: pendingField === 'course_interest' ? 'AWAITING_COURSE_INTEREST' : 'AWAITING_STUDENT_CLASS',
           pendingField,
           collected: {},
           status: 'awaiting_user',
@@ -395,11 +476,13 @@ function buildAcademyFirstReplyPlan({
       }
       return {
         reason: 'ADMISSION',
-        message: `Thank you for your interest. Admissions are open for our JEE batches. Please share the student's class so that ${institutionPhrase} can guide you properly.${languageSupportSuffix}`,
+        message: pendingField === 'course_interest'
+          ? `Thank you for your interest. Admissions are open for our ${replyConfig?.primaryOffering || 'programmes'}. Please share ${getCourseInterestPrompt(replyConfig)} so that ${institutionPhrase} can guide you properly.${languageSupportSuffix}`
+          : `Thank you for your interest. Admissions are open for our ${replyConfig?.primaryOffering || 'programmes'}. Please share the student's class so that ${institutionPhrase} can guide you properly.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
           flowIntent: 'ADMISSION',
-          stage: 'AWAITING_STUDENT_CLASS',
+          stage: pendingField === 'course_interest' ? 'AWAITING_COURSE_INTEREST' : 'AWAITING_STUDENT_CLASS',
           pendingField,
           collected: {},
           status: 'awaiting_user',
@@ -419,8 +502,12 @@ function buildAcademyFirstReplyPlan({
         reason: 'CALLBACK_REQUEST',
         message: requiredFields.includes('studentClass') && requiredFields.includes('preferredCallTime')
           ? `Certainly. Please share the student's class and your preferred call time, and ${institutionPhrase} will call you accordingly.${languageSupportSuffix}`
+          : requiredFields.includes('courseInterest') && requiredFields.includes('preferredCallTime')
+            ? `Certainly. Please share your preferred call time and ${getCourseInterestPrompt(replyConfig)}, and ${institutionPhrase} will call you accordingly.${languageSupportSuffix}`
           : requiredFields.includes('preferredCallTime')
             ? `Certainly. Please share your preferred call time, and ${institutionPhrase} will call you accordingly.${languageSupportSuffix}`
+            : requiredFields.includes('courseInterest')
+              ? `Certainly. Please share ${getCourseInterestPrompt(replyConfig)}, and ${institutionPhrase} will call you accordingly.${languageSupportSuffix}`
             : `Certainly. Please share the student's class so that ${institutionPhrase} can call you accordingly.${languageSupportSuffix}`,
         conversationMode: 'initial',
         conversationState: createConversationState({
@@ -584,6 +671,20 @@ function extractAcademyEnquiryTopic(message = '') {
   return null;
 }
 
+function extractCourseInterest(message = '') {
+  const text = String(message || '').trim().toLowerCase();
+  if (!text) return null;
+
+  if (/\bielts\s+academic\b/.test(text)) return 'IELTS Academic';
+  if (/\bielts\s+general\b|\bgeneral training\b/.test(text)) return 'IELTS General Training';
+  if (/\bspoken english\b|\benglish speaking\b|\bspoken-english\b|\bfluency\b/.test(text)) return 'spoken English';
+  if (/\bpte\b/.test(text)) return 'PTE';
+  if (/\bielts\b/.test(text)) return 'IELTS';
+  if (/\binterview\b|\bcommunication\b/.test(text)) return 'communication support';
+
+  return null;
+}
+
 function buildAcademyContinuationPlan({
   conversationState,
   message,
@@ -593,6 +694,7 @@ function buildAcademyContinuationPlan({
   const flowIntent = conversationState?.flowIntent || null;
   const collected = { ...(conversationState?.collected || {}) };
   const institutionPhrase = getInstitutionPhrase(replyConfig);
+  const requiredFields = getRequiredCollectedFields(replyConfig, flowIntent);
 
   if (!conversationState || conversationState.status === 'handoff') {
     return createConfiguredHandoffPlan({
@@ -673,7 +775,79 @@ function buildAcademyContinuationPlan({
       default:
         return {
           reason: 'ADMISSION_HANDOFF',
-          message: `Thank you. For ${studentClass}, ${institutionPhrase} will guide you on the suitable JEE batch and connect with you shortly.`,
+          message: `Thank you. For ${studentClass}, ${institutionPhrase} will guide you on the suitable batch and connect with you shortly.`,
+          conversationMode: 'continuation',
+          conversationState: createConversationState({
+            flowIntent: flowIntent || 'ADMISSION',
+            stage: 'HANDOFF_QUEUED',
+            pendingField: null,
+            collected,
+            status: 'handoff',
+          }),
+      };
+    }
+  }
+
+  if (conversationState.pendingField === 'course_interest') {
+    const courseInterest = extractCourseInterest(message);
+    if (!courseInterest) {
+      return createConfiguredHandoffPlan({
+        reason: 'OFF_FLOW_HANDOFF',
+        templateKey: 'offFlow',
+        fallbackMessage: 'Thank you. Our counsellor will continue with you on WhatsApp shortly.',
+        replyConfig,
+        flowIntent,
+        collected,
+      });
+    }
+
+    collected.courseInterest = courseInterest;
+
+    switch (flowIntent) {
+      case 'FEE_ENQUIRY':
+        return {
+          reason: 'FEE_ENQUIRY_HANDOFF',
+          message: `Thank you. For ${courseInterest}, ${institutionPhrase} will share the fee details and batch timings shortly on WhatsApp.`,
+          conversationMode: 'continuation',
+          conversationState: createConversationState({
+            flowIntent,
+            stage: 'HANDOFF_QUEUED',
+            pendingField: null,
+            collected,
+            status: 'handoff',
+          }),
+        };
+      case 'DEMO_REQUEST':
+        return {
+          reason: 'DEMO_REQUEST_HANDOFF',
+          message: `Thank you. For ${courseInterest}, ${institutionPhrase} will help you with the next available demo or counselling slot shortly.`,
+          conversationMode: 'continuation',
+          conversationState: createConversationState({
+            flowIntent,
+            stage: 'HANDOFF_QUEUED',
+            pendingField: null,
+            collected,
+            status: 'handoff',
+          }),
+        };
+      case 'SCHOLARSHIP_ENQUIRY':
+        return {
+          reason: 'SCHOLARSHIP_ENQUIRY_HANDOFF',
+          message: `Thank you. For ${courseInterest}, ${institutionPhrase} will review the current discount options and guide you shortly on WhatsApp.`,
+          conversationMode: 'continuation',
+          conversationState: createConversationState({
+            flowIntent: flowIntent || 'SCHOLARSHIP_ENQUIRY',
+            stage: 'HANDOFF_QUEUED',
+            pendingField: null,
+            collected,
+            status: 'handoff',
+          }),
+        };
+      case 'ADMISSION':
+      default:
+        return {
+          reason: 'ADMISSION_HANDOFF',
+          message: `Thank you. For ${courseInterest}, ${institutionPhrase} will guide you on the suitable batch and connect with you shortly.`,
           conversationMode: 'continuation',
           conversationState: createConversationState({
             flowIntent: flowIntent || 'ADMISSION',
@@ -720,8 +894,9 @@ function buildAcademyContinuationPlan({
   if (conversationState.pendingField === 'callback_details') {
     const studentClass = extractStudentClass(message);
     const preferredCallTime = extractPreferredCallTime(message);
+    const courseInterest = requiredFields.includes('courseInterest') ? extractCourseInterest(message) : null;
 
-    if (!studentClass && !preferredCallTime) {
+    if (!studentClass && !preferredCallTime && !courseInterest) {
       return createConfiguredHandoffPlan({
         reason: 'OFF_FLOW_HANDOFF',
         templateKey: 'offFlow',
@@ -734,15 +909,19 @@ function buildAcademyContinuationPlan({
 
     if (studentClass) collected.studentClass = studentClass;
     if (preferredCallTime) collected.preferredCallTime = preferredCallTime;
+    if (courseInterest) collected.courseInterest = courseInterest;
 
     const classText = studentClass ? ` regarding ${studentClass}` : '';
+    const courseText = courseInterest
+      ? `${classText ? ' and' : ' regarding'} ${courseInterest}`
+      : '';
     const callTimeText = preferredCallTime
       ? ` ${preferredCallTime}`
       : ' shortly';
 
     return {
       reason: 'CALLBACK_REQUEST_HANDOFF',
-      message: `Thank you. ${institutionPhrase} will call you${callTimeText}${classText} and assist you with the coaching details.`.replace(/\s+/g, ' ').trim(),
+      message: `Thank you. ${institutionPhrase} will call you${callTimeText}${classText}${courseText} and assist you with the enquiry details.`.replace(/\s+/g, ' ').trim(),
       conversationMode: 'continuation',
       conversationState: createConversationState({
         flowIntent: 'CALLBACK_REQUEST',
@@ -757,8 +936,9 @@ function buildAcademyContinuationPlan({
   if (conversationState.pendingField === 'general_enquiry_details') {
     const studentClass = extractStudentClass(message);
     const topic = extractAcademyEnquiryTopic(message);
+    const courseInterest = requiredFields.includes('courseInterest') ? extractCourseInterest(message) : null;
 
-    if (!studentClass && !topic) {
+    if (!studentClass && !topic && !courseInterest) {
       return createConfiguredHandoffPlan({
         reason: 'OFF_FLOW_HANDOFF',
         templateKey: 'offFlow',
@@ -771,6 +951,7 @@ function buildAcademyContinuationPlan({
 
     if (studentClass) collected.studentClass = studentClass;
     if (topic) collected.topic = topic;
+    if (courseInterest) collected.courseInterest = courseInterest;
 
     const resolvedIntent = topic || 'GENERAL_ENQUIRY';
     const topicLabelMap = {
@@ -781,10 +962,11 @@ function buildAcademyContinuationPlan({
     };
     const topicLabel = topicLabelMap[resolvedIntent] || 'coaching details';
     const classText = studentClass ? ` for ${studentClass}` : '';
+    const courseText = courseInterest ? ` for ${courseInterest}` : '';
 
     return {
       reason: 'GENERAL_ENQUIRY_HANDOFF',
-      message: `Thank you. ${institutionPhrase} will guide you on ${topicLabel}${classText} shortly on WhatsApp.`.replace(/\s+/g, ' ').trim(),
+      message: `Thank you. ${institutionPhrase} will guide you on ${topicLabel}${courseText}${classText} shortly on WhatsApp.`.replace(/\s+/g, ' ').trim(),
       conversationMode: 'continuation',
       conversationState: createConversationState({
         flowIntent: resolvedIntent,
@@ -1092,21 +1274,29 @@ async function continueWhatsAppConversation(leadId, {
     businessIndustry: lead.business.industry || 'other',
     agentConfig,
   });
-  const groundedReplyPlan = await maybeBuildGroundedKnowledgeReplyPlan({
-    businessName: lead.business.name,
-    businessIndustry: lead.business.industry || 'other',
-    message,
-    intent: priorState?.flowIntent || context.intent,
-    tags: context.tags,
-    agentConfig,
-    conversationState: priorState,
-    conversationMode: 'continuation',
-  });
-  const replyPlan = groundedReplyPlan || buildAcademyContinuationPlan({
+  const structuredReplyPlan = buildAcademyContinuationPlan({
     conversationState: priorState,
     message,
     priorityScore: context.priorityScore,
     replyConfig,
+  });
+  const groundedReplyPlan = shouldSkipKnowledgeForStructuredContinuation(priorState)
+    ? null
+    : await maybeBuildGroundedKnowledgeReplyPlan({
+        businessName: lead.business.name,
+        businessIndustry: lead.business.industry || 'other',
+        message,
+        intent: priorState?.flowIntent || context.intent,
+        tags: context.tags,
+        agentConfig,
+        conversationState: priorState,
+        conversationMode: 'continuation',
+      });
+  const replyPlan = selectPreferredAcademyReplyPlan({
+    businessIndustry: lead.business.industry || 'other',
+    message,
+    structuredReplyPlan,
+    groundedReplyPlan,
   });
 
   if (!replyPlan?.message) {
@@ -1148,6 +1338,15 @@ async function runLeadAutomations(leadId, {
 } = {}) {
   const creates = [];
   const resolvedAgentConfig = agentConfig || (businessId ? await getOrCreateAgentConfig(businessId) : null);
+  const structuredReplyPlan = buildWhatsAppReplyPlan({
+    businessIndustry,
+    intent,
+    tags,
+    priorityScore,
+    confidenceLabel,
+    leadDisposition,
+    agentConfig: resolvedAgentConfig,
+  });
   const groundedReplyPlan = source === 'whatsapp'
     ? await maybeBuildGroundedKnowledgeReplyPlan({
         businessName,
@@ -1159,14 +1358,11 @@ async function runLeadAutomations(leadId, {
         conversationMode: 'initial',
       })
     : null;
-  const replyPlan = groundedReplyPlan || buildWhatsAppReplyPlan({
+  const replyPlan = selectPreferredAcademyReplyPlan({
     businessIndustry,
-    intent,
-    tags,
-    priorityScore,
-    confidenceLabel,
-    leadDisposition,
-    agentConfig: resolvedAgentConfig,
+    message: leadMessage,
+    structuredReplyPlan,
+    groundedReplyPlan,
   });
   const shouldSendWhatsAppReply = source === 'whatsapp'
     && Boolean(phone)

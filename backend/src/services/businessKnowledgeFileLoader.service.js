@@ -23,6 +23,7 @@ const BUSINESS_KNOWLEDGE_FILE_ORDER = [
 
 const BUSINESS_KNOWLEDGE_FOLDER_REGISTRY = Object.freeze({
   'aarohan-jee-academy-delhi': 'aarohan-jee-academy-delhi',
+  'lexicon-ielts-spoken-english-gurugram': 'lexicon-ielts-spoken-english-gurugram',
 });
 
 class BusinessKnowledgeFileLoaderError extends Error {

@@ -3,7 +3,7 @@
 /**
  * seed.js — SME Engine demo data seed
  *
- * Preserves the two primary businesses (upsert).
+ * Preserves the primary and file-backed showcase businesses (upsert).
  * Wipes and recreates 10 demo businesses with realistic leads + activities.
  *
  * Run:  npx prisma db seed
@@ -44,6 +44,22 @@ const AAROHAN_SHOWCASE = {
   currency: 'INR',
   ownerEmail: 'owner@aarohanjeeacademy.in',
   ownerName: 'Aarohan Owner',
+  stage: 'AUTOMATION_ACTIVE',
+};
+
+const LEXICON_SHOWCASE = {
+  name: 'Lexicon IELTS & Spoken English Institute',
+  slug: 'lexicon-ielts-spoken-english-gurugram',
+  phone: '+91 98990 33445',
+  email: 'hello@lexiconielts.in',
+  address: 'Sector 14, Gurugram',
+  industry: 'academy',
+  city: 'Gurugram',
+  country: 'India',
+  timezone: 'Asia/Kolkata',
+  currency: 'INR',
+  ownerEmail: 'owner@lexiconielts.in',
+  ownerName: 'Lexicon Owner',
   stage: 'AUTOMATION_ACTIVE',
 };
 
@@ -135,17 +151,81 @@ function getSharmaShowcaseAgentConfig() {
   };
 }
 
-async function getAarohanShowcaseAgentConfig() {
+function getLexiconShowcaseBaseAgentConfig() {
+  const preset = getAgentConfigPreset('academy');
+  const presetReplyConfig = preset.classificationRules?.whatsappReplyConfig || {};
+
+  return {
+    ...preset,
+    classificationRules: {
+      ...preset.classificationRules,
+      keywords: {
+        DEMO_REQUEST: ['demo', 'trial', 'demo session', 'trial class', 'orientation'],
+        ADMISSION: ['admission', 'enroll', 'join', 'want to join', 'ielts', 'spoken english', 'english speaking', 'pte'],
+        FEE_ENQUIRY: ['fee', 'fees', 'price', 'cost', 'charges', 'ielts fee', 'spoken english fee', 'course fee'],
+        CALLBACK_REQUEST: ['call me', 'phone call', 'callback', 'please call'],
+        BATCH_TIMING: ['batch timing', 'batch timings', 'timings', 'weekday batch', 'weekend batch', 'morning batch', 'evening batch', 'schedule'],
+        WHATSAPP_REQUEST: ['whatsapp', 'send on whatsapp', 'send details', 'message me', 'send brochure', 'send fee details'],
+        SCHOLARSHIP_ENQUIRY: ['discount', 'offer', 'concession', 'student discount', 'group discount', 'weekday offer'],
+        COURSE_INFO: ['ielts', 'spoken english', 'english speaking', 'pte', 'mock test', 'band score', 'grammar'],
+      },
+      whatsappReplyConfig: {
+        ...presetReplyConfig,
+        institutionLabel: 'counsellor',
+        primaryOffering: 'IELTS and spoken English coaching',
+        supportedOfferings: ['IELTS batch details', 'spoken English programme', 'demo counselling'],
+        wrongFitCategories: ['JEE coaching', 'NEET coaching', 'full visa consultancy'],
+        preferredLanguage: 'english',
+        requiredCollectedFields: {
+          ...presetReplyConfig.requiredCollectedFields,
+          ADMISSION: ['courseInterest'],
+          DEMO_REQUEST: ['courseInterest'],
+          FEE_ENQUIRY: ['courseInterest'],
+          SCHOLARSHIP_ENQUIRY: ['courseInterest'],
+          CALLBACK_REQUEST: ['preferredCallTime', 'courseInterest'],
+          GENERAL_ENQUIRY: ['topic'],
+        },
+      },
+    },
+    priorityRules: {
+      ...preset.priorityRules,
+      weights: {
+        ...preset.priorityRules.weights,
+        ielts: 25,
+        'spoken english': 20,
+        pte: 18,
+        band: 14,
+        'weekend batch': 12,
+        gurugram: 6,
+      },
+    },
+    testMessage: 'Need IELTS weekend batch details and fee structure. Please WhatsApp the demo session information.',
+  };
+}
+
+async function getFileBackedShowcaseAgentConfig(showcase, baseConfig = null) {
   const { agentConfig, knowledgeBundle } = await buildAgentConfigFromBusinessKnowledgeFiles({
-    businessSlug: AAROHAN_SHOWCASE.slug,
-    industry: AAROHAN_SHOWCASE.industry,
+    businessSlug: showcase.slug,
+    industry: showcase.industry,
+    baseConfig,
   });
 
   console.log(
-    `[seed] Loaded ${knowledgeBundle.entryCount} business knowledge entries from ${knowledgeBundle.folderPath}`
+    `[seed] Loaded ${knowledgeBundle.entryCount} business knowledge entries for ${showcase.slug} from ${knowledgeBundle.folderPath}`
   );
 
   return agentConfig;
+}
+
+async function getAarohanShowcaseAgentConfig() {
+  return getFileBackedShowcaseAgentConfig(AAROHAN_SHOWCASE);
+}
+
+async function getLexiconShowcaseAgentConfig() {
+  return getFileBackedShowcaseAgentConfig(
+    LEXICON_SHOWCASE,
+    getLexiconShowcaseBaseAgentConfig()
+  );
 }
 
 /* ── Deterministic helpers ──────────────────────────────────────────────── */
@@ -238,7 +318,7 @@ const ACADEMY_MESSAGES = [
 
 const TAGS_POOL = [
   'DEMO_REQUEST', 'ADMISSION', 'FEE_ENQUIRY',
-  'CALL_REQUEST', 'WHATSAPP_REQUEST', 'GENERAL_ENQUIRY', 'COURSE_INFO',
+  'CALLBACK_REQUEST', 'WHATSAPP_REQUEST', 'GENERAL_ENQUIRY', 'COURSE_INFO',
 ];
 
 /* Weighted lead statuses — NEW is most common, WON least */
@@ -614,6 +694,60 @@ async function main() {
     create: { businessId: aarohanBusiness.id, ...aarohanAgentConfig },
   });
 
+  const lexiconBusiness = await prisma.business.upsert({
+    where: { slug: LEXICON_SHOWCASE.slug },
+    update: {
+      name: LEXICON_SHOWCASE.name,
+      slug: LEXICON_SHOWCASE.slug,
+      phone: LEXICON_SHOWCASE.phone,
+      email: LEXICON_SHOWCASE.email,
+      address: LEXICON_SHOWCASE.address,
+      industry: LEXICON_SHOWCASE.industry,
+      city: LEXICON_SHOWCASE.city,
+      country: LEXICON_SHOWCASE.country,
+      timezone: LEXICON_SHOWCASE.timezone,
+      currency: LEXICON_SHOWCASE.currency,
+      stage: LEXICON_SHOWCASE.stage,
+    },
+    create: {
+      name: LEXICON_SHOWCASE.name,
+      slug: LEXICON_SHOWCASE.slug,
+      phone: LEXICON_SHOWCASE.phone,
+      email: LEXICON_SHOWCASE.email,
+      address: LEXICON_SHOWCASE.address,
+      industry: LEXICON_SHOWCASE.industry,
+      city: LEXICON_SHOWCASE.city,
+      country: LEXICON_SHOWCASE.country,
+      timezone: LEXICON_SHOWCASE.timezone,
+      currency: LEXICON_SHOWCASE.currency,
+      stage: LEXICON_SHOWCASE.stage,
+    },
+  });
+
+  const lexiconPwHash = await bcrypt.hash('Admin@12345', 12);
+  await prisma.user.upsert({
+    where: { businessId_email: { businessId: lexiconBusiness.id, email: LEXICON_SHOWCASE.ownerEmail } },
+    update: {
+      name: LEXICON_SHOWCASE.ownerName,
+      passwordHash: lexiconPwHash,
+      role: 'OWNER',
+    },
+    create: {
+      businessId: lexiconBusiness.id,
+      name: LEXICON_SHOWCASE.ownerName,
+      email: LEXICON_SHOWCASE.ownerEmail,
+      passwordHash: lexiconPwHash,
+      role: 'OWNER',
+    },
+  });
+
+  const lexiconAgentConfig = await getLexiconShowcaseAgentConfig();
+  await prisma.agentConfig.upsert({
+    where: { businessId: lexiconBusiness.id },
+    update: lexiconAgentConfig,
+    create: { businessId: lexiconBusiness.id, ...lexiconAgentConfig },
+  });
+
   const demoAcademy = await prisma.business.upsert({
     where: { slug: 'demo-academy' },
     update: {
@@ -727,12 +861,13 @@ async function main() {
 
   /* ── Summary ── */
   console.log('\n✓ Seed complete');
-  console.log(`  Businesses : ${DEMO_BUSINESSES.length + 3} total (3 primary/demo + ${DEMO_BUSINESSES.length} demo)`);
+  console.log(`  Businesses : ${DEMO_BUSINESSES.length + 4} total (4 primary/demo + ${DEMO_BUSINESSES.length} demo)`);
   console.log(`  Leads      : ${totalLeads}`);
   console.log(`  Activities : ${totalActivities}`);
   console.log('\n  Credentials (all demo businesses): Admin@12345');
   console.log('  Primary business: owner@sharmajeeacademy.in / Admin@12345');
-  console.log('  File-backed sample: owner@aarohanjeeacademy.in / Admin@12345');
+  console.log('  File-backed JEE sample   : owner@aarohanjeeacademy.in / Admin@12345');
+  console.log('  File-backed IELTS sample : owner@lexiconielts.in / Admin@12345');
   console.log('  Demo academy    : demo@smeengine.com / Demo@123');
 }
 

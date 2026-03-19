@@ -17,8 +17,8 @@ const TOPIC_LABELS = {
   DEMO_REQUEST: 'Demo class details',
   FEE_ENQUIRY: 'Fee details',
   SCHOLARSHIP_ENQUIRY: 'Scholarship details',
-  GENERAL_ENQUIRY: 'Coaching details',
-  CALLBACK_REQUEST: 'Coaching callback',
+  GENERAL_ENQUIRY: 'Programme details',
+  CALLBACK_REQUEST: 'Callback request',
 };
 
 const STATUS_LABELS = {
@@ -30,9 +30,10 @@ const STATUS_LABELS = {
 
 const PENDING_FIELD_ACTIONS = {
   student_class: 'Wait for the student class, then continue the handoff.',
+  course_interest: 'Wait for the course or programme interest, then continue the handoff.',
   recent_marks: 'Wait for the recent marks or percentage, then guide on scholarship.',
-  callback_details: 'Wait for the preferred call time and student class, then call the lead.',
-  general_enquiry_details: 'Wait for the class and whether they need fees, demo, or admission details.',
+  callback_details: 'Wait for the preferred call time and the remaining enquiry details, then call the lead.',
+  general_enquiry_details: 'Wait for the missing enquiry details, then continue the handoff.',
   knowledge_follow_up: 'Business details have already been shared on WhatsApp. If the lead asks for something more specific, hand it to a counsellor.',
 };
 
@@ -93,6 +94,7 @@ function buildCapturedFields(conversationState, classifiedMeta) {
 
   return {
     studentClass: collected.studentClass || null,
+    courseInterest: collected.courseInterest || null,
     requestedTopic: requestedTopic ? formatTopicLabel(requestedTopic) : null,
     preferredCallTime: collected.preferredCallTime || null,
     recentMarks: collected.recentMarks || null,
@@ -129,7 +131,8 @@ function buildRecommendedNextAction({
     if (primaryIntent === 'CALLBACK_REQUEST') {
       const callTime = capturedFields.preferredCallTime ? ` around ${capturedFields.preferredCallTime}` : '';
       const studentClass = capturedFields.studentClass ? ` for ${capturedFields.studentClass}` : '';
-      return `Call the lead${callTime}${studentClass} and continue the academy conversation.`.replace(/\s+/g, ' ').trim();
+      const courseInterest = capturedFields.courseInterest ? ` about ${capturedFields.courseInterest}` : '';
+      return `Call the lead${callTime}${studentClass}${courseInterest} and continue the conversation.`.replace(/\s+/g, ' ').trim();
     }
 
     if (primaryIntent === 'SCHOLARSHIP_ENQUIRY') {
@@ -139,11 +142,12 @@ function buildRecommendedNextAction({
 
     const topic = capturedFields.requestedTopic ? ` about ${capturedFields.requestedTopic.toLowerCase()}` : '';
     const studentClass = capturedFields.studentClass ? ` for ${capturedFields.studentClass}` : '';
-    return `Reach out on call or WhatsApp${studentClass}${topic}.`.replace(/\s+/g, ' ').trim();
+    const courseInterest = capturedFields.courseInterest ? ` for ${capturedFields.courseInterest}` : '';
+    return `Reach out on call or WhatsApp${studentClass}${courseInterest}${topic}.`.replace(/\s+/g, ' ').trim();
   }
 
   if (status === 'closed') {
-    return 'No handoff needed unless the lead asks again about IIT-JEE coaching.';
+    return 'No handoff needed unless the lead asks again.';
   }
 
   if (classifiedMeta.suggestedNextAction) return classifiedMeta.suggestedNextAction;
@@ -163,7 +167,7 @@ function buildTranscript(whatsAppActivities = []) {
     .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
     .map((activity) => ({
       direction: activity.metadata.direction,
-      speaker: activity.metadata.direction === 'inbound' ? 'Lead' : 'Academy',
+      speaker: activity.metadata.direction === 'inbound' ? 'Lead' : 'Business',
       text: activity.metadata.messageText,
       createdAt: activity.createdAt,
       reason: activity.metadata.replyIntent || activity.metadata.reason || null,

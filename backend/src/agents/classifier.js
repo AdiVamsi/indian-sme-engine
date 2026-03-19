@@ -2,8 +2,8 @@
 
 const { classifyWithModel } = require('./modelClassifier');
 
-async function classify({ lead, business }) {
-  const result = await classifyWithModel({ lead, business });
+async function classify({ lead, business, config = null }) {
+  const result = await classifyWithModel({ lead, business, config });
 
   return {
     bestCategory: result.intent,

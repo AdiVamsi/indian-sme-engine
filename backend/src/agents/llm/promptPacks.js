@@ -46,11 +46,11 @@ const PROMPT_PACKS = {
     vertical: 'academy',
     label: 'Academy / Coaching Center',
     nicheRole: [
-      'ROLE: You are an AI lead-classification engine for a coaching institute.',
+      'ROLE: You are an AI lead-classification engine for a coaching institute, training center, or language academy.',
       'TASK: Analyze each message and classify the true business intent.',
       'Focus on the strongest enquiry intent, not unrelated chatter.',
       'Ignore irrelevant sentences if the message still contains a clear coaching enquiry.',
-      'Treat coaching, admission, classes, course details, fees, batch timing, and enrollment as valid lead intent.',
+      'Treat coaching, admission, classes, course details, fees, batch timing, enrollment, IELTS, spoken English, PTE, and communication-training requests as valid lead intent.',
     ].join(' '),
     intents: [
       'ADMISSION',
@@ -68,6 +68,8 @@ const PROMPT_PACKS = {
     tags: ['COURSE_INFO', 'SCHOLARSHIP', 'ADMISSION', 'DEMO_REQUEST'],
     wrongFitExamples: [
       'NEET enquiry for a JEE-focused academy',
+      'JEE or NEET enquiry for an IELTS or spoken-English institute',
+      'Visa-consultancy request for a coaching-only institute',
       'IAS, dance, music, or unrelated coaching requests',
     ],
     junkExamples: [
@@ -86,6 +88,8 @@ const PROMPT_PACKS = {
       'Example: "My brother needs coaching soon" -> intent ADMISSION, priority NORMAL, tags [ADMISSION].',
       'Example: "I need coaching immediately" -> intent ADMISSION, priority HIGH, tags [ADMISSION, URGENT].',
       'Example: "fees kitni hai" -> intent FEE_ENQUIRY, priority NORMAL, tags [FEE_ENQUIRY].',
+      'Example: "IELTS fees and weekend batch details chahiye" -> intent FEE_ENQUIRY, priority NORMAL, tags [FEE_ENQUIRY, COURSE_INFO].',
+      'Example: "spoken english demo class chahiye" -> intent DEMO_REQUEST, priority NORMAL, tags [DEMO_REQUEST, COURSE_INFO].',
       'Example: "I dont need coaching" -> intent NOT_INTERESTED, priority LOW, tags [].',
       'Example: "My favourite food is mango but I need coaching next month" -> intent ADMISSION, priority NORMAL, tags [ADMISSION].',
       'Example: "My favourite food is mango. but i need coaching from next month, give me the details now" -> intent ADMISSION, priority NORMAL, tags [ADMISSION].',

@@ -1,0 +1,38 @@
+{
+  "sourceLabel": "Lexicon IELTS and Spoken English Institute business profile",
+  "enabled": true,
+  "business": {
+    "name": "Lexicon IELTS & Spoken English Institute",
+    "slug": "lexicon-ielts-spoken-english-gurugram",
+    "industry": "academy",
+    "city": "Gurugram",
+    "area": "Sector 14",
+    "focus": "IELTS, spoken English, and communication-skills coaching"
+  },
+  "entries": [
+    {
+      "id": "institute_overview",
+      "title": "Institute overview",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY", "COURSE_INFO", "ADMISSION"],
+      "keywords": ["lexicon", "ielts institute", "spoken english institute", "gurugram english coaching", "sector 14 institute"],
+      "content": "Lexicon IELTS & Spoken English Institute is an imagined language-training centre in Sector 14, Gurugram. The centre focuses on IELTS Academic, IELTS General Training, spoken English fluency, and practical communication support for college students, working professionals, and study-abroad test candidates. The teaching model is batch-based with trainer feedback, speaking practice, mock tests, and hybrid support for revision."
+    },
+    {
+      "id": "bilingual_counselling_support",
+      "title": "Hindi and English counselling support",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY", "CALLBACK_REQUEST"],
+      "keywords": ["hindi", "english", "language", "bilingual", "hindi mein", "english mein"],
+      "content": "Front-desk counselling and admission guidance can be handled in Hindi or English. Learners who are not comfortable speaking fully in English at the start can discuss course options in Hindi, while trainer notes, IELTS rubrics, and most written study material are usually maintained in English."
+    },
+    {
+      "id": "entrance_exam_scope_boundary",
+      "title": "Not a JEE or NEET coaching centre",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY", "COURSE_INFO"],
+      "keywords": ["jee", "neet", "iit jee", "medical entrance", "engineering entrance", "school tuition", "science coaching"],
+      "content": "Lexicon is a language and exam-preparation institute for IELTS, spoken English, and selected communication modules. It does not run JEE, NEET, board-science tuition, or full school-subject coaching. If a parent asks for engineering or medical entrance coaching, the counsellor should clarify the mismatch instead of stretching the offer."
+    }
+  ]
+}

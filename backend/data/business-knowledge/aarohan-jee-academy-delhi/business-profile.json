@@ -28,11 +28,11 @@
     },
     {
       "id": "non_jee_scope_clarification",
-      "title": "Non-JEE scope clarification",
+      "title": "Non-JEE and non-language scope clarification",
       "category": "general",
       "intents": ["GENERAL_ENQUIRY", "COURSE_INFO"],
-      "keywords": ["neet", "cuet", "upsc", "ias", "non jee", "other exams"],
-      "content": "Aarohan JEE Academy mainly focuses on IIT-JEE Main and Advanced preparation. The team can clarify whether a student profile fits Class 11, Class 12, or dropper JEE batches, but it does not promise full counselling for NEET, UPSC, CUET-only, or government-job exam coaching. If the enquiry is outside JEE preparation, the counsellor will usually clarify scope instead of overcommitting."
+      "keywords": ["neet", "cuet", "upsc", "ias", "non jee", "other exams", "ielts", "spoken english", "english speaking", "pte", "language institute"],
+      "content": "Aarohan JEE Academy mainly focuses on IIT-JEE Main and Advanced preparation. The team can clarify whether a student profile fits Class 11, Class 12, or dropper JEE batches, but it does not promise full counselling for NEET, UPSC, CUET-only, IELTS, spoken English, PTE, or government-job exam coaching. If the enquiry is outside JEE preparation, the counsellor should clarify scope instead of overcommitting."
     }
   ]
 }

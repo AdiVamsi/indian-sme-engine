@@ -23,7 +23,7 @@ const PRESETS = {
                               'my son', 'my daughter', 'my brother', 'my sister',
                               'my child', 'my ward'],
         FEE_ENQUIRY:         ['fee', 'fees', 'price', 'cost', 'charges', 'fee structure'],
-        CALL_REQUEST:        ['call me', 'phone call', 'callback', 'please call'],
+        CALLBACK_REQUEST:    ['call me', 'phone call', 'callback', 'please call'],
         BATCH_TIMING:        ['batch timing', 'batch timings', 'timings', 'morning batch',
                               'evening batch', 'weekend batch', 'which batch', 'batch schedule',
                               'what time', 'schedule',
@@ -86,7 +86,7 @@ const PRESETS = {
         MEMBERSHIP:    ['membership', 'join', 'enroll'],
         FEE_ENQUIRY:   ['fee', 'fees', 'price', 'cost', 'charges'],
         TIMING_QUERY:  ['timing', 'timings', 'schedule', 'hours', 'batch'],
-        CALL_REQUEST:  ['call me', 'callback', 'phone call'],
+        CALLBACK_REQUEST: ['call me', 'callback', 'phone call'],
       },
     },
     priorityRules: {
@@ -108,7 +108,7 @@ const PRESETS = {
         APPOINTMENT:    ['appointment', 'book', 'booking', 'slot'],
         PRICING:        ['price', 'cost', 'charges', 'rate', 'fees'],
         LOCATION_QUERY: ['location', 'address', 'where', 'directions'],
-        CALL_REQUEST:   ['call me', 'callback', 'phone call'],
+        CALLBACK_REQUEST: ['call me', 'callback', 'phone call'],
       },
     },
     priorityRules: {
@@ -130,7 +130,7 @@ const PRESETS = {
         APPOINTMENT:  ['appointment', 'book', 'consult', 'consultation', 'visit'],
         EMERGENCY:    ['urgent', 'emergency', 'immediately', 'asap'],
         FEE_ENQUIRY:  ['fee', 'fees', 'charges', 'cost'],
-        CALL_REQUEST: ['call me', 'callback', 'phone call'],
+        CALLBACK_REQUEST: ['call me', 'callback', 'phone call'],
       },
     },
     priorityRules: {
@@ -139,7 +139,7 @@ const PRESETS = {
         appointment: 15, consultation: 15,
       },
     },
-    /* 'book', 'consultation' → APPOINTMENT (score 2); 'call me' → CALL_REQUEST */
+    /* 'book', 'consultation' → APPOINTMENT (score 2); 'call me' → CALLBACK_REQUEST */
     testMessage: 'Need to book a consultation, please call me',
   },
 
@@ -198,7 +198,7 @@ const FALLBACK_PRESET = {
       DEMO_REQUEST:    ['demo', 'trial'],
       GENERAL_ENQUIRY: ['info', 'details', 'information', 'more'],
       FEE_ENQUIRY:     ['fee', 'fees', 'price', 'cost'],
-      CALL_REQUEST:    ['call me', 'callback', 'phone call'],
+      CALLBACK_REQUEST: ['call me', 'callback', 'phone call'],
     },
     whatsappReplyConfig: {
       institutionLabel: 'team',

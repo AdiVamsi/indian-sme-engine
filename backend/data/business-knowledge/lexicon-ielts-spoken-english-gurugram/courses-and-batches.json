@@ -1,0 +1,38 @@
+{
+  "sourceLabel": "Lexicon IELTS and Spoken English Institute courses and batches",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "ielts_academic_programme",
+      "title": "IELTS Academic programme",
+      "category": "courses",
+      "intents": ["COURSE_INFO", "ADMISSION", "GENERAL_ENQUIRY"],
+      "keywords": ["ielts academic", "academic ielts", "study abroad", "band improvement", "ielts course"],
+      "content": "Lexicon's IELTS Academic programme is designed for students aiming for university admission or higher-study applications. The usual batch format runs for around 8 to 10 weeks with guided reading, listening drills, writing task feedback, speaking mock practice, and strategy sessions on band descriptors."
+    },
+    {
+      "id": "ielts_general_training_programme",
+      "title": "IELTS General Training programme",
+      "category": "courses",
+      "intents": ["COURSE_INFO", "ADMISSION", "GENERAL_ENQUIRY"],
+      "keywords": ["ielts general", "general training", "immigration ielts", "work visa english test", "general ielts"],
+      "content": "The IELTS General Training programme is built for learners targeting migration, work-related English testing, or profile-specific overseas requirements. The centre usually covers letter writing, practical vocabulary, speaking confidence, and timed mock tests with trainer review."
+    },
+    {
+      "id": "spoken_english_fluency_programme",
+      "title": "Spoken English fluency programme",
+      "category": "courses",
+      "intents": ["COURSE_INFO", "ADMISSION", "GENERAL_ENQUIRY"],
+      "keywords": ["spoken english", "spoken english course", "english speaking", "fluency", "communication skills"],
+      "content": "Lexicon also runs spoken English batches for learners who want better confidence in daily conversation, interviews, office communication, or presentation basics. The programme usually starts with a level check, then covers grammar correction, vocabulary building, guided speaking, and confidence practice in small groups."
+    },
+    {
+      "id": "pte_and_interview_support",
+      "title": "PTE and interview communication support",
+      "category": "courses",
+      "intents": ["COURSE_INFO", "GENERAL_ENQUIRY"],
+      "keywords": ["pte", "pte coaching", "interview preparation", "interview english", "communication support"],
+      "content": "PTE preparation and interview-communication support may be offered in selected cycles depending on trainer availability. The safe front-desk response is to confirm the currently active PTE or interview batch before promising immediate admission, because this module is not treated as permanently open in every month."
+    }
+  ]
+}

@@ -19,6 +19,7 @@ const WHATSAPP_REPLY_INTENTS = new Set([
 
 const WHATSAPP_REQUIRED_FIELDS = new Set([
   'studentClass',
+  'courseInterest',
   'preferredCallTime',
   'recentMarks',
   'topic',

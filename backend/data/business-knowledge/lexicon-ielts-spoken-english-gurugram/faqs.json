@@ -1,0 +1,30 @@
+{
+  "sourceLabel": "Lexicon IELTS and Spoken English Institute FAQs",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "online_classes_availability",
+      "title": "Online class availability",
+      "category": "online_classes",
+      "intents": ["GENERAL_ENQUIRY", "COURSE_INFO"],
+      "keywords": ["online classes", "online batch", "live class", "zoom class", "hybrid", "online coaching"],
+      "content": "Yes, Lexicon can support selected IELTS and spoken English learners through live online or hybrid batches, especially when the learner cannot attend every classroom session. The team should still confirm the currently active online-supported batch before promising that every programme is fully available in online-only mode."
+    },
+    {
+      "id": "mock_test_and_feedback_support",
+      "title": "Mock test and feedback support",
+      "category": "general",
+      "intents": ["COURSE_INFO", "GENERAL_ENQUIRY"],
+      "keywords": ["mock test", "practice test", "writing feedback", "speaking mock", "review"],
+      "content": "IELTS learners usually receive mock-test practice, writing correction, and speaking feedback based on the batch plan, while spoken English learners get trainer correction and guided speaking exercises. The exact number of mock reviews can vary by batch type, so the counsellor should explain the active package rather than promising unlimited review."
+    },
+    {
+      "id": "whatsapp_notes_and_one_to_one_policy",
+      "title": "WhatsApp notes and one-to-one policy",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY", "CALLBACK_REQUEST"],
+      "keywords": ["whatsapp notes", "study material", "recording", "one to one", "personal session", "notes on whatsapp"],
+      "content": "Basic updates, reminders, and selected notes can be shared on WhatsApp after admission, but full class recordings or one-to-one coaching are not automatically included in every batch fee. Personal sessions or additional doubt time may be available as a separate arrangement depending on trainer schedule and course type."
+    }
+  ]
+}

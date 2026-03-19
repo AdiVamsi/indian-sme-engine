@@ -11,7 +11,41 @@ const DEFAULT_TEMPERATURE = Number(process.env.LLM_CLASSIFIER_TEMPERATURE || 0.1
 
 let warnedMissingKey = false;
 
-function buildSystemPrompt(pack, businessName) {
+function buildKeywordHintLine(config = null) {
+  const keywords = config?.classificationRules?.keywords;
+  if (!keywords || typeof keywords !== 'object' || Array.isArray(keywords)) return null;
+
+  const parts = Object.entries(keywords)
+    .filter(([, values]) => Array.isArray(values) && values.length)
+    .slice(0, 8)
+    .map(([intent, values]) => {
+      const examples = values
+        .filter((value) => typeof value === 'string' && value.trim())
+        .slice(0, 4)
+        .join(', ');
+      return examples ? `${intent}: ${examples}` : null;
+    })
+    .filter(Boolean);
+
+  return parts.length ? `Business keyword hints: ${parts.join(' | ')}.` : null;
+}
+
+function buildPriorityHintLine(config = null) {
+  const weights = config?.priorityRules?.weights;
+  if (!weights || typeof weights !== 'object' || Array.isArray(weights)) return null;
+
+  const parts = Object.entries(weights)
+    .filter(([, weight]) => typeof weight === 'number' && Number.isFinite(weight))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([term, weight]) => `${term}=${weight}`);
+
+  return parts.length
+    ? `Business priority hints: if these terms are present, reflect their urgency or commercial value when assigning priorityScore: ${parts.join(', ')}.`
+    : null;
+}
+
+function buildSystemPrompt(pack, businessName, config = null) {
   return [
     `${pack.nicheRole} Messages may be English, Hinglish, transliterated Hindi, mixed-language, typo-heavy, or WhatsApp-style.`,
     `Business: ${businessName || 'Unknown business'}. Industry: ${pack.label}. Judge fit for this business, not a generic business.`,
@@ -19,11 +53,13 @@ function buildSystemPrompt(pack, businessName) {
     `Allowed dispositions: ${pack.allowedDispositions.join(', ')}.`,
     `Allowed tags: ${pack.allowedTags.join(', ')}.`,
     `Priority guidance: ${pack.priorityGuidance.join(' ')}`,
+    buildKeywordHintLine(config),
+    buildPriorityHintLine(config),
     `Wrong-fit examples: ${pack.wrongFitExamples.join('; ')}.`,
     `Junk examples: ${pack.junkExamples.join('; ')}.`,
     `Next-action guidance: ${pack.nextActionGuidance.join(' ')}`,
     'Return JSON only. Keep reasoning short and concrete. Never output markdown.',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 function buildUserPrompt({ message, businessName, industry }) {
@@ -176,7 +212,7 @@ async function requestOpenAIClassification({ apiKey, model, baseUrl, systemPromp
   }
 }
 
-async function classifyWithModel({ lead, business }) {
+async function classifyWithModel({ lead, business, config = null }) {
   const pack = getPromptPack(business?.industry);
   const provider = DEFAULT_PROVIDER;
   const model = DEFAULT_MODEL;
@@ -213,7 +249,7 @@ async function classifyWithModel({ lead, business }) {
     });
   }
 
-  const systemPrompt = buildSystemPrompt(pack, business?.name);
+  const systemPrompt = buildSystemPrompt(pack, business?.name, config);
   const userPrompt = buildUserPrompt({
     message: lead.message,
     businessName: business?.name,
@@ -255,6 +291,7 @@ async function classifyWithModel({ lead, business }) {
 
 module.exports = {
   DEFAULT_MODEL,
+  buildSystemPrompt,
   classifyWithModel,
   deriveConfidenceLabel,
   derivePriorityFromScore,

@@ -48,6 +48,7 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
       name: business?.name || 'Unknown business',
       industry: business?.industry || 'other',
     },
+    config,
   });
 
   const bestCategory = intelligence.bestCategory || 'GENERAL_ENQUIRY';

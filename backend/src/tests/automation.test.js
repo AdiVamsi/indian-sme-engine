@@ -155,6 +155,32 @@ describe('WhatsApp academy reply selection', () => {
     expect(plan.conversationState.pendingField).toBe('general_enquiry_details');
   });
 
+  it('supports course-interest collection for academy businesses that do not use student class', () => {
+    const plan = buildWhatsAppReplyPlan({
+      businessIndustry: 'academy',
+      intent: 'FEE_ENQUIRY',
+      tags: ['FEE_ENQUIRY'],
+      priorityScore: 20,
+      agentConfig: {
+        classificationRules: {
+          whatsappReplyConfig: {
+            institutionLabel: 'counsellor',
+            primaryOffering: 'IELTS and spoken English coaching',
+            supportedOfferings: ['IELTS batch details', 'spoken English programme', 'PTE support'],
+            requiredCollectedFields: {
+              FEE_ENQUIRY: ['courseInterest'],
+            },
+          },
+        },
+      },
+    });
+
+    expect(plan.reason).toBe('FEE_ENQUIRY');
+    expect(plan.message).toContain('course or programme');
+    expect(plan.message).toContain('IELTS batch details');
+    expect(plan.conversationState.pendingField).toBe('course_interest');
+  });
+
   it('builds a grounded business-knowledge answer when a confident FAQ match exists', async () => {
     process.env.OPENAI_API_KEY = 'test-openai-key';
     process.env.LLM_CLASSIFIER_PROVIDER = 'openai';
@@ -374,5 +400,27 @@ describe('WhatsApp academy continuation planning', () => {
     expect(callbackPlan.reason).toBe('CALLBACK_REQUEST_HANDOFF');
     expect(callbackPlan.message).toContain('our admissions team will call you');
     expect(callbackPlan.message).toContain('7 pm');
+  });
+
+  it('handles course-interest follow-up replies for non-school academy businesses', () => {
+    const plan = buildAcademyContinuationPlan({
+      conversationState: {
+        flowIntent: 'FEE_ENQUIRY',
+        pendingField: 'course_interest',
+        collected: {},
+        status: 'awaiting_user',
+      },
+      message: 'IELTS',
+      priorityScore: 20,
+      replyConfig: {
+        institutionLabel: 'counsellor',
+      },
+    });
+
+    expect(plan.reason).toBe('FEE_ENQUIRY_HANDOFF');
+    expect(plan.message).toContain('For IELTS');
+    expect(plan.message).toContain('fee details and batch timings');
+    expect(plan.conversationState.collected.courseInterest).toBe('IELTS');
+    expect(plan.conversationState.status).toBe('handoff');
   });
 });

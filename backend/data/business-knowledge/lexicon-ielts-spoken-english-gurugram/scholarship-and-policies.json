@@ -1,0 +1,30 @@
+{
+  "sourceLabel": "Lexicon IELTS and Spoken English Institute discounts and policies",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "discount_and_offer_guidance",
+      "title": "Discount and offer guidance",
+      "category": "scholarship",
+      "intents": ["SCHOLARSHIP_ENQUIRY", "FEE_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["discount", "offer", "concession", "student discount", "group discount", "weekday offer"],
+      "content": "Lexicon may run limited offers such as weekday-batch discounts, repeat-attempt concessions, or occasional paired-admission offers for friends or siblings. These are not assumed to be permanently active for every batch, so the counsellor should confirm the current offer window instead of promising a discount by default."
+    },
+    {
+      "id": "no_band_score_guarantee",
+      "title": "No guaranteed band score",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY", "COURSE_INFO"],
+      "keywords": ["7 band guarantee", "8 band guarantee", "band guarantee", "score guarantee", "guaranteed band score"],
+      "content": "Lexicon does not promise a guaranteed IELTS band score purely from a WhatsApp chat or admission payment. A learner's result depends on their baseline level, attendance, practice consistency, and mock-test discipline. The safest front-desk answer is to explain the training format and support system, not to overpromise a fixed band like 7 or 8."
+    },
+    {
+      "id": "visa_and_application_scope_boundary",
+      "title": "Visa and application scope boundary",
+      "category": "general",
+      "intents": ["GENERAL_ENQUIRY", "COURSE_INFO"],
+      "keywords": ["visa", "application", "sop", "college admission", "consultancy", "immigration consultant"],
+      "content": "Lexicon's primary role is English-test training and communication coaching. The team may explain how IELTS fits into study-abroad or migration plans, but it does not promise full visa filing, SOP drafting, embassy handling, or guaranteed college-admission consultancy as part of a normal coaching enrolment."
+    }
+  ]
+}

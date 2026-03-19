@@ -164,6 +164,48 @@ describe('WhatsApp conversation summary builder', () => {
     expect(summary.recommendedNextAction).toContain('Callback already scheduled for Today 6 PM');
   });
 
+  it('includes captured course interest in the handoff summary', () => {
+    const summary = buildWhatsAppConversationSummary({
+      lead: { id: 'lead-5' },
+      activities: [
+        {
+          type: 'AGENT_CLASSIFIED',
+          createdAt: '2026-03-14T10:00:00.000Z',
+          metadata: {
+            source: 'whatsapp',
+            bestCategory: 'FEE_ENQUIRY',
+          },
+        },
+        {
+          type: 'AGENT_PRIORITIZED',
+          createdAt: '2026-03-14T10:00:01.000Z',
+          metadata: { priorityScore: 18 },
+        },
+        {
+          type: 'AUTOMATION_ALERT',
+          createdAt: '2026-03-14T10:00:03.000Z',
+          metadata: {
+            channel: 'whatsapp',
+            direction: 'outbound',
+            messageText: 'Thank you. For IELTS, our counsellor will share the fee details and batch timings shortly on WhatsApp.',
+            replyIntent: 'FEE_ENQUIRY_HANDOFF',
+            conversationState: {
+              flowIntent: 'FEE_ENQUIRY',
+              pendingField: null,
+              status: 'handoff',
+              collected: {
+                courseInterest: 'IELTS',
+              },
+            },
+          },
+        },
+      ],
+    });
+
+    expect(summary.capturedFields.courseInterest).toBe('IELTS');
+    expect(summary.recommendedNextAction).toContain('for IELTS');
+  });
+
   it('surfaces failed outbound replies that need operator attention', () => {
     const summary = buildWhatsAppConversationSummary({
       lead: { id: 'lead-4' },

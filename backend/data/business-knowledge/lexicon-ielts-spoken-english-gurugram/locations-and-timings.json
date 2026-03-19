@@ -1,0 +1,30 @@
+{
+  "sourceLabel": "Lexicon IELTS and Spoken English Institute location and timings",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "sector_14_branch_location",
+      "title": "Sector 14 branch location",
+      "category": "branch_location",
+      "intents": ["GENERAL_ENQUIRY"],
+      "keywords": ["branch", "location", "address", "sector 14", "gurugram", "where"],
+      "content": "The imagined Lexicon branch is in Sector 14, Gurugram, in the old-city coaching and office belt side of the area. For front-desk replies, it is safe to say the centre is accessible from the Sector 14 market side and that the exact visit pin can be shared on WhatsApp before the learner comes in."
+    },
+    {
+      "id": "weekday_and_weekend_timings",
+      "title": "Weekday and weekend batch timings",
+      "category": "timings",
+      "intents": ["BATCH_TIMING", "GENERAL_ENQUIRY"],
+      "keywords": ["batch timing", "timings", "weekday batch", "weekend batch", "morning batch", "evening batch", "schedule"],
+      "content": "Lexicon usually runs weekday IELTS slots in late morning and evening windows, while spoken English batches often include office-friendly evening options and selected weekend groups. A sample front-desk answer is that morning, evening, and weekend timing choices may be available, but the exact active slot depends on the current batch calendar and learner level."
+    },
+    {
+      "id": "travel_and_landmark_boundary",
+      "title": "Travel and landmark guidance boundary",
+      "category": "branch_location",
+      "intents": ["GENERAL_ENQUIRY"],
+      "keywords": ["nearest metro", "landmark", "distance", "parking", "travel time", "map"],
+      "content": "The counselling team can help with broad location guidance for Sector 14, but exact walking landmarks, parking availability, and current traffic time are better confirmed closer to the visit. The safe reply is to offer the map pin or a callback instead of giving overconfident distance estimates."
+    }
+  ]
+}

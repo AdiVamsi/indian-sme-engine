@@ -1,0 +1,38 @@
+{
+  "sourceLabel": "Lexicon IELTS and Spoken English Institute fees and payment",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "ielts_regular_fee_range",
+      "title": "IELTS regular fee range",
+      "category": "fees",
+      "intents": ["FEE_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["ielts fee", "ielts fees", "ielts course fee", "regular ielts fee", "fees"],
+      "content": "For the imagined Lexicon sample setup, regular IELTS weekday classroom batches usually fall between INR 18,500 and INR 24,000 depending on batch size, number of mock tests, and writing-feedback coverage. The counsellor usually confirms the exact payable fee only after checking whether the learner needs Academic or General Training preparation."
+    },
+    {
+      "id": "ielts_fast_track_fee_range",
+      "title": "IELTS fast-track fee range",
+      "category": "fees",
+      "intents": ["FEE_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["fast track ielts", "intensive ielts fee", "urgent ielts batch", "ielts crash course", "ielts fast fee"],
+      "content": "Fast-track IELTS batches with shorter timelines and denser trainer support are usually around INR 26,000 to INR 34,000 for the cycle. These intensive batches are meant for learners working against a deadline, but the front desk should still avoid promising a score outcome just because the batch is more expensive."
+    },
+    {
+      "id": "spoken_english_fee_range",
+      "title": "Spoken English fee range",
+      "category": "fees",
+      "intents": ["FEE_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["spoken english fee", "english speaking fee", "fluency course fee", "spoken english charges", "fee"],
+      "content": "Spoken English classroom batches usually range from around INR 12,500 to INR 18,500 depending on the learner level, programme duration, and whether the learner is taking a weekday or weekend format. The team normally maps the learner to beginner, intermediate, or confidence-improvement level before finalising the fee."
+    },
+    {
+      "id": "installment_and_refund_policy",
+      "title": "Installment and refund policy",
+      "category": "fees",
+      "intents": ["FEE_ENQUIRY", "GENERAL_ENQUIRY"],
+      "keywords": ["installment", "emi", "refund", "cancellation", "payment plan", "registration amount"],
+      "content": "Lexicon may allow a split payment in 2 parts for selected batches, especially when the programme fee is on the higher side. Registration or seat-booking amounts are usually handled separately, and the sample policy does not promise a full refund after multiple sessions have already been attended. Batch transfer requests are reviewed case by case rather than guaranteed automatically."
+    }
+  ]
+}

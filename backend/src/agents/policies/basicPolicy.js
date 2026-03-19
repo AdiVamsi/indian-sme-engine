@@ -7,7 +7,7 @@ const FALLBACK_CLASSIFICATION = {
     DEMO_REQUEST:      ['demo', 'trial', 'demo class'],
     FEE_ENQUIRY:       ['fee', 'fees', 'price', 'cost', 'charges'],
     COURSE_INFO:       ['course', 'syllabus', 'curriculum'],
-    CALL_REQUEST:      ['call me', 'phone call', 'talk'],
+    CALLBACK_REQUEST:  ['call me', 'phone call', 'talk'],
     WHATSAPP_REQUEST:  ['whatsapp', 'send details'],
     LOCATION_QUERY:    ['location', 'address', 'where are you'],
     GENERAL_ENQUIRY:   ['info', 'details', 'information'],

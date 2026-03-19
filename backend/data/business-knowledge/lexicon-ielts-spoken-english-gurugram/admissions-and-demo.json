@@ -1,0 +1,30 @@
+{
+  "sourceLabel": "Lexicon IELTS and Spoken English Institute admissions and demo",
+  "enabled": true,
+  "entries": [
+    {
+      "id": "admission_and_level_assessment_process",
+      "title": "Admission and level-assessment process",
+      "category": "admission",
+      "intents": ["ADMISSION", "GENERAL_ENQUIRY"],
+      "keywords": ["admission", "join", "enroll", "enrollment", "level test", "assessment"],
+      "content": "The admission process usually begins with a short counselling call or walk-in discussion to understand whether the learner wants IELTS Academic, IELTS General, spoken English, or communication support. For many learners, Lexicon also does a short level assessment before placing them in a suitable batch, then shares the recommended programme, timing, and payment steps."
+    },
+    {
+      "id": "demo_and_trial_policy",
+      "title": "Demo and trial policy",
+      "category": "demo_class",
+      "intents": ["DEMO_REQUEST", "GENERAL_ENQUIRY"],
+      "keywords": ["demo", "trial", "demo class", "trial class", "orientation"],
+      "content": "Demo or orientation sessions are available in planned slots, but they are not treated as unlimited free classes on demand. Spoken English enquiries may sometimes get a short trial interaction, while IELTS enquiries are often given a structured counselling-plus-demo slot so the learner can understand teaching style, batch pace, and mock-test format before admission."
+    },
+    {
+      "id": "callback_support",
+      "title": "Callback support",
+      "category": "general",
+      "intents": ["CALLBACK_REQUEST", "GENERAL_ENQUIRY"],
+      "keywords": ["call", "callback", "phone", "counsellor call", "call back"],
+      "content": "If a learner asks for a call, Lexicon's counselling desk usually tries to return the call between 10:30 AM and 7:00 PM. Same-day callbacks are attempted where possible, but the front desk should not promise an exact minute unless a counsellor has already confirmed the slot. Learners can share their preferred call time and whether they want guidance in Hindi or English."
+    }
+  ]
+}

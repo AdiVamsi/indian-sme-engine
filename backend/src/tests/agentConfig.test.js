@@ -308,6 +308,7 @@ describe('AgentConfig API', () => {
           preferredLanguage: 'english_hindi_friendly',
           requiredCollectedFields: {
             ...current.body.whatsappReplyConfig.requiredCollectedFields,
+            FEE_ENQUIRY: ['courseInterest'],
             GENERAL_ENQUIRY: ['topic'],
           },
           handoffWording: {
@@ -332,6 +333,7 @@ describe('AgentConfig API', () => {
       'hostel guidance',
       'admission counselling',
     ]);
+    expect(res.body.whatsappReplyConfig.requiredCollectedFields.FEE_ENQUIRY).toEqual(['courseInterest']);
     expect(res.body.whatsappReplyConfig.requiredCollectedFields.GENERAL_ENQUIRY).toEqual(['topic']);
     expect(res.body.whatsappReplyConfig.handoffWording.inProgress).toBe(
       'Thank you. Our {{institutionLabel}} will take this forward shortly.'

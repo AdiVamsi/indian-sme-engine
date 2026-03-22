@@ -15,6 +15,7 @@ const {
   getBusinessProfile,
   getLeadsByDay,
 } = require('../services/admin.service');
+const { getActionQueueForBusiness } = require('../services/actionQueue.service');
 
 const { updateLeadStatus, getLeadActivity, getLeadForSuggestions, getLeadForOutreach } = require('../services/leads.service');
 const { getLeadSuggestions } = require('../agents/leadSuggestions');
@@ -80,6 +81,15 @@ const dashboard = async (req, res) => {
 const leads = async (req, res) => {
   try {
     return res.json(await getLeads(req.user.businessId));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+const actionQueue = async (req, res) => {
+  try {
+    return res.json(await getActionQueueForBusiness(req.user.businessId));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -209,6 +219,7 @@ module.exports = {
   getBusiness,
   dashboard,
   leads,
+  actionQueue,
   appointments,
   services,
   testimonials,

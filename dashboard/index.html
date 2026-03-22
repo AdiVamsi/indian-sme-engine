@@ -117,6 +117,10 @@
         <span class="sidebar__item-icon">◈</span>
         <span class="sidebar__item-label">Overview</span>
       </a>
+      <a class="sidebar__item" data-tab="queue" href="#" role="button">
+        <span class="sidebar__item-icon">◍</span>
+        <span class="sidebar__item-label">Needs Attention</span>
+      </a>
       <a class="sidebar__item" data-tab="leads" href="#" role="button">
         <span class="sidebar__item-icon">◎</span>
         <span class="sidebar__item-label">Leads</span>
@@ -231,8 +235,11 @@
         <!-- ── Action Center ── -->
         <div class="action-center" id="action-center">
           <div class="action-center__header">
-            <h3 class="action-center__title">Action Center</h3>
-            <span class="action-center__badge" id="ac-badge"></span>
+            <div class="action-center__title-wrap">
+              <h3 class="action-center__title">Needs Attention</h3>
+              <span class="action-center__badge" id="ac-badge"></span>
+            </div>
+            <button type="button" class="action-center__open" id="ac-open-queue">Open full queue</button>
           </div>
           <div id="ac-body"></div>
         </div>
@@ -241,6 +248,19 @@
           <h3 class="recent-activity__title">Recent Activity</h3>
           <div id="overview-activity"></div>
         </div>
+      </section>
+
+      <!-- ── Needs Attention ── -->
+      <section id="section-queue" class="section hidden">
+        <div class="section-header section-header--actions">
+          <div>
+            <h2 class="section-title">Needs Attention</h2>
+            <p class="section-sub">Operator queue for leads that still need a human step</p>
+          </div>
+          <span class="section-badge" id="queue-badge"></span>
+        </div>
+        <div id="queue-filters" class="queue-filters" role="toolbar" aria-label="Filter queue"></div>
+        <div id="queue-list" class="queue-list"></div>
       </section>
 
       <!-- ── Leads ── -->
@@ -354,6 +374,7 @@
       <!-- Hidden nav tabs kept for JS compatibility -->
       <nav class="tabs" role="tablist" aria-hidden="true">
         <button type="button" class="tab" data-tab="overview"      role="tab">Overview</button>
+        <button type="button" class="tab" data-tab="queue"         role="tab">Needs Attention</button>
         <button type="button" class="tab" data-tab="leads"         role="tab">Leads</button>
         <button type="button" class="tab" data-tab="automations"   role="tab">Automations</button>
         <button type="button" class="tab" data-tab="appointments"  role="tab">Appointments</button>

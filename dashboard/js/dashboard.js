@@ -26,6 +26,9 @@ let loadedSections = new Set();
 let wsClient = null;
 let expiryTimer = null;
 let _leadsSort = { col: null, dir: 'asc' };
+let _actionQueue = [];
+let _actionQueueRequestSeq = 0;
+let _actionQueueFilter = 'all';
 let activeDrawerLeadId = null;
 let activeDrawerData = null;
 let activeDrawerActionBusy = false;
@@ -39,7 +42,59 @@ const LEAD_PRIORITY_ORDER = { HIGH: 3, NORMAL: 2, LOW: 1 };
 
 const $ = (id) => document.getElementById(id);
 
-const ALL_SECTIONS = ['overview', 'leads', 'automations', 'appointments', 'services', 'testimonials', 'settings'];
+const ALL_SECTIONS = ['overview', 'queue', 'leads', 'automations', 'appointments', 'services', 'testimonials', 'settings'];
+const ACTION_QUEUE_FILTERS = [
+  {
+    id: 'all',
+    label: 'All',
+    match: () => true,
+    emptyState: {
+      icon: '✅',
+      title: 'Queue is clear',
+      sub: 'New leads, overdue follow-ups, and AI review cases will show up here.',
+    },
+  },
+  {
+    id: 'high_priority',
+    label: 'High Priority',
+    match: (item) => String(item?.priority || '').toUpperCase() === 'HIGH',
+    emptyState: {
+      icon: '🔥',
+      title: 'No high-priority leads',
+      sub: 'Urgent leads will show up here when the queue needs fast follow-up.',
+    },
+  },
+  {
+    id: 'overdue_follow_up',
+    label: 'Overdue Follow-up',
+    match: (item) => Boolean(item?.isOverdue) || _getQueueReasonCodes(item).has('FOLLOW_UP_OVERDUE'),
+    emptyState: {
+      icon: '⏰',
+      title: 'No overdue follow-ups',
+      sub: 'Missed follow-up deadlines will show up here when a human touch is overdue.',
+    },
+  },
+  {
+    id: 'whatsapp_response',
+    label: 'WhatsApp Response Needed',
+    match: (item) => _getQueueReasonCodes(item).has('WHATSAPP_RESPONSE_REQUIRED'),
+    emptyState: {
+      icon: '💬',
+      title: 'No WhatsApp responses pending',
+      sub: 'WhatsApp handoffs and delivery-failure cases will show up here.',
+    },
+  },
+  {
+    id: 'classification_review',
+    label: 'Classification Review',
+    match: (item) => _getQueueReasonCodes(item).has('LOW_CONFIDENCE_REVIEW'),
+    emptyState: {
+      icon: '🔎',
+      title: 'No classification reviews pending',
+      sub: 'Weak-confidence or fallback AI classifications will show up here.',
+    },
+  },
+];
 
 function getRequestedTab() {
   const hash = window.location.hash.slice(1);
@@ -92,6 +147,10 @@ function doLogout(reason) {
   expiryTimer = null;
   activeTab = 'overview';
   loadedSections.clear();
+  _allLeads = [];
+  _actionQueue = [];
+  _actionQueueRequestSeq = 0;
+  _actionQueueFilter = 'all';
 
   document.body.removeAttribute('data-mood');
 
@@ -124,6 +183,21 @@ function doLogout(reason) {
 
   const autoEl = $('automations-feed');
   if (autoEl) autoEl.innerHTML = '';
+
+  const queueSummaryEl = $('ac-body');
+  if (queueSummaryEl) queueSummaryEl.innerHTML = '';
+
+  const queueListEl = $('queue-list');
+  if (queueListEl) queueListEl.innerHTML = '';
+
+  const queueBadgeEl = $('queue-badge');
+  if (queueBadgeEl) queueBadgeEl.textContent = '';
+
+  const queueFiltersEl = $('queue-filters');
+  if (queueFiltersEl) queueFiltersEl.innerHTML = '';
+
+  const acBadgeEl = $('ac-badge');
+  if (acBadgeEl) acBadgeEl.textContent = '';
 
   /* Reset tabs + sidebar */
   document.querySelectorAll('.tab').forEach((b) =>
@@ -328,42 +402,8 @@ function wireGoLiveCard(cfg) {
 }
 
 /* ─────────────────────────────────────────────────
-   ACTION CENTER — buckets of leads that need human
-   attention right now. Frontend-only computation
-   over the already-loaded _allLeads array.
+   ACTION QUEUE — backend-powered operator queue
 ─────────────────────────────────────────────────── */
-const AC_MS = { FOLLOWUP: 30 * 60 * 1000, STALE: 4 * 60 * 60 * 1000 };
-
-function computeActionItems() {
-  const now = Date.now();
-  const urgent = [];
-  const followup = [];
-  const stale = [];
-
-  for (const lead of _allLeads) {
-    if (lead.status !== 'NEW') continue;
-    const age = now - new Date(lead.createdAt).getTime();
-    const isUrgent = lead.priority === 'HIGH';
-
-    if (isUrgent) {
-      urgent.push(lead);
-    } else if (age > AC_MS.STALE) {
-      stale.push(lead);
-    } else if (age > AC_MS.FOLLOWUP) {
-      followup.push(lead);
-    }
-    /* age ≤ 30 min and non-urgent → no bucket yet */
-  }
-
-  /* Oldest first within each bucket */
-  const byAge = (a, b) => new Date(a.createdAt) - new Date(b.createdAt);
-  urgent.sort(byAge);
-  followup.sort(byAge);
-  stale.sort(byAge);
-
-  return { urgent, followup, stale };
-}
-
 function _fmtAge(iso) {
   const ms = Date.now() - new Date(iso).getTime();
   const min = Math.floor(ms / 60000);
@@ -373,13 +413,157 @@ function _fmtAge(iso) {
   return `${Math.floor(hr / 24)}d ago`;
 }
 
-function renderActionCenter() {
+function _queueEsc(value) {
+  if (ui?.esc) return ui.esc(value);
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function _getQueueReasonCodes(item) {
+  return new Set(
+    (Array.isArray(item?.queueReasons) ? item.queueReasons : [])
+      .map((reason) => reason?.code)
+      .filter(Boolean)
+  );
+}
+
+function _getActionQueueFilter(filterId = _actionQueueFilter) {
+  return ACTION_QUEUE_FILTERS.find((filter) => filter.id === filterId) || ACTION_QUEUE_FILTERS[0];
+}
+
+function _getFilteredActionQueueItems() {
+  const filter = _getActionQueueFilter();
+  return _actionQueue.filter((item) => filter.match(item));
+}
+
+function _buildQueuePriorityBadge(priority) {
+  const normalized = String(priority || 'LOW').toUpperCase();
+  const cls = normalized === 'HIGH' ? 'badge--hot'
+    : normalized === 'NORMAL' ? 'badge--warm'
+      : 'badge--normal';
+  return `<span class="priority-badge ${cls}">${_queueEsc(normalized)}</span>`;
+}
+
+function _buildQueueSourceBadge(source) {
+  const normalized = String(source || 'web').toLowerCase();
+  const label = normalized === 'whatsapp'
+    ? 'WhatsApp'
+    : normalized === 'web'
+      ? 'Website Form'
+      : normalized.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+
+  return `<span class="lead-source-badge lead-source-badge--${_queueEsc(normalized)}">${_queueEsc(label)}</span>`;
+}
+
+function _buildQueueDueState(item) {
+  if (!item?.dueAt) return '';
+
+  const dueAtTime = new Date(item.dueAt).getTime();
+  const isDueSoon = (
+    Number.isFinite(dueAtTime)
+    && dueAtTime > Date.now()
+    && dueAtTime <= Date.now() + 30 * 60 * 1000
+  );
+  const tone = item.isOverdue ? 'overdue' : isDueSoon ? 'due-soon' : 'scheduled';
+  const label = item.isOverdue ? 'Overdue' : isDueSoon ? 'Due soon' : 'Scheduled';
+  return `<span class="callback-status-badge callback-status-badge--${tone}">${_queueEsc(label)}</span>`;
+}
+
+function _canQueueLeadBeMarkedContacted(item) {
+  return String(item?.status || '').toUpperCase() === 'NEW';
+}
+
+function _getQueueLeadById(leadId) {
+  return _actionQueue.find((item) => item.leadId === leadId) || null;
+}
+
+function _buildQueueItemHtml(item, { compact = false } = {}) {
+  const tags = Array.isArray(item?.tags) ? item.tags : [];
+  const reasons = Array.isArray(item?.queueReasons) ? item.queueReasons : [];
+  const canMarkContacted = _canQueueLeadBeMarkedContacted(item);
+  const dueAtLabel = item?.dueAt
+    ? (ui?.fmtDate ? ui.fmtDate(item.dueAt) : new Date(item.dueAt).toLocaleString('en-IN'))
+    : null;
+  const createdLabel = item?.createdAt
+    ? (ui?.fmtRelativeDate ? ui.fmtRelativeDate(item.createdAt) : _fmtAge(item.createdAt))
+    : 'just now';
+  const latestActivityLabel = item?.latestRelevantActivityAt
+    ? (ui?.fmtRelativeDate ? ui.fmtRelativeDate(item.latestRelevantActivityAt) : _fmtAge(item.latestRelevantActivityAt))
+    : createdLabel;
+
+  return `
+    <article class="queue-item${compact ? ' queue-item--compact' : ''}" data-queue-item="${_queueEsc(item.leadId)}">
+      <div class="queue-item__main">
+        <div class="queue-item__header">
+          <div class="queue-item__headline">
+            <button type="button" class="lead-name-btn queue-item__name" data-queue-open="${_queueEsc(item.leadId)}">${_queueEsc(item.leadName || 'Unknown lead')}</button>
+            <div class="queue-item__meta">
+              <span>${_queueEsc(createdLabel)}</span>
+              <span>&middot;</span>
+              <span>Latest activity ${_queueEsc(latestActivityLabel)}</span>
+            </div>
+          </div>
+          <div class="queue-item__state">
+            ${_buildQueuePriorityBadge(item.priority)}
+            ${_buildQueueDueState(item)}
+          </div>
+        </div>
+
+        <div class="queue-item__badges">
+          ${_buildQueueSourceBadge(item.source)}
+          ${tags.map((tag) => `<span class="tag-chip tag-chip--${_queueEsc(String(tag).toLowerCase().replace(/_/g, '-'))}">${_queueEsc(tag)}</span>`).join('')}
+        </div>
+
+        <p class="queue-item__message">${_queueEsc(item.messagePreview || 'No message provided.')}</p>
+
+        ${reasons.length ? `
+          <div class="queue-item__reasons">
+            ${reasons.map((reason) => `
+              <div class="queue-reason-row">
+                <span class="queue-reason">${_queueEsc(reason.label)}</span>
+                ${compact ? '' : `<p class="queue-reason-row__detail">${_queueEsc(reason.detail || '')}</p>`}
+              </div>`).join('')}
+          </div>` : ''}
+
+        <div class="queue-item__next">
+          <span class="queue-item__next-label">Next action</span>
+          <p class="queue-item__next-text">${_queueEsc(item.suggestedNextAction || 'Review the lead and take the next operator step.')}</p>
+        </div>
+
+        ${item.dueAt ? `
+          <div class="queue-item__due">
+            <span class="queue-item__due-label">${item.isOverdue ? 'Due since' : 'Due at'}</span>
+            <span class="queue-item__due-value">${_queueEsc(dueAtLabel)}</span>
+          </div>` : ''}
+
+        ${!compact && item.outreachDraftPreview ? `
+          <div class="queue-item__draft">
+            <span class="queue-item__draft-label">Reply draft</span>
+            <p class="queue-item__draft-text">${_queueEsc(item.outreachDraftPreview)}</p>
+          </div>` : ''}
+      </div>
+
+      <div class="queue-item__actions">
+        ${canMarkContacted ? `
+          <button
+            type="button"
+            class="queue-item__mark"
+            data-queue-mark-contacted="${_queueEsc(item.leadId)}"
+          >${compact ? 'Contacted' : 'Mark Contacted'}</button>` : ''}
+        <a class="btn-timeline" href="/dashboard/lead-activity.html?leadId=${_queueEsc(item.leadId)}" title="View timeline">⏱</a>
+        <button type="button" class="queue-item__open" data-queue-open="${_queueEsc(item.leadId)}">Open lead</button>
+      </div>
+    </article>`;
+}
+
+function renderActionQueueSummary() {
   const body = $('ac-body');
   const badge = $('ac-badge');
   if (!body) return;
 
-  const { urgent, followup, stale } = computeActionItems();
-  const total = urgent.length + followup.length + stale.length;
+  const total = _actionQueue.length;
 
   if (badge) badge.textContent = total > 0 ? String(total) : '';
 
@@ -388,96 +572,154 @@ function renderActionCenter() {
     return;
   }
 
-  const buckets = [
-    { key: 'urgent', mod: 'urgent', label: 'Urgent', leads: urgent },
-    { key: 'followup', mod: 'followup', label: 'Follow-up due', leads: followup },
-    { key: 'stale', mod: 'stale', label: 'Stale', leads: stale },
-  ];
+  const previewItems = _actionQueue.slice(0, 4);
+  const remaining = total - previewItems.length;
 
-  body.innerHTML = buckets
-    .filter((b) => b.leads.length > 0)
-    .map((b) => `
-      <div class="ac-bucket ac-bucket--${b.mod}" data-bucket="${b.key}">
-        <div class="ac-bucket__heading" data-toggle="${b.key}">
-          <span class="ac-bucket__dot"></span>
-          ${b.label}
-          <span class="ac-bucket__count">${b.leads.length}</span>
-        </div>
-        <div class="ac-bucket__rows" id="ac-rows-${b.key}">
-          ${b.leads.map((l) => _buildAcRow(l)).join('')}
-        </div>
-      </div>`)
-    .join('');
-
-  /* Wire collapse toggles */
-  body.querySelectorAll('[data-toggle]').forEach((heading) => {
-    heading.addEventListener('click', () => {
-      const rows = $(`ac-rows-${heading.dataset.toggle}`);
-      if (rows) rows.classList.toggle('is-collapsed');
-    });
-  });
-
-  /* Wire "Contacted" buttons */
-  body.querySelectorAll('[data-ac-id]').forEach((btn) => {
-    btn.addEventListener('click', () => handleMarkContacted(btn.dataset.acId, btn));
-  });
+  body.innerHTML = `
+    <div class="queue-list queue-list--summary">
+      ${previewItems.map((item) => _buildQueueItemHtml(item, { compact: true })).join('')}
+    </div>
+    ${remaining > 0 ? `<p class="queue-list__overflow">+${remaining} more lead${remaining === 1 ? '' : 's'} in the full queue</p>` : ''}`;
 }
 
-function _buildAcRow(lead) {
-  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const phone = lead.phone ? ` · ${esc(lead.phone)}` : '';
-  return `
-    <div class="ac-row" data-ac-lead="${lead.id}">
-      <div class="ac-row__info">
-        <div class="ac-row__name">${esc(lead.name || '—')}</div>
-        <div class="ac-row__meta">${_fmtAge(lead.createdAt)}${phone}</div>
-      </div>
-      <button class="ac-row__btn" data-ac-id="${esc(lead.id)}">Contacted</button>
-    </div>`;
+function renderActionQueueFilters() {
+  const row = $('queue-filters');
+  if (!row) return;
+
+  row.innerHTML = ACTION_QUEUE_FILTERS.map((filter) => `
+    <button
+      type="button"
+      class="queue-filter${filter.id === _actionQueueFilter ? ' is-active' : ''}"
+      data-queue-filter="${_queueEsc(filter.id)}"
+      aria-pressed="${filter.id === _actionQueueFilter ? 'true' : 'false'}"
+    >${_queueEsc(filter.label)}</button>`).join('');
 }
 
-async function handleMarkContacted(leadId, btn) {
-  const lead = _allLeads.find((l) => l.id === leadId);
-  if (!lead) return;
-  const oldStatus = lead.status;
+function renderActionQueueSection() {
+  const list = $('queue-list');
+  const badge = $('queue-badge');
+  if (!list) return;
 
-  /* Optimistic: mutate status in place — keep lead in _allLeads for other components */
-  btn.disabled = true;
-  btn.textContent = '…';
-  lead.status = 'CONTACTED';
+  renderActionQueueFilters();
 
-  /* Refresh all affected surfaces */
-  syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
+  const total = _actionQueue.length;
+  const filteredItems = _getFilteredActionQueueItems();
+  const visible = filteredItems.length;
+  const activeFilter = _getActionQueueFilter();
 
-  /* Keep the leads table row in sync if visible */
-  const sel = document.querySelector(`.status-select[data-id="${leadId}"]`);
-  if (sel) {
-    const oldClass = [...sel.classList].find((c) => c.startsWith('status--'));
-    if (oldClass) sel.classList.remove(oldClass);
-    sel.classList.add('status--contacted');
-    sel.value = 'CONTACTED';
-    ui?.applyStatusPulse(sel);
+  if (badge) {
+    if (!total) {
+      badge.textContent = '';
+    } else if (activeFilter.id === 'all') {
+      badge.textContent = `${total} item${total === 1 ? '' : 's'}`;
+    } else {
+      badge.textContent = `${visible} of ${total}`;
+    }
   }
-  ui?.updateStat('newLeads', Math.max(0, ui.getStat('newLeads') - 1));
+
+  if (!visible) {
+    list.innerHTML = simpleEmptyState(
+      activeFilter.emptyState.icon,
+      activeFilter.emptyState.title,
+      activeFilter.emptyState.sub
+    );
+    return;
+  }
+
+  list.innerHTML = filteredItems.map((item) => _buildQueueItemHtml(item)).join('');
+}
+
+function renderActionQueueSurfaces() {
+  renderActionQueueSummary();
+  renderActionQueueSection();
+}
+
+async function refreshActionQueue({ showToastOnError = false } = {}) {
+  if (!api) return;
+
+  const requestSeq = ++_actionQueueRequestSeq;
+
+  try {
+    const items = await api.getActionQueue();
+    if (requestSeq !== _actionQueueRequestSeq) return;
+    _actionQueue = Array.isArray(items) ? items : [];
+    renderActionQueueSurfaces();
+  } catch (err) {
+    console.error('[Dashboard] action queue refresh failed:', err);
+    if (requestSeq !== _actionQueueRequestSeq) return;
+    if (!_actionQueue.length) renderActionQueueSurfaces();
+    if (showToastOnError) {
+      ui?.showToast(err.message || 'Could not refresh the queue.', 'error');
+    }
+  }
+}
+
+async function handleQueueMarkContacted(button) {
+  if (!api || !button) return;
+
+  const leadId = button.dataset.queueMarkContacted;
+  const queueLead = _getQueueLeadById(leadId);
+  const cachedLead = _allLeads.find((lead) => lead.id === leadId);
+  const currentStatus = String(cachedLead?.status || queueLead?.status || '').toUpperCase();
+
+  if (currentStatus !== 'NEW') {
+    void refreshActionQueue();
+    return;
+  }
+
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Saving…';
 
   try {
     await api.updateLeadStatus(leadId, 'CONTACTED');
-    ui?.showToast('Marked contacted', 'success');
-  } catch (err) {
-    console.error('[ActionCenter] markContacted failed:', err);
-    /* Rollback: restore status in place — no re-insert needed */
-    lead.status = oldStatus;
+
+    if (cachedLead) cachedLead.status = 'CONTACTED';
+    _actionQueue = _actionQueue.filter((item) => item.leadId !== leadId);
+
+    ui?.updateStat('newLeads', Math.max(0, ui.getStat('newLeads') - 1));
+    ui?.showToast('Status → CONTACTED', 'success');
+
     syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
-    if (sel) {
-      const revertClass = [...sel.classList].find((c) => c.startsWith('status--'));
-      if (revertClass) sel.classList.remove(revertClass);
-      sel.classList.add(`status--${oldStatus.toLowerCase()}`);
-      sel.value = oldStatus;
-    }
-    ui?.updateStat('newLeads', ui.getStat('newLeads') + 1);
+    void refreshActionQueue();
+  } catch (err) {
+    console.error('[Dashboard] queue mark contacted failed:', err);
+    button.disabled = false;
+    button.textContent = originalLabel;
     ui?.showToast(err.message || 'Could not update status', 'error');
   }
 }
+
+(function initActionQueueUi() {
+  $('ac-open-queue')?.addEventListener('click', () => switchTab('queue'));
+
+  const onQueueClick = (event) => {
+    const markButton = event.target.closest('[data-queue-mark-contacted]');
+    if (markButton) {
+      event.preventDefault();
+      void handleQueueMarkContacted(markButton);
+      return;
+    }
+
+    const button = event.target.closest('[data-queue-open]');
+    if (!button) return;
+    event.preventDefault();
+    openLeadDrawer(button.dataset.queueOpen);
+  };
+
+  $('ac-body')?.addEventListener('click', onQueueClick);
+  $('queue-list')?.addEventListener('click', onQueueClick);
+  $('queue-filters')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-queue-filter]');
+    if (!button) return;
+
+    const nextFilter = button.dataset.queueFilter;
+    if (!ACTION_QUEUE_FILTERS.some((filter) => filter.id === nextFilter) || nextFilter === _actionQueueFilter) return;
+
+    _actionQueueFilter = nextFilter;
+    renderActionQueueSection();
+  });
+}());
 
 /* ─────────────────────────────────────────────────
    ACTIVATION FLOW — first-run overlay for STARTING
@@ -633,6 +875,10 @@ async function bootDashboard() {
   const leads = await safeFetch(() => api.getLeads(), 'leads');
   renderLeads(leads ?? []);
 
+  const actionQueue = await safeFetch(() => api.getActionQueue(), 'action queue');
+  _actionQueue = Array.isArray(actionQueue) ? actionQueue : [];
+  renderActionQueueSurfaces();
+
   /* Chart — optional; chart area stays blank if it fails */
   const chartData = await safeFetch(() => api.getLeadsByDay(7), 'leads by day');
   if (chartData) ui.renderChart(chartData);
@@ -640,7 +886,6 @@ async function bootDashboard() {
   /* Donut chart — computed from already-loaded leads */
   ui.renderDonutChart(_allLeads);
   renderOverviewActivity(_allLeads);
-  renderActionCenter();
   renderAutomations(_allLeads);
 
   /* Go Live card — fills URL and wires copy button */
@@ -699,7 +944,12 @@ async function switchTab(tab) {
   if (tab === 'overview' && ui) {
     ui.renderDonutChart(_allLeads);
     renderOverviewActivity(_allLeads);
-    renderActionCenter();
+    renderActionQueueSummary();
+  }
+
+  if (tab === 'queue' && ui) {
+    renderActionQueueSection();
+    void refreshActionQueue();
   }
 
   if (tab === 'automations' && ui) {
@@ -715,6 +965,9 @@ async function loadSection(tab) {
     ui.renderColumns('appt-thead', config.tableColumns.appointments);
     ui.showSkeletonRows('appt-tbody', config.tableColumns.appointments.length);
     renderAppointments(await api.getAppts());
+
+  } else if (tab === 'queue') {
+    renderActionQueueSection();
 
   } else if (tab === 'services') {
     ui.renderColumns('services-thead', config.tableColumns.services);
@@ -792,7 +1045,7 @@ function syncLeadDerivedViews({ rerenderTable = false } = {}) {
   if (rerenderTable) _applyLeadFilters();
   ui?.renderDonutChart(_allLeads);
   renderWhatsAppHealthAlert(_allLeads);
-  renderActionCenter();
+  renderActionQueueSurfaces();
   if (activeTab === 'overview') renderOverviewActivity(_allLeads);
   if (activeTab === 'automations') renderAutomations(_allLeads);
 }
@@ -989,6 +1242,7 @@ async function onLeadStatusChange(e) {
     const cached = _allLeads.find((l) => l.id === id);
     if (cached) cached.status = newStatus;
     syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
+    void refreshActionQueue();
   } catch (err) {
     console.error('[Dashboard] updateLeadStatus failed:', err);
     select.value = oldStatus || config.leadStatuses[0];
@@ -1021,6 +1275,7 @@ async function doDeleteLead(id) {
     ui.updateStat('totalLeads', Math.max(0, ui.getStat('totalLeads') - 1));
     if (wasNew) ui.updateStat('newLeads', Math.max(0, ui.getStat('newLeads') - 1));
     ui.showToast('Lead deleted', 'success');
+    void refreshActionQueue();
   } catch (err) {
     console.error('[Dashboard] deleteLead failed:', err);
     if (row) { row.classList.remove('row-exit'); row.style.cssText = ''; }
@@ -1431,6 +1686,7 @@ function onNewLead(lead) {
   }
 
   syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
+  void refreshActionQueue();
 
   const drawerIsOpen = $('lead-drawer')?.classList.contains('is-open');
   if (
@@ -1466,6 +1722,7 @@ function onRemoteLeadStatusChange({ id, status }) {
   const cached = _allLeads.find((l) => l.id === id);
   if (cached) cached.status = status;
   syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
+  void refreshActionQueue();
 }
 
 function onRemoteLeadDeleted({ id }) {
@@ -1486,6 +1743,7 @@ function onRemoteLeadDeleted({ id }) {
   ui.updateStat('totalLeads', Math.max(0, ui.getStat('totalLeads') - 1));
   if (wasNew) ui.updateStat('newLeads', Math.max(0, ui.getStat('newLeads') - 1));
   syncLeadDerivedViews({ rerenderTable: activeTab === 'leads' });
+  void refreshActionQueue();
 }
 
 /* ─────────────────────────────────────────────────
@@ -2000,6 +2258,7 @@ async function _runLeadDrawerAction(action) {
     activeDrawerDraft = { callbackTime: '', note: '', standaloneNote: '' };
     ui?.showToast(_leadDrawerActionToast(action), 'success');
     _applyLeadDrawerData(payload);
+    void refreshActionQueue();
   } catch (err) {
     console.error('[Dashboard] runLeadAction failed:', err);
     activeDrawerActionPending = null;

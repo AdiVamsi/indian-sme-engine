@@ -9,6 +9,7 @@ const {
   getBusiness,
   dashboard,
   leads,
+  actionQueue,
   leadsByDay,
   appointments,
   services,
@@ -29,6 +30,7 @@ router.post('/login', login);
 router.get('/config',        authenticate, getConfig);
 router.get('/business',      authenticate, getBusiness);
 router.get('/dashboard',     authenticate, dashboard);
+router.get('/action-queue',  authenticate, actionQueue);
 router.get  ('/leads',               authenticate, leads);
 router.get  ('/leads/by-day',        authenticate, leadsByDay);
 router.get  ('/leads/:id/activity',     authenticate, leadActivity);

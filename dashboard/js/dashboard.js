@@ -675,7 +675,6 @@ async function handleQueueMarkContacted(button) {
     await api.updateLeadStatus(leadId, 'CONTACTED');
 
     if (cachedLead) cachedLead.status = 'CONTACTED';
-    _actionQueue = _actionQueue.filter((item) => item.leadId !== leadId);
 
     ui?.updateStat('newLeads', Math.max(0, ui.getStat('newLeads') - 1));
     ui?.showToast('Status → CONTACTED', 'success');

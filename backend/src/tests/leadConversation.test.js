@@ -150,6 +150,7 @@ describe('WhatsApp conversation summary builder', () => {
           metadata: {
             reason: 'OPERATOR_CALLBACK_SCHEDULED',
             callbackTime: 'Today 6 PM',
+            callbackAt: '2026-03-14T12:30:00.000Z',
             operatorNote: 'Parent requested an evening call.',
           },
         },
@@ -158,6 +159,7 @@ describe('WhatsApp conversation summary builder', () => {
 
     expect(summary.latestCallback).toEqual({
       callbackTime: 'Today 6 PM',
+      callbackAt: '2026-03-14T12:30:00.000Z',
       createdAt: '2026-03-14T10:10:00.000Z',
       note: 'Parent requested an evening call.',
     });

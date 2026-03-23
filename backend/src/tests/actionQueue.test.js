@@ -274,6 +274,41 @@ describe('Action Queue API', () => {
     expect(res.body.some((item) => item.leadId === expiredSnoozeLead.id)).toBe(true);
   });
 
+  it('GET /api/admin/action-queue - includes leads whose scheduled callback is due or overdue', async () => {
+    const lead = await createQueueLead({
+      businessId: ctx.business.id,
+      name: 'Callback Due Lead',
+      status: 'CONTACTED',
+      priorityScore: 12,
+      extraActivities: [
+        {
+          type: 'FOLLOW_UP_SCHEDULED',
+          message: 'Callback scheduled for later today',
+          createdAt: minutesFromNow(-45),
+          metadata: {
+            reason: 'OPERATOR_CALLBACK_SCHEDULED',
+            operatorAction: 'SCHEDULE_CALLBACK',
+            callbackTime: 'Today 5:30 PM',
+            callbackAt: minutesFromNow(-15).toISOString(),
+          },
+        },
+      ],
+    });
+
+    const res = await request(app).get('/api/admin/action-queue').set(auth());
+    const item = res.body.find((entry) => entry.leadId === lead.id);
+
+    expect(res.status).toBe(200);
+    expect(item).toEqual(expect.objectContaining({
+      leadId: lead.id,
+      isOverdue: true,
+      dueAt: expect.any(String),
+      queueReasons: expect.arrayContaining([
+        expect.objectContaining({ code: 'CALLBACK_DUE' }),
+      ]),
+    }));
+  });
+
   it('GET /api/admin/action-queue - includes WhatsApp handoff leads based on automation activity history', async () => {
     const createdAt = minutesFromNow(-40);
     const lead = await createQueueLead({
@@ -347,6 +382,7 @@ describe('Action Queue API', () => {
             reason: 'OPERATOR_CALLBACK_SCHEDULED',
             operatorAction: 'SCHEDULE_CALLBACK',
             callbackTime: 'Tomorrow 4:00 PM',
+            callbackAt: minutesFromNow(24 * 60).toISOString(),
             conversationState: {
               channel: 'whatsapp',
               flowIntent: 'CALLBACK_REQUEST',
@@ -380,6 +416,7 @@ describe('Action Queue API', () => {
             reason: 'OPERATOR_CALLBACK_SCHEDULED',
             operatorAction: 'SCHEDULE_CALLBACK',
             callbackTime: 'Today 5:30 PM',
+            callbackAt: minutesFromNow(-20).toISOString(),
           },
         },
         {

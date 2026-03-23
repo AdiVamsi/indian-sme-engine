@@ -66,6 +66,7 @@ describe('Leads', () => {
   });
 
   it('POST /api/leads/:id/actions - logs operator actions and returns refreshed drawer payload', async () => {
+    const callbackAt = new Date('2026-03-24T12:30:00.000Z');
     const created = await request(app)
       .post('/api/leads')
       .set(auth())
@@ -76,7 +77,8 @@ describe('Leads', () => {
       .set(auth())
       .send({
         action: 'SCHEDULE_CALLBACK',
-        callbackTime: 'Today 6 PM',
+        callbackTime: '24 Mar 2026, 6:00 pm',
+        callbackAt: callbackAt.toISOString(),
         note: 'Parent asked for an evening callback.',
       });
 
@@ -88,12 +90,14 @@ describe('Leads', () => {
     );
 
     expect(scheduled).toBeTruthy();
-    expect(scheduled.metadata.callbackTime).toBe('Today 6 PM');
+    expect(scheduled.metadata.callbackTime).toBe('24 Mar 2026, 6:00 pm');
+    expect(scheduled.metadata.callbackAt).toBe(callbackAt.toISOString());
     expect(scheduled.message).toContain('Parent asked for an evening callback.');
 
     const list = await request(app).get('/api/leads').set(auth());
     const listedLead = list.body.find((item) => item.id === created.body.id);
-    expect(listedLead.callbackTime).toBe('Today 6 PM');
+    expect(listedLead.callbackTime).toBe('24 Mar 2026, 6:00 pm');
+    expect(listedLead.callbackAt).toBe(callbackAt.toISOString());
     expect(listedLead.callbackScheduledAt).toEqual(expect.any(String));
   });
 

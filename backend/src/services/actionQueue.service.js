@@ -64,7 +64,17 @@ function getLatestPrioritizationActivity(activities = []) {
 
 function getLatestMachineFollowUpActivity(activities = []) {
   return getLatestMatchingActivity(activities, (activity) =>
-    activity.type === 'FOLLOW_UP_SCHEDULED' && Boolean(parseDate(activity?.metadata?.followUpAt))
+    activity.type === 'FOLLOW_UP_SCHEDULED'
+    && activity?.metadata?.reason !== 'OPERATOR_CALLBACK_SCHEDULED'
+    && Boolean(parseDate(activity?.metadata?.followUpAt))
+  );
+}
+
+function getLatestOperatorCallbackActivity(activities = []) {
+  return getLatestMatchingActivity(activities, (activity) =>
+    activity.type === 'FOLLOW_UP_SCHEDULED'
+    && activity?.metadata?.reason === 'OPERATOR_CALLBACK_SCHEDULED'
+    && Boolean(parseDate(activity?.metadata?.callbackAt))
   );
 }
 
@@ -139,6 +149,18 @@ function getLatestFollowUpDueAt(activities = [], { latestOperatorActivity = null
   return parseDate(followUpActivity.metadata?.followUpAt);
 }
 
+function getLatestCallbackDueAt(activities = []) {
+  const callbackActivity = getLatestOperatorCallbackActivity(activities);
+  if (!callbackActivity) return null;
+
+  const laterOperatorActivity = getLatestOperatorActivity(activities, {
+    after: callbackActivity.createdAt,
+  });
+  if (laterOperatorActivity) return null;
+
+  return parseDate(callbackActivity.metadata?.callbackAt);
+}
+
 function buildQueueReasons(lead, activities = [], now = new Date()) {
   const classificationActivity = getLatestClassificationActivity(activities);
   const prioritizationActivity = getLatestPrioritizationActivity(activities);
@@ -147,7 +169,11 @@ function buildQueueReasons(lead, activities = [], now = new Date()) {
   const latestOperatorActivity = getLatestOperatorActivity(activities, {
     after: classificationActivity?.createdAt || null,
   });
-  const dueAt = getLatestFollowUpDueAt(activities, { latestOperatorActivity });
+  const followUpDueAt = getLatestFollowUpDueAt(activities, { latestOperatorActivity });
+  const callbackDueAt = getLatestCallbackDueAt(activities);
+  const dueAt = [followUpDueAt, callbackDueAt]
+    .filter(Boolean)
+    .sort((a, b) => a.getTime() - b.getTime())[0] || null;
   const conversationState = getLatestWhatsAppConversationState(activities);
   const latestWhatsAppFailure = getLatestWhatsAppFailureActivity(activities);
 
@@ -159,6 +185,7 @@ function buildQueueReasons(lead, activities = [], now = new Date()) {
   const via = classification.via || null;
   const isActiveLead = ACTIVE_LEAD_STATUSES.has(String(lead.status || '').toUpperCase());
   const hasOperatorTouchAfterClassification = Boolean(latestOperatorActivity);
+  const isFollowUpOverdue = Boolean(followUpDueAt && followUpDueAt.getTime() <= now.getTime());
   const isOverdue = Boolean(dueAt && dueAt.getTime() <= now.getTime());
   const isDueSoon = Boolean(
     dueAt
@@ -166,6 +193,11 @@ function buildQueueReasons(lead, activities = [], now = new Date()) {
     && dueAt.getTime() <= now.getTime() + DUE_SOON_WINDOW_MS
   );
   const hasOutboundWhatsAppReply = hasOutboundWhatsAppReplyAfter(activities, classificationActivity?.createdAt || null);
+  const isCallbackDue = Boolean(
+    callbackDueAt
+    && callbackDueAt.getTime() <= now.getTime() + DUE_SOON_WINDOW_MS
+  );
+  const isCallbackOverdue = Boolean(callbackDueAt && callbackDueAt.getTime() <= now.getTime());
   const hasOutstandingWhatsAppFailure = Boolean(
     latestWhatsAppFailure
     && isActivityAfter(latestWhatsAppFailure, latestOperatorActivity)
@@ -183,11 +215,19 @@ function buildQueueReasons(lead, activities = [], now = new Date()) {
     ));
   }
 
-  if (isActiveLead && isOverdue) {
+  if (isActiveLead && isFollowUpOverdue) {
     reasons.push(buildQueueReason(
       'FOLLOW_UP_OVERDUE',
       'Follow-up overdue',
       'The latest AI follow-up target has already passed and still needs an operator touch.'
+    ));
+  }
+
+  if (isActiveLead && isCallbackDue) {
+    reasons.push(buildQueueReason(
+      'CALLBACK_DUE',
+      isCallbackOverdue ? 'Callback overdue' : 'Callback due soon',
+      'A scheduled callback time is now due, so this lead needs operator follow-up.'
     ));
   }
 

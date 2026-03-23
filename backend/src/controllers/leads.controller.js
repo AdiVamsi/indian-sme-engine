@@ -33,6 +33,7 @@ const operatorActionSchema = z.object({
   action: z.enum(['MARK_CALLED', 'SCHEDULE_CALLBACK', 'SEND_FEE_DETAILS', 'MARK_HANDOFF_COMPLETE', 'ADD_NOTE', 'SNOOZE']),
   note: z.string().max(500).optional(),
   callbackTime: z.string().max(120).optional(),
+  callbackAt: z.string().max(64).optional(),
   snoozeDays: snoozeDaysSchema.optional(),
 }).superRefine((data, ctx) => {
   if (data.action === 'ADD_NOTE' && !String(data.note || '').trim()) {
@@ -48,6 +49,14 @@ const operatorActionSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['snoozeDays'],
       message: 'Snooze duration is required.',
+    });
+  }
+
+  if (data.action === 'SCHEDULE_CALLBACK' && !String(data.callbackAt || '').trim() && !String(data.callbackTime || '').trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['callbackAt'],
+      message: 'Callback date and time are required.',
     });
   }
 });

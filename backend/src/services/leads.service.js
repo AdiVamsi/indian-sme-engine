@@ -52,6 +52,12 @@ function getSortedActivitiesNewestFirst(activities = []) {
   return [...activities].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
+function parseScheduledDate(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function getLatestWhatsAppConversationState(activities = []) {
   for (const activity of getSortedActivitiesNewestFirst(activities)) {
     const metadata = activity?.metadata || {};
@@ -72,12 +78,14 @@ function getLatestCallbackDetails(activities = []) {
   if (!latest) {
     return {
       callbackTime: null,
+      callbackAt: null,
       callbackScheduledAt: null,
     };
   }
 
   return {
     callbackTime: latest.metadata?.callbackTime || null,
+    callbackAt: latest.metadata?.callbackAt || null,
     callbackScheduledAt: latest.createdAt || null,
   };
 }
@@ -136,6 +144,7 @@ function buildLeadActivitySummary(activities = []) {
     source,
     priority,
     callbackTime: callback.callbackTime,
+    callbackAt: callback.callbackAt,
     callbackScheduledAt: callback.callbackScheduledAt,
     conversationStatus,
     handoffReady: conversationStatus === 'handoff',
@@ -340,6 +349,7 @@ const runLeadOperatorAction = async (id, businessId, {
   action,
   note = '',
   callbackTime = '',
+  callbackAt = '',
   snoozeDays = undefined,
 } = {}) => {
   const lead = await prisma.lead.findFirst({
@@ -355,6 +365,8 @@ const runLeadOperatorAction = async (id, businessId, {
 
   const operatorNote = String(note || '').trim() || null;
   const normalizedCallbackTime = String(callbackTime || '').trim() || null;
+  const normalizedCallbackAt = String(callbackAt || '').trim() || null;
+  const parsedCallbackAt = parseScheduledDate(normalizedCallbackAt);
   const normalizedSnoozeDays = VALID_SNOOZE_DAYS.has(snoozeDays) ? snoozeDays : null;
   const latestConversationState = getLatestWhatsAppConversationState(lead.activities);
   const whatsappConversation = buildWhatsAppConversationSummary({ lead, activities: lead.activities });
@@ -384,6 +396,10 @@ const runLeadOperatorAction = async (id, businessId, {
 
     case 'SCHEDULE_CALLBACK': {
       activityType = 'FOLLOW_UP_SCHEDULED';
+      if (!parsedCallbackAt && !normalizedCallbackTime) {
+        throw new Error('Callback date and time are required.');
+      }
+
       const callbackSummary = normalizedCallbackTime
         ? `Callback scheduled for ${normalizedCallbackTime}.`
         : 'Callback scheduled for follow-up.';
@@ -392,6 +408,7 @@ const runLeadOperatorAction = async (id, businessId, {
         ...metadata,
         reason: 'OPERATOR_CALLBACK_SCHEDULED',
         callbackTime: normalizedCallbackTime,
+        callbackAt: parsedCallbackAt ? parsedCallbackAt.toISOString() : null,
         operatorNote,
       };
 
@@ -505,6 +522,7 @@ const runLeadOperatorAction = async (id, businessId, {
       previousStatus: lead.status,
       nextStatus,
       callbackTime: normalizedCallbackTime,
+      callbackAt: parsedCallbackAt ? parsedCallbackAt.toISOString() : null,
       snoozeDays: normalizedSnoozeDays,
       hasNote: Boolean(operatorNote),
     },

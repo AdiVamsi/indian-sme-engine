@@ -134,6 +134,7 @@ describe('Admin API', () => {
   });
 
   it('GET /api/admin/leads - returns the latest scheduled callback details for operator follow-up', async () => {
+    const callbackAt = '2026-03-14T12:30:00.000Z';
     const lead = await prisma.lead.create({
       data: {
         businessId: ctx.business.id,
@@ -171,6 +172,7 @@ describe('Admin API', () => {
           metadata: {
             reason: 'OPERATOR_CALLBACK_SCHEDULED',
             callbackTime: 'Today 6 PM',
+            callbackAt,
           },
         },
       ],
@@ -184,6 +186,7 @@ describe('Admin API', () => {
         expect.objectContaining({
           id: lead.id,
           callbackTime: 'Today 6 PM',
+          callbackAt,
           callbackScheduledAt: expect.any(String),
         }),
       ])

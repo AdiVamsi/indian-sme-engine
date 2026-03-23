@@ -122,8 +122,9 @@ function buildRecommendedNextAction({
   }
 
   if (status === 'handoff') {
-    if (latestCallback?.metadata?.callbackTime) {
-      return `Callback already scheduled for ${latestCallback.metadata.callbackTime}. Follow up then or update the callback plan in Activity.`;
+    const callbackLabel = latestCallback?.metadata?.callbackTime || latestCallback?.metadata?.callbackAt || null;
+    if (callbackLabel) {
+      return `Callback already scheduled for ${callbackLabel}. Follow up then or update the callback plan in Activity.`;
     }
 
     const primaryIntent = conversationState?.flowIntent || classifiedMeta.bestCategory;
@@ -217,6 +218,7 @@ function buildWhatsAppConversationSummary({ lead, activities = [] }) {
     } : null,
     latestCallback: latestCallback ? {
       callbackTime: latestCallback.metadata?.callbackTime || null,
+      callbackAt: latestCallback.metadata?.callbackAt || null,
       createdAt: latestCallback.createdAt,
       note: latestCallback.metadata?.operatorNote || null,
     } : null,

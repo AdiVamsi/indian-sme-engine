@@ -122,6 +122,37 @@ describe('Leads', () => {
     expect(noteActivity.message).toContain('Operator note added');
   });
 
+  it('POST /api/leads/:id/actions - snoozes a lead for a fixed number of days', async () => {
+    const created = await request(app)
+      .post('/api/leads')
+      .set(auth())
+      .send({ name: 'Snooze Lead', phone: '+91 88888 00037', message: 'Please call back later this week' });
+
+    const res = await request(app)
+      .post(`/api/leads/${created.body.id}/actions`)
+      .set(auth())
+      .send({
+        action: 'SNOOZE',
+        snoozeDays: 3,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.lead.id).toBe(created.body.id);
+    expect(res.body.lead.snoozedUntil).toEqual(expect.any(String));
+
+    const snoozeActivity = res.body.activities.find(
+      (activity) => activity.metadata?.reason === 'OPERATOR_SNOOZED_QUEUE'
+    );
+
+    expect(snoozeActivity).toBeTruthy();
+    expect(snoozeActivity.metadata.snoozeDays).toBe(3);
+    expect(snoozeActivity.metadata.snoozedUntil).toEqual(expect.any(String));
+
+    const dbLead = await prisma.lead.findUnique({ where: { id: created.body.id } });
+    expect(dbLead.snoozedUntil).toEqual(expect.any(Date));
+    expect(dbLead.snoozedUntil.getTime()).toBeGreaterThan(Date.now() + (2.5 * 24 * 60 * 60 * 1000));
+  });
+
   it('POST /api/leads/:id/actions - rejects empty operator notes', async () => {
     const created = await request(app)
       .post('/api/leads')

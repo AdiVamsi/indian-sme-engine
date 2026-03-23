@@ -39,6 +39,7 @@ describe('Action Queue API', () => {
     status = 'NEW',
     message = 'Need details',
     createdAt = new Date(),
+    snoozedUntil = null,
     source = 'web',
     bestCategory = 'GENERAL_ENQUIRY',
     tags = [],
@@ -60,6 +61,7 @@ describe('Action Queue API', () => {
         phone: phone || `+91 99999${Math.floor(Math.random() * 100000).toString().padStart(5, '0')}`,
         message,
         status,
+        snoozedUntil,
         createdAt,
       },
     });
@@ -248,6 +250,28 @@ describe('Action Queue API', () => {
         expect.objectContaining({ code: 'LOW_CONFIDENCE_REVIEW' }),
       ]),
     }));
+  });
+
+  it('GET /api/admin/action-queue - excludes leads while snoozed and includes them again once snooze expires', async () => {
+    await createQueueLead({
+      businessId: ctx.business.id,
+      name: 'Snoozed Queue Lead',
+      priorityScore: 38,
+      snoozedUntil: minutesFromNow(24 * 60),
+    });
+
+    const expiredSnoozeLead = await createQueueLead({
+      businessId: ctx.business.id,
+      name: 'Expired Snooze Queue Lead',
+      priorityScore: 38,
+      snoozedUntil: minutesFromNow(-60),
+    });
+
+    const res = await request(app).get('/api/admin/action-queue').set(auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body.some((item) => item.leadName === 'Snoozed Queue Lead')).toBe(false);
+    expect(res.body.some((item) => item.leadId === expiredSnoozeLead.id)).toBe(true);
   });
 
   it('GET /api/admin/action-queue - includes WhatsApp handoff leads based on automation activity history', async () => {

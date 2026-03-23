@@ -5,6 +5,8 @@ const { buildWhatsAppConversationSummary } = require('./leadConversation.service
 const { prisma } = require('../lib/prisma');
 const { logger } = require('../lib/logger');
 
+const VALID_SNOOZE_DAYS = new Set([1, 3, 7]);
+
 function decorateLead(lead, {
   priorityScore = 0,
   tags = [],
@@ -338,6 +340,7 @@ const runLeadOperatorAction = async (id, businessId, {
   action,
   note = '',
   callbackTime = '',
+  snoozeDays = undefined,
 } = {}) => {
   const lead = await prisma.lead.findFirst({
     where: { id, businessId },
@@ -352,11 +355,13 @@ const runLeadOperatorAction = async (id, businessId, {
 
   const operatorNote = String(note || '').trim() || null;
   const normalizedCallbackTime = String(callbackTime || '').trim() || null;
+  const normalizedSnoozeDays = VALID_SNOOZE_DAYS.has(snoozeDays) ? snoozeDays : null;
   const latestConversationState = getLatestWhatsAppConversationState(lead.activities);
   const whatsappConversation = buildWhatsAppConversationSummary({ lead, activities: lead.activities });
 
   let nextStatus = lead.status;
   let activityType = 'AUTOMATION_ALERT';
+  let leadUpdateData = {};
   let message = '';
   let metadata = {
     reason: null,
@@ -444,17 +449,40 @@ const runLeadOperatorAction = async (id, businessId, {
       };
       break;
 
+    case 'SNOOZE': {
+      if (!normalizedSnoozeDays) {
+        throw new Error('Unsupported snooze duration.');
+      }
+
+      const snoozedUntil = new Date(Date.now() + normalizedSnoozeDays * 24 * 60 * 60 * 1000);
+      message = `Operator snoozed this lead for ${normalizedSnoozeDays} day${normalizedSnoozeDays === 1 ? '' : 's'}.`;
+      metadata = {
+        ...metadata,
+        reason: 'OPERATOR_SNOOZED_QUEUE',
+        snoozeDays: normalizedSnoozeDays,
+        snoozedUntil: snoozedUntil.toISOString(),
+      };
+      leadUpdateData = {
+        snoozedUntil,
+      };
+      break;
+    }
+
     default:
       throw new Error(`Unsupported lead operator action: ${action}`);
   }
 
   const statusChanged = nextStatus !== lead.status;
+  const hasLeadUpdate = statusChanged || Object.keys(leadUpdateData).length > 0;
 
   await prisma.$transaction(async (tx) => {
-    if (statusChanged) {
+    if (hasLeadUpdate) {
       await tx.lead.update({
         where: { id },
-        data: { status: nextStatus },
+        data: {
+          ...(statusChanged ? { status: nextStatus } : {}),
+          ...leadUpdateData,
+        },
       });
     }
 
@@ -477,6 +505,7 @@ const runLeadOperatorAction = async (id, businessId, {
       previousStatus: lead.status,
       nextStatus,
       callbackTime: normalizedCallbackTime,
+      snoozeDays: normalizedSnoozeDays,
       hasNote: Boolean(operatorNote),
     },
     'Lead operator action completed'
@@ -506,6 +535,7 @@ const getLeadActivity = async (id, businessId) => {
           email: true,
           message: true,
           status: true,
+          snoozedUntil: true,
           createdAt: true,
         },
       },

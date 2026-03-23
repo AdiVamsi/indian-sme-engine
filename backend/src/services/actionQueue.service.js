@@ -290,10 +290,15 @@ function compareQueueItems(a, b) {
 }
 
 async function getActionQueueForBusiness(businessId) {
+  const now = new Date();
   const leads = await prisma.lead.findMany({
     where: {
       businessId,
       status: { in: Array.from(ACTIVE_LEAD_STATUSES) },
+      OR: [
+        { snoozedUntil: null },
+        { snoozedUntil: { lte: now } },
+      ],
     },
     orderBy: { createdAt: 'desc' },
     select: {
@@ -317,7 +322,6 @@ async function getActionQueueForBusiness(businessId) {
     },
   });
 
-  const now = new Date();
   const queueItems = [];
 
   for (const lead of leads) {

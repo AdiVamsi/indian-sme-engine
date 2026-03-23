@@ -102,6 +102,7 @@ model Lead {
   email      String?
   message    String?
   status     LeadStatus @default(NEW)
+  snoozedUntil DateTime?
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

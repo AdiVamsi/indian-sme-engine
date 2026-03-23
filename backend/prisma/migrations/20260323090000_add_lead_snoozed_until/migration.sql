@@ -1,0 +1,2 @@
+ALTER TABLE "Lead"
+ADD COLUMN "snoozedUntil" TIMESTAMP(3);

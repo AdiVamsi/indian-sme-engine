@@ -479,6 +479,22 @@ function _getQueueLeadById(leadId) {
   return _actionQueue.find((item) => item.leadId === leadId) || null;
 }
 
+function _buildQueueSnoozeControl(item, { compact = false } = {}) {
+  if (compact) return '';
+
+  return `
+    <select
+      class="queue-item__snooze"
+      data-queue-snooze-select="${_queueEsc(item.leadId)}"
+      aria-label="Snooze ${_queueEsc(item.leadName || 'lead')}"
+    >
+      <option value="">Snooze</option>
+      <option value="1">1 day</option>
+      <option value="3">3 days</option>
+      <option value="7">7 days</option>
+    </select>`;
+}
+
 function _buildQueueItemHtml(item, { compact = false } = {}) {
   const tags = Array.isArray(item?.tags) ? item.tags : [];
   const reasons = Array.isArray(item?.queueReasons) ? item.queueReasons : [];
@@ -552,6 +568,7 @@ function _buildQueueItemHtml(item, { compact = false } = {}) {
             class="queue-item__mark"
             data-queue-mark-contacted="${_queueEsc(item.leadId)}"
           >${compact ? 'Contacted' : 'Mark Contacted'}</button>` : ''}
+        ${_buildQueueSnoozeControl(item, { compact })}
         <a class="btn-timeline" href="/dashboard/lead-activity.html?leadId=${_queueEsc(item.leadId)}" title="View timeline">⏱</a>
         <button type="button" class="queue-item__open" data-queue-open="${_queueEsc(item.leadId)}">Open lead</button>
       </div>
@@ -641,16 +658,18 @@ async function refreshActionQueue({ showToastOnError = false } = {}) {
 
   try {
     const items = await api.getActionQueue();
-    if (requestSeq !== _actionQueueRequestSeq) return;
+    if (requestSeq !== _actionQueueRequestSeq) return true;
     _actionQueue = Array.isArray(items) ? items : [];
     renderActionQueueSurfaces();
+    return true;
   } catch (err) {
     console.error('[Dashboard] action queue refresh failed:', err);
-    if (requestSeq !== _actionQueueRequestSeq) return;
+    if (requestSeq !== _actionQueueRequestSeq) return true;
     if (!_actionQueue.length) renderActionQueueSurfaces();
     if (showToastOnError) {
       ui?.showToast(err.message || 'Could not refresh the queue.', 'error');
     }
+    return false;
   }
 }
 
@@ -689,6 +708,40 @@ async function handleQueueMarkContacted(button) {
   }
 }
 
+async function handleQueueSnooze(select) {
+  if (!api || !select) return;
+
+  const leadId = select.dataset.queueSnoozeSelect;
+  const snoozeDays = Number.parseInt(select.value, 10);
+  if (![1, 3, 7].includes(snoozeDays)) {
+    select.value = '';
+    return;
+  }
+
+  select.disabled = true;
+
+  try {
+    const payload = await api.runLeadAction(leadId, { action: 'SNOOZE', snoozeDays });
+    const cachedLead = _allLeads.find((lead) => lead.id === leadId);
+    if (cachedLead) {
+      cachedLead.snoozedUntil = payload?.lead?.snoozedUntil || null;
+    }
+
+    ui?.showToast(`Snoozed for ${snoozeDays} day${snoozeDays === 1 ? '' : 's'}.`, 'success');
+
+    const refreshed = await refreshActionQueue({ showToastOnError: true });
+    if (!refreshed) {
+      select.disabled = false;
+      select.value = '';
+    }
+  } catch (err) {
+    console.error('[Dashboard] queue snooze failed:', err);
+    select.disabled = false;
+    select.value = '';
+    ui?.showToast(err.message || 'Could not snooze lead', 'error');
+  }
+}
+
 (function initActionQueueUi() {
   $('ac-open-queue')?.addEventListener('click', () => switchTab('queue'));
 
@@ -708,6 +761,11 @@ async function handleQueueMarkContacted(button) {
 
   $('ac-body')?.addEventListener('click', onQueueClick);
   $('queue-list')?.addEventListener('click', onQueueClick);
+  $('queue-list')?.addEventListener('change', (event) => {
+    const select = event.target.closest('[data-queue-snooze-select]');
+    if (!select) return;
+    void handleQueueSnooze(select);
+  });
   $('queue-filters')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-queue-filter]');
     if (!button) return;
@@ -1996,8 +2054,13 @@ function _buildWhatsAppSummaryHtml(summary, { leadStatus = null } = {}) {
   const callbackCue = summary.latestCallback
     ? getCallbackCue({
       callbackTime: summary.latestCallback.callbackTime,
+      callbackAt: summary.latestCallback.callbackAt,
     })
     : null;
+  const latestCallbackDisplay = _getCallbackDisplayText(
+    summary.latestCallback?.callbackTime,
+    summary.latestCallback?.callbackAt
+  );
   const fields = Object.entries(summary.capturedFields || {})
     .filter(([, value]) => value)
     .map(([key, value]) => `
@@ -2053,11 +2116,11 @@ function _buildWhatsAppSummaryHtml(summary, { leadStatus = null } = {}) {
 
       ${fields ? `<div class="wa-summary__fields">${fields}</div>` : '<div class="wa-summary__empty">No captured fields yet. Use the transcript below for context.</div>'}
 
-      ${summary.latestCallback?.callbackTime ? `
+      ${latestCallbackDisplay ? `
         <div class="wa-summary__next">
           <span class="wa-summary__next-label">${isTerminal ? 'Latest callback plan' : 'Callback plan'}</span>
           <p class="wa-summary__next-text">
-            ${_escDrawer(summary.latestCallback.callbackTime)}
+            ${_escDrawer(latestCallbackDisplay)}
             ${(!isTerminal && callbackCue) ? `<span class="callback-status-badge callback-status-badge--${_escDrawer(callbackCue.state)}">${_escDrawer(callbackCue.stateLabel)}</span>` : ''}
           </p>
         </div>` : ''}
@@ -2098,7 +2161,7 @@ function _getLeadDrawerQuickActions({ lead, activities, whatsappConversation }) 
     action: 'SCHEDULE_CALLBACK',
     label: 'Schedule Callback',
     tone: 'neutral',
-    helper: 'Logs the callback plan with an optional time or note.',
+    helper: 'Logs the callback date and time with an optional note.',
   });
 
   const requestedTopic = String(whatsappConversation?.capturedFields?.requestedTopic || '').toLowerCase();
@@ -2192,8 +2255,8 @@ function _buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })
           </div>
           <div class="drawer-actions-card__fields">
             <label class="drawer-actions-card__field">
-              <span>Callback time</span>
-              <input id="drawer-callback-time" type="text" placeholder="Today 6:30 PM" value="${_escDrawerAttr(callbackDraft)}" ${activeDrawerActionPending === 'SCHEDULE_CALLBACK' ? 'disabled' : ''} />
+              <span>Callback date & time</span>
+              <input id="drawer-callback-time" type="datetime-local" value="${_escDrawerAttr(callbackDraft)}" ${activeDrawerActionPending === 'SCHEDULE_CALLBACK' ? 'disabled' : ''} />
             </label>
             <label class="drawer-actions-card__field drawer-actions-card__field--full">
               <span>Operator note</span>
@@ -2236,8 +2299,15 @@ function _leadDrawerActionToast(action) {
 async function _runLeadDrawerAction(action) {
   if (!activeDrawerLeadId || activeDrawerActionBusy) return;
 
-  const callbackTime = action === 'SCHEDULE_CALLBACK'
+  const rawCallbackTime = action === 'SCHEDULE_CALLBACK'
     ? String(activeDrawerDraft.callbackTime || '').trim()
+    : '';
+  const parsedCallbackAt = rawCallbackTime ? new Date(rawCallbackTime) : null;
+  const callbackAt = parsedCallbackAt && !Number.isNaN(parsedCallbackAt.getTime())
+    ? parsedCallbackAt.toISOString()
+    : '';
+  const callbackTime = callbackAt
+    ? (ui?.fmtDate ? ui.fmtDate(callbackAt) : new Date(callbackAt).toLocaleString('en-IN'))
     : '';
   const note = action === 'SCHEDULE_CALLBACK'
     ? String(activeDrawerDraft.note || '').trim()
@@ -2245,12 +2315,17 @@ async function _runLeadDrawerAction(action) {
       ? String(activeDrawerDraft.standaloneNote || '').trim()
     : '';
 
+  if (action === 'SCHEDULE_CALLBACK' && !callbackAt) {
+    ui?.showToast('Callback date and time are required.', 'error');
+    return;
+  }
+
   try {
     activeDrawerActionPending = action;
     _setDrawerActionButtonsBusy(true);
     if (activeDrawerData) _renderDrawerTimeline(activeDrawerData);
 
-    const payload = await api.runLeadAction(activeDrawerLeadId, { action, callbackTime, note });
+    const payload = await api.runLeadAction(activeDrawerLeadId, { action, callbackTime, callbackAt, note });
 
     activeDrawerActionPending = null;
     activeDrawerSelectedAction = null;
@@ -2440,6 +2515,12 @@ function _getLeadOperatorNotes(activities = []) {
     .filter((note) => note.text);
 }
 
+function _getCallbackDisplayText(callbackTime, callbackAt) {
+  if (callbackTime) return callbackTime;
+  if (!callbackAt) return null;
+  return ui?.fmtDate ? ui.fmtDate(callbackAt) : new Date(callbackAt).toLocaleString('en-IN');
+}
+
 function _getLatestCallbackMemory(activities = []) {
   const latest = [...activities]
     .filter((activity) =>
@@ -2452,11 +2533,14 @@ function _getLatestCallbackMemory(activities = []) {
 
   const cue = getCallbackCue({
     callbackTime: latest.metadata?.callbackTime || null,
+    callbackAt: latest.metadata?.callbackAt || null,
   });
 
   return {
     callbackTime: latest.metadata?.callbackTime || null,
-    callbackScheduledAt: latest.metadata?.callbackScheduledAt || null,
+    callbackAt: latest.metadata?.callbackAt || null,
+    displayTime: _getCallbackDisplayText(latest.metadata?.callbackTime || null, latest.metadata?.callbackAt || null),
+    callbackScheduledAt: latest.createdAt,
     note: latest.metadata?.operatorNote || null,
     createdAt: latest.createdAt,
     cue,
@@ -2493,7 +2577,7 @@ function _buildLeadOperatorNotesHtml({ lead = null, activities = [] }) {
           <div class="drawer-notes-card__memory-head">
             <div>
               <div class="drawer-notes-card__memory-label">${_escDrawer(isTerminal ? 'Last callback plan' : 'Latest callback memory')}</div>
-              <div class="drawer-notes-card__memory-value">${_escDrawer(latestCallback.callbackTime || 'Scheduled callback')}</div>
+              <div class="drawer-notes-card__memory-value">${_escDrawer(latestCallback.displayTime || 'Scheduled callback')}</div>
             </div>
             ${!isTerminal ? `<span class="callback-status-badge callback-status-badge--${_escDrawer(callbackTone)}">${_escDrawer(latestCallback.cue?.stateLabel || 'Scheduled')}</span>` : ''}
           </div>
@@ -2568,8 +2652,9 @@ function _syncDrawerLeadCache(data) {
       email: lead.email,
       message: lead.message,
       status: lead.status,
-      callbackTime: latestCallback?.callbackTime || null,
-      callbackScheduledAt: latestCallback?.createdAt || null,
+      callbackTime: latestCallback?.displayTime || null,
+      callbackAt: latestCallback?.callbackAt || null,
+      callbackScheduledAt: latestCallback?.callbackScheduledAt || null,
       conversationStatus,
       handoffReady: conversationStatus === 'handoff',
       ...derived,
@@ -2704,13 +2789,15 @@ function _renderDrawerTimeline(data) {
     } else if (act.type === 'AGENT_PRIORITIZED') {
       const score = meta?.priorityScore ?? meta?.score;
       if (score != null) metaHtml = `<div class="dtl-pills"><span class="dtl-pill">Score: ${_escDrawer(score)}</span></div>`;
-    } else if (act.type === 'FOLLOW_UP_SCHEDULED' && meta?.callbackTime) {
+    } else if (act.type === 'FOLLOW_UP_SCHEDULED' && (meta?.callbackTime || meta?.callbackAt)) {
+      const callbackDisplay = _getCallbackDisplayText(meta?.callbackTime, meta?.callbackAt);
       const callbackCue = getCallbackCue({
         callbackTime: meta.callbackTime,
+        callbackAt: meta.callbackAt,
       });
       metaHtml = `
         <div class="dtl-pills">
-          <span class="dtl-pill">Callback: ${_escDrawer(meta.callbackTime)}</span>
+          <span class="dtl-pill">Callback: ${_escDrawer(callbackDisplay || 'Scheduled callback')}</span>
           <span class="dtl-pill dtl-pill--callback-${_escDrawer(callbackCue.state)}">${_escDrawer(callbackCue.stateLabel)}</span>
         </div>`;
     } else if (meta?.channel === 'whatsapp' && meta?.direction === 'outbound' && meta?.conversationState?.status) {
@@ -2818,10 +2905,10 @@ function _renderDrawerOverview(data) {
             <span class="drawer-overview__label">Score</span>
             <strong class="drawer-overview__value">${esc(priorityScore)}</strong>
           </div>
-          ${latestCallback?.callbackTime ? `
+          ${latestCallback?.displayTime ? `
             <div class="drawer-overview__item">
               <span class="drawer-overview__label">${esc(_isTerminalLead(lead) ? 'Last Callback' : 'Latest Callback')}</span>
-              <strong class="drawer-overview__value">${esc(latestCallback.callbackTime)}</strong>
+              <strong class="drawer-overview__value">${esc(latestCallback.displayTime)}</strong>
             </div>` : ''}
         </div>
       </section>

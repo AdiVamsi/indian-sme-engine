@@ -187,6 +187,18 @@ function renderMeta(type, meta) {
         <span class="tl-meta__kv-value">${escHtml(fmt)}</span>
       </span>`);
     }
+    if (meta.callbackAt) {
+      const fmt = formatDateTime(meta.callbackAt);
+      parts.push(`<span class="tl-meta__kv">
+        <span class="tl-meta__kv-label">Callback:</span>
+        <span class="tl-meta__kv-value">${escHtml(fmt)}</span>
+      </span>`);
+    } else if (meta.callbackTime) {
+      parts.push(`<span class="tl-meta__kv">
+        <span class="tl-meta__kv-label">Callback:</span>
+        <span class="tl-meta__kv-value">${escHtml(String(meta.callbackTime))}</span>
+      </span>`);
+    }
     if (!parts.length) return '';
     return `<div class="tl-meta">${parts.join('')}</div>`;
   }

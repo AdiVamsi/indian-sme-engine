@@ -248,10 +248,11 @@ export function DashUI(config) {
   }
 
   function buildLeadCallbackBadge(lead) {
-    if (!lead?.callbackTime) return '';
+    if (!lead?.callbackTime && !lead?.callbackAt) return '';
 
     const cue = getCallbackCue({
       callbackTime: lead.callbackTime,
+      callbackAt: lead.callbackAt,
     });
 
     return `
@@ -278,9 +279,10 @@ export function DashUI(config) {
     if (isNew) tr.classList.add('row-enter');
     const isTerminal = ['WON', 'LOST'].includes(String(lead.status || '').toUpperCase());
 
-    const callbackCue = !isTerminal && lead.callbackTime
-      ? getCallbackCue({ callbackTime: lead.callbackTime })
+    const callbackCue = !isTerminal && (lead.callbackTime || lead.callbackAt)
+      ? getCallbackCue({ callbackTime: lead.callbackTime, callbackAt: lead.callbackAt })
       : null;
+    const callbackDisplayTime = lead.callbackTime || (lead.callbackAt ? fmtDate(lead.callbackAt) : null);
 
     if (isTerminal) {
       tr.classList.add('lead-row--closed');
@@ -307,7 +309,7 @@ export function DashUI(config) {
     const callbackHint = !isTerminal && lead.whatsappNeedsAttention
       ? `<div class="lead-row__hint lead-row__hint--whatsapp-error">⚠ ${esc(lead.whatsappFailureTitle || 'WhatsApp reply failed')}${lead.whatsappFailureDetail ? ` · ${esc(truncateText(lead.whatsappFailureDetail, 72))}` : ''}</div>`
       : callbackCue
-      ? `<div class="lead-row__hint lead-row__hint--callback lead-row__hint--${esc(callbackCue.state)}" title="${esc(callbackCue.title)}">⏰ ${esc(callbackCue.stateLabel)}${lead.callbackTime ? ` · ${esc(lead.callbackTime)}` : ''}</div>`
+      ? `<div class="lead-row__hint lead-row__hint--callback lead-row__hint--${esc(callbackCue.state)}" title="${esc(callbackCue.title)}">⏰ ${esc(callbackCue.stateLabel)}${callbackDisplayTime ? ` · ${esc(callbackDisplayTime)}` : ''}</div>`
       : !isTerminal && lead.handoffReady
         ? '<div class="lead-row__hint lead-row__hint--handoff">🤝 Ready for counsellor follow-up</div>'
       : '';

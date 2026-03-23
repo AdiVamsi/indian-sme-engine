@@ -3383,6 +3383,7 @@ body[data-mood="retail"] {
   .queue-item__actions { justify-content: flex-start; }
   .queue-item__actions .btn-timeline { margin-left: 0; }
   .queue-item__mark { flex: 1; }
+  .queue-item__snooze { flex: 1; }
   .queue-item__open { flex: 1; }
 
   /* Leads toolbar: hide slash hint, remove dividers, let controls share space */
@@ -4025,6 +4026,33 @@ tbody tr:hover td:first-child {
 }
 
 .queue-item__mark:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.queue-item__snooze {
+  min-height: 36px;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.queue-item__snooze:hover:not(:disabled),
+.queue-item__snooze:focus {
+  border-color: var(--accent-20);
+  background: var(--panel-hover);
+  color: var(--text);
+  outline: none;
+}
+
+.queue-item__snooze:disabled {
   opacity: 0.6;
   cursor: wait;
 }

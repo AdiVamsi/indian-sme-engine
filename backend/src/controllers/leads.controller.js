@@ -12,6 +12,7 @@ const {
   getLeadForSuggestions,
 } = require('../services/leads.service');
 const { getLeadSuggestions } = require('../agents/leadSuggestions');
+const { isMissingLeadSnoozedUntilColumnError } = require('../lib/leadCompat');
 const { broadcast } = require('../realtime/socket');
 
 const leadStatusEnum = z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'WON', 'LOST']);
@@ -130,6 +131,9 @@ const list = async (req, res) => {
     const leads = await findLeadsByBusiness(req.user.businessId, status || null);
     return res.json(leads);
   } catch (err) {
+    if (isMissingLeadSnoozedUntilColumnError(err)) {
+      return res.status(503).json({ error: 'Snooze is temporarily unavailable until the database update completes.' });
+    }
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
   }

@@ -3,6 +3,7 @@
 const { classify } = require('./classifier');
 const { runLeadAutomations } = require('../services/automation.service');
 const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
+const { LEGACY_SAFE_LEAD_SELECT } = require('../lib/leadCompat');
 const { prisma } = require('../lib/prisma');
 
 /**
@@ -19,6 +20,7 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
   /* 1. Fetch lead — scoped by businessId to prevent cross-tenant access. */
   const lead = await prisma.lead.findFirst({
     where: { id: leadId, businessId },
+    select: LEGACY_SAFE_LEAD_SELECT,
   });
 
   if (!lead) {

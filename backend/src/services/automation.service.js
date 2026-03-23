@@ -1,6 +1,7 @@
 'use strict';
 
 const { prisma } = require('../lib/prisma');
+const { LEGACY_SAFE_LEAD_SELECT } = require('../lib/leadCompat');
 const { logger } = require('../lib/logger');
 const { getOrCreate: getOrCreateAgentConfig } = require('./agentConfig.service');
 const { normalizeWhatsAppSendError, sendWhatsAppMessage } = require('./whatsapp.service');
@@ -1248,7 +1249,8 @@ async function continueWhatsAppConversation(leadId, {
 } = {}) {
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    include: {
+    select: {
+      ...LEGACY_SAFE_LEAD_SELECT,
       business: { select: { id: true, name: true, industry: true, slug: true } },
       activities: { orderBy: { createdAt: 'asc' } },
     },

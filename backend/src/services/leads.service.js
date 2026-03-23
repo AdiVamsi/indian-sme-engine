@@ -2,6 +2,7 @@
 
 const { AgentEngine } = require('../agents');
 const { buildWhatsAppConversationSummary } = require('./leadConversation.service');
+const { LEGACY_SAFE_LEAD_SELECT, isMissingLeadSnoozedUntilColumnError } = require('../lib/leadCompat');
 const { prisma } = require('../lib/prisma');
 const { logger } = require('../lib/logger');
 
@@ -56,6 +57,13 @@ function parseScheduledDate(value) {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildLeadSelect({ includeSnoozedUntil = false } = {}) {
+  return {
+    ...LEGACY_SAFE_LEAD_SELECT,
+    ...(includeSnoozedUntil ? { snoozedUntil: true } : {}),
+  };
 }
 
 function getLatestWhatsAppConversationState(activities = []) {
@@ -189,7 +197,10 @@ const saveRawLead = async (businessId, data) => {
     ...leadData
   } = data;
 
-  const lead = await prisma.lead.create({ data: { businessId, ...leadData } });
+  const lead = await prisma.lead.create({
+    data: { businessId, ...leadData },
+    select: LEGACY_SAFE_LEAD_SELECT,
+  });
 
   return decorateLead(lead, {
     source,
@@ -209,7 +220,8 @@ const findActiveWhatsAppLead = async (businessId, phone) => {
     },
     orderBy: { createdAt: 'desc' },
     take: 10,
-    include: {
+    select: {
+      ...LEGACY_SAFE_LEAD_SELECT,
       activities: {
         orderBy: { createdAt: 'desc' },
       },
@@ -312,7 +324,8 @@ const findLeadsByBusiness = async (businessId, status) => {
   const leads = await prisma.lead.findMany({
     where:   { businessId, ...(status ? { status } : {}) },
     orderBy: { createdAt: 'desc' },
-    include: {
+    select: {
+      ...LEGACY_SAFE_LEAD_SELECT,
       activities: {
         where:   { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED', 'FOLLOW_UP_SCHEDULED', 'AUTOMATION_ALERT'] } },
         orderBy: { createdAt: 'desc' },
@@ -329,10 +342,17 @@ const findLeadsByBusiness = async (businessId, status) => {
 };
 
 const updateLeadStatus = async (id, businessId, status) => {
-  const existing = await prisma.lead.findFirst({ where: { id, businessId } });
+  const existing = await prisma.lead.findFirst({
+    where: { id, businessId },
+    select: { id: true, status: true },
+  });
   if (!existing) return { count: 0 };
   await prisma.$transaction([
-    prisma.lead.update({ where: { id }, data: { status } }),
+    prisma.lead.update({
+      where: { id },
+      data: { status },
+      select: { id: true },
+    }),
     prisma.leadActivity.create({
       data: {
         leadId:   id,
@@ -354,7 +374,8 @@ const runLeadOperatorAction = async (id, businessId, {
 } = {}) => {
   const lead = await prisma.lead.findFirst({
     where: { id, businessId },
-    include: {
+    select: {
+      ...LEGACY_SAFE_LEAD_SELECT,
       activities: {
         orderBy: { createdAt: 'asc' },
       },
@@ -500,6 +521,7 @@ const runLeadOperatorAction = async (id, businessId, {
           ...(statusChanged ? { status: nextStatus } : {}),
           ...leadUpdateData,
         },
+        select: { id: true },
       });
     }
 
@@ -541,29 +563,40 @@ const deleteLead = (id, businessId) =>
   prisma.lead.deleteMany({ where: { id, businessId } });
 
 const getLeadActivity = async (id, businessId) => {
-  /* Single query: filter by lead relation for multi-tenant safety */
-  const rows = await prisma.leadActivity.findMany({
+  const buildLeadActivityQuery = (includeSnoozedUntil = false) => ({
     where: { leadId: id, lead: { businessId } },
     include: {
       lead: {
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          email: true,
-          message: true,
-          status: true,
-          snoozedUntil: true,
-          createdAt: true,
-        },
+        select: buildLeadSelect({ includeSnoozedUntil }),
       },
     },
     orderBy: { createdAt: 'asc' },
   });
 
+  /* Single query: filter by lead relation for multi-tenant safety */
+  let rows;
+  try {
+    rows = await prisma.leadActivity.findMany(buildLeadActivityQuery(true));
+  } catch (err) {
+    if (!isMissingLeadSnoozedUntilColumnError(err)) throw err;
+    rows = await prisma.leadActivity.findMany(buildLeadActivityQuery(false));
+  }
+
   if (!rows.length) {
     /* No activities yet — confirm lead exists for this business */
-    const existing = await prisma.lead.findFirst({ where: { id, businessId } });
+    let existing;
+    try {
+      existing = await prisma.lead.findFirst({
+        where: { id, businessId },
+        select: buildLeadSelect({ includeSnoozedUntil: true }),
+      });
+    } catch (err) {
+      if (!isMissingLeadSnoozedUntilColumnError(err)) throw err;
+      existing = await prisma.lead.findFirst({
+        where: { id, businessId },
+        select: buildLeadSelect(),
+      });
+    }
     if (!existing) return null;
     return {
       lead: existing,
@@ -590,7 +623,10 @@ const getLeadActivity = async (id, businessId) => {
 const getLeadForSuggestions = async (id, businessId) => {
   const lead = await prisma.lead.findFirst({
     where:   { id, businessId },
-    include: { activities: { orderBy: { createdAt: 'asc' } } },
+    select: {
+      ...LEGACY_SAFE_LEAD_SELECT,
+      activities: { orderBy: { createdAt: 'asc' } },
+    },
   });
   if (!lead) return null;
 
@@ -613,7 +649,10 @@ const getLeadForSuggestions = async (id, businessId) => {
 const getLeadForOutreach = async (id, businessId) => {
   const lead = await prisma.lead.findFirst({
     where:   { id, businessId },
-    include: { activities: { orderBy: { createdAt: 'asc' } } },
+    select: {
+      ...LEGACY_SAFE_LEAD_SELECT,
+      activities: { orderBy: { createdAt: 'asc' } },
+    },
   });
   if (!lead) return null;
 

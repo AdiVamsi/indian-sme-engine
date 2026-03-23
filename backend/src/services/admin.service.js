@@ -1,6 +1,7 @@
 'use strict';
 
 const { prisma } = require('../lib/prisma');
+const { LEGACY_SAFE_LEAD_SELECT } = require('../lib/leadCompat');
 const { buildLeadActivitySummary } = require('./leads.service');
 
 const getDashboardSummary = async (businessId) => {
@@ -40,7 +41,8 @@ const getLeads = async (businessId) => {
   const leads = await prisma.lead.findMany({
     where:   { businessId },
     orderBy: { createdAt: 'desc' },
-    include: {
+    select: {
+      ...LEGACY_SAFE_LEAD_SELECT,
       activities: {
         where:  { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED', 'FOLLOW_UP_SCHEDULED', 'AUTOMATION_ALERT'] } },
         orderBy: { createdAt: 'desc' },

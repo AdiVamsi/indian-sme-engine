@@ -1,6 +1,7 @@
 'use strict';
 
 const { prisma } = require('../lib/prisma');
+const { isMissingLeadSnoozedUntilColumnError } = require('../lib/leadCompat');
 const { getLeadSuggestions } = require('../agents/leadSuggestions');
 const { getOutreachDraft } = require('../agents/outreachDrafts');
 
@@ -331,14 +332,16 @@ function compareQueueItems(a, b) {
 
 async function getActionQueueForBusiness(businessId) {
   const now = new Date();
-  const leads = await prisma.lead.findMany({
+  const buildQueueLeadQuery = (includeSnoozeFilter = true) => ({
     where: {
       businessId,
       status: { in: Array.from(ACTIVE_LEAD_STATUSES) },
-      OR: [
-        { snoozedUntil: null },
-        { snoozedUntil: { lte: now } },
-      ],
+      ...(includeSnoozeFilter ? {
+        OR: [
+          { snoozedUntil: null },
+          { snoozedUntil: { lte: now } },
+        ],
+      } : {}),
     },
     orderBy: { createdAt: 'desc' },
     select: {
@@ -361,6 +364,14 @@ async function getActionQueueForBusiness(businessId) {
       },
     },
   });
+
+  let leads;
+  try {
+    leads = await prisma.lead.findMany(buildQueueLeadQuery(true));
+  } catch (err) {
+    if (!isMissingLeadSnoozedUntilColumnError(err)) throw err;
+    leads = await prisma.lead.findMany(buildQueueLeadQuery(false));
+  }
 
   const queueItems = [];
 

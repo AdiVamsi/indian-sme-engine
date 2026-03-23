@@ -100,57 +100,10 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
         slug: req.params.businessSlug,
         businessId: business.id,
         leadId: lead.id,
-        source: lead.source,
       },
       'Public lead saved'
     );
-
-    // Make website leads visible in open dashboards immediately, even if
-    // async classification is still running or later fails.
-    emitLeadCreated(business.id, lead);
-    reqLogger.info(
-      {
-        slug: req.params.businessSlug,
-        businessId: business.id,
-        leadId: lead.id,
-      },
-      'Public lead realtime broadcast sent'
-    );
-
-    reqLogger.info(
-      {
-        slug: req.params.businessSlug,
-        businessId: business.id,
-        leadId: lead.id,
-      },
-      'Public lead classification started'
-    );
-    void processLeadAfterSave(lead, {
-      businessId: business.id,
-      source: lead.source,
-      externalMessageId: lead.externalMessageId,
-      receivedAt: lead.receivedAt,
-    })
-      .then((processedLead) => {
-        reqLogger.info(
-          {
-            slug: req.params.businessSlug,
-            businessId: business.id,
-            leadId: processedLead.id,
-            priority: processedLead.priority,
-            priorityScore: processedLead.priorityScore,
-            tags: processedLead.tags,
-          },
-          'Public lead classification completed'
-        );
-        emitLeadCreated(business.id, processedLead);
-      })
-      .catch((err) => {
-        logger.error(
-          { err, leadId: lead.id, businessId: business.id, slug: req.params.businessSlug },
-          'Public lead background processing failed'
-        );
-      });
+    res.status(201).json({ ok: true });
 
     reqLogger.info(
       {
@@ -160,7 +113,71 @@ router.post('/:businessSlug/leads', limiter, async (req, res) => {
       },
       'Public lead response returned'
     );
-    return res.status(201).json({ ok: true });
+
+    setImmediate(() => {
+      try {
+        emitLeadCreated(business.id, lead);
+        reqLogger.info(
+          {
+            slug: req.params.businessSlug,
+            businessId: business.id,
+            leadId: lead.id,
+          },
+          'Public lead realtime broadcast sent'
+        );
+      } catch (wsErr) {
+        logger.error(
+          { err: wsErr, leadId: lead.id, businessId: business.id, slug: req.params.businessSlug },
+          'Public lead realtime broadcast failed'
+        );
+      }
+
+      reqLogger.info(
+        {
+          slug: req.params.businessSlug,
+          businessId: business.id,
+          leadId: lead.id,
+        },
+        'Public lead classification started'
+      );
+
+      void processLeadAfterSave(lead, {
+        businessId: business.id,
+        source: lead.source,
+        externalMessageId: lead.externalMessageId,
+        receivedAt: lead.receivedAt,
+      })
+        .then((processedLead) => {
+          reqLogger.info(
+            {
+              slug: req.params.businessSlug,
+              businessId: business.id,
+              leadId: processedLead.id,
+              priority: processedLead.priority,
+              priorityScore: processedLead.priorityScore,
+              tags: processedLead.tags,
+            },
+            'Public lead classification completed'
+          );
+
+          try {
+            emitLeadCreated(business.id, processedLead);
+          } catch (wsErr) {
+            logger.error(
+              { err: wsErr, leadId: processedLead.id, businessId: business.id, slug: req.params.businessSlug },
+              'Public lead processed realtime broadcast failed'
+            );
+          }
+        })
+        .catch((err) => {
+          logger.error(
+            { err, leadId: lead.id, businessId: business.id, slug: req.params.businessSlug },
+            'Public lead background processing failed'
+          );
+        });
+    });
+
+    return;
   } catch (err) {
     if (err.name === 'ZodError') {
       const firstError = err.errors?.[0]?.message || 'Invalid form data';

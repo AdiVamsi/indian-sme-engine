@@ -3890,14 +3890,13 @@ tbody tr:hover td:first-child {
 ══════════════════════════════════════════════ */
 .action-center {
   background:
-    radial-gradient(circle at 80% 0%, rgba(231, 163, 90, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 72%),
-    var(--panel);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 74%),
+    rgba(7, 8, 10, 0.88);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.35rem 1.45rem;
   margin-bottom: 1.75rem;
-  box-shadow: var(--shadow);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.36);
 }
 
 .action-center__header {
@@ -3932,11 +3931,12 @@ tbody tr:hover td:first-child {
   border-radius: 99px;
   font-size: 0.6875rem;
   font-weight: 700;
-  background: rgba(232, 177, 94, 0.12);
-  color: var(--accent);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.78);
   line-height: 1;
   letter-spacing: 0.08em;
   font-family: var(--font-mono);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .action-center__badge:empty { display: none; }
@@ -4027,10 +4027,9 @@ tbody tr:hover td:first-child {
   border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
-    radial-gradient(circle at 18% 0%, rgba(231, 163, 90, 0.16), transparent 26%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 72%),
-    rgba(8, 9, 11, 0.82);
-  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.34);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 74%),
+    rgba(7, 8, 10, 0.9);
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42);
   overflow: hidden;
 }
 
@@ -4040,9 +4039,9 @@ tbody tr:hover td:first-child {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04), transparent 18%, transparent 82%, rgba(231, 163, 90, 0.08)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035), transparent 18%, transparent 82%, rgba(231, 163, 90, 0.025)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%);
-  opacity: 0.7;
+  opacity: 0.56;
 }
 
 #section-queue .section-header > * {
@@ -4063,8 +4062,10 @@ tbody tr:hover td:first-child {
 #section-queue .section-badge {
   min-height: 1.9rem;
   padding: 0.25rem 0.78rem;
-  background: rgba(231, 163, 90, 0.14);
-  box-shadow: 0 0 28px rgba(231, 163, 90, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.78);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
 }
 
 .queue-filters {
@@ -4087,10 +4088,10 @@ tbody tr:hover td:first-child {
   width: 22rem;
   height: 10rem;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(231, 163, 90, 0.12) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(231, 163, 90, 0.045) 0%, transparent 70%);
   filter: blur(22px);
   pointer-events: none;
-  opacity: 0.75;
+  opacity: 0.42;
 }
 
 .queue-filter {
@@ -4118,10 +4119,10 @@ tbody tr:hover td:first-child {
 }
 
 .queue-filter.is-active {
-  border-color: rgba(231, 163, 90, 0.24);
-  background: rgba(231, 163, 90, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(231, 163, 90, 0.08), 0 0 22px rgba(231, 163, 90, 0.08);
-  color: var(--accent-hover);
+  border-color: rgba(231, 163, 90, 0.18);
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03), 0 0 18px rgba(231, 163, 90, 0.04);
+  color: var(--text);
 }
 
 #section-queue .queue-toolbar {
@@ -4129,9 +4130,8 @@ tbody tr:hover td:first-child {
   padding: 1.35rem 1.45rem;
   border-radius: 26px;
   background:
-    radial-gradient(circle at 84% 0%, rgba(231, 163, 90, 0.1), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 74%),
-    rgba(8, 9, 11, 0.8);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 76%),
+    rgba(7, 8, 10, 0.9);
   overflow: hidden;
 }
 
@@ -4150,7 +4150,7 @@ tbody tr:hover td:first-child {
 }
 
 #section-queue .queue-toolbar__eyebrow {
-  color: var(--accent-hover);
+  color: rgba(255, 255, 255, 0.74);
 }
 
 #section-queue .queue-toolbar__hint {
@@ -4162,7 +4162,7 @@ tbody tr:hover td:first-child {
   gap: 0.4rem;
   padding: 0.35rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
@@ -4212,9 +4212,9 @@ tbody tr:hover td:first-child {
   padding: 1.4rem;
   border-radius: 26px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 70%),
-    rgba(8, 9, 11, 0.88);
-  box-shadow: 0 26px 72px rgba(0, 0, 0, 0.42);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.016), transparent 74%),
+    rgba(7, 8, 10, 0.92);
+  box-shadow: 0 26px 72px rgba(0, 0, 0, 0.5);
 }
 
 #section-queue #queue-list > .queue-item::after {
@@ -4239,28 +4239,32 @@ tbody tr:hover td:first-child {
 .queue-item--critical {
   --queue-tone: rgba(239, 68, 68, 0.92);
   background:
-    linear-gradient(135deg, rgba(239, 68, 68, 0.09), rgba(17, 25, 36, 0.96) 34%),
+    linear-gradient(90deg, rgba(239, 68, 68, 0.05), transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 74%),
     var(--panel);
 }
 
 .queue-item--high {
   --queue-tone: rgba(249, 115, 22, 0.92);
   background:
-    linear-gradient(135deg, rgba(249, 115, 22, 0.08), rgba(17, 25, 36, 0.96) 34%),
+    linear-gradient(90deg, rgba(231, 163, 90, 0.035), transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 74%),
     var(--panel);
 }
 
 .queue-item--whatsapp {
   --queue-tone: rgba(34, 197, 94, 0.9);
   background:
-    linear-gradient(135deg, rgba(34, 197, 94, 0.07), rgba(17, 25, 36, 0.96) 34%),
+    linear-gradient(90deg, rgba(34, 197, 94, 0.035), transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 74%),
     var(--panel);
 }
 
 .queue-item--review {
   --queue-tone: rgba(56, 189, 248, 0.9);
   background:
-    linear-gradient(135deg, rgba(56, 189, 248, 0.08), rgba(17, 25, 36, 0.96) 34%),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.035), transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 74%),
     var(--panel);
 }
 
@@ -4320,7 +4324,7 @@ tbody tr:hover td:first-child {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.56);
+  color: rgba(255, 255, 255, 0.5);
   font-family: var(--font-mono);
 }
 
@@ -4329,15 +4333,15 @@ tbody tr:hover td:first-child {
   align-items: center;
   padding: 0.18rem 0.58rem;
   border-radius: 999px;
-  border: 1px solid rgba(231, 163, 90, 0.18);
-  background: rgba(231, 163, 90, 0.12);
-  color: var(--accent-hover);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   font-family: var(--font-mono);
-  box-shadow: 0 0 22px rgba(231, 163, 90, 0.08);
+  box-shadow: none;
 }
 
 .queue-item__name {
@@ -4445,8 +4449,8 @@ tbody tr:hover td:first-child {
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.018)),
-    rgba(255, 255, 255, 0.018);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.012)),
+    rgba(255, 255, 255, 0.014);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
@@ -4479,28 +4483,25 @@ tbody tr:hover td:first-child {
   padding: 1rem 1.05rem;
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.022);
+  background: rgba(255, 255, 255, 0.016);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .queue-item__panel--reasons {
-  background:
-    linear-gradient(180deg, rgba(231, 163, 90, 0.05), rgba(255, 255, 255, 0.018)),
-    rgba(255, 255, 255, 0.018);
+  background: rgba(255, 255, 255, 0.014);
 }
 
 .queue-item__panel--next {
   background:
-    radial-gradient(circle at 80% 0%, rgba(231, 163, 90, 0.08), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.018)),
-    rgba(255, 255, 255, 0.02);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0.014)),
+    rgba(255, 255, 255, 0.016);
 }
 
 .queue-item__panel--draft {
   grid-column: 1 / -1;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0.015)),
-    rgba(255, 255, 255, 0.016);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0.01)),
+    rgba(255, 255, 255, 0.012);
 }
 
 .queue-item__panel-label {
@@ -4538,9 +4539,9 @@ tbody tr:hover td:first-child {
   width: fit-content;
   border-radius: 999px;
   padding: 0.22rem 0.58rem;
-  border: 1px solid rgba(231, 163, 90, 0.16);
-  background: rgba(231, 163, 90, 0.08);
-  color: #F7D8A7;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.72);
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -4597,8 +4598,8 @@ tbody tr:hover td:first-child {
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-    rgba(255, 255, 255, 0.018);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.012)),
+    rgba(255, 255, 255, 0.012);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), inset 1px 0 0 rgba(255, 255, 255, 0.02), 0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
@@ -4631,7 +4632,7 @@ tbody tr:hover td:first-child {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--accent-hover);
+  color: rgba(255, 255, 255, 0.72);
   font-family: var(--font-mono);
 }
 
@@ -4691,7 +4692,7 @@ tbody tr:hover td:first-child {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.48);
   font-family: var(--font-mono);
 }
 
@@ -4773,25 +4774,81 @@ tbody tr:hover td:first-child {
   grid-template-columns: minmax(0, 1.08fr) 300px;
   padding: 1.55rem;
   background:
-    radial-gradient(circle at 22% 0%, rgba(231, 163, 90, 0.16), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 74%),
-    rgba(8, 9, 11, 0.9);
-  border-color: rgba(231, 163, 90, 0.12);
-  box-shadow: 0 34px 92px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(231, 163, 90, 0.05);
+    radial-gradient(circle at 22% 0%, rgba(231, 163, 90, 0.06), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 76%),
+    rgba(7, 8, 10, 0.94);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 34px 92px rgba(0, 0, 0, 0.56);
 }
 
 #section-queue #queue-list > .queue-item--featured .queue-item__summary {
   background:
-    radial-gradient(circle at 85% 0%, rgba(231, 163, 90, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-    rgba(255, 255, 255, 0.02);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.014)),
+    rgba(255, 255, 255, 0.016);
 }
 
 #section-queue #queue-list > .queue-item--featured .queue-item__actions {
   background:
-    radial-gradient(circle at 70% 0%, rgba(231, 163, 90, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
-    rgba(255, 255, 255, 0.02);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.012)),
+    rgba(255, 255, 255, 0.015);
+}
+
+.action-center .queue-list--summary {
+  gap: 0.95rem;
+}
+
+.action-center .queue-item--compact {
+  grid-template-columns: minmax(0, 1fr) 156px;
+  padding: 1rem 1.05rem;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.014), transparent 74%),
+    rgba(7, 8, 10, 0.9);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+}
+
+.action-center .queue-item--compact .queue-item__kicker {
+  color: rgba(255, 255, 255, 0.46);
+}
+
+.action-center .queue-item--compact .queue-item__meta-phone {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.action-center .queue-item--compact .queue-item__actions {
+  gap: 0.5rem;
+}
+
+.action-center .queue-item--compact .queue-item__open,
+.action-center .queue-item--compact .queue-item__mark,
+.action-center .queue-item--compact .queue-item__timeline {
+  min-height: 38px;
+}
+
+.action-center .queue-item--compact .queue-reason {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.action-center .queue-list__overflow {
+  color: rgba(255, 255, 255, 0.54);
+}
+
+#section-queue .priority-badge.badge--warm,
+#section-queue .callback-status-badge--scheduled,
+.action-center .priority-badge.badge--warm,
+.action-center .callback-status-badge--scheduled {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(231, 163, 90, 0.16);
+  color: rgba(255, 245, 230, 0.86);
+}
+
+#section-queue .tag-chip,
+.action-center .tag-chip {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.68);
 }
 
 /* ── Bucket ── */

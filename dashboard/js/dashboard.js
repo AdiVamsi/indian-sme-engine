@@ -498,15 +498,16 @@ function _getQueueTone(item) {
 function _buildQueueMeta(item, { createdLabel, latestActivityLabel } = {}) {
   const metaParts = [];
 
-  if (item?.phone) metaParts.push(`<span class="queue-item__meta-chip">${_queueEsc(item.phone)}</span>`);
-  metaParts.push(`<span class="queue-item__meta-chip">Created ${_queueEsc(createdLabel)}</span>`);
-  metaParts.push(`<span class="queue-item__meta-chip">Latest ${_queueEsc(latestActivityLabel)}</span>`);
+  if (item?.phone) metaParts.push(`<span class="queue-item__meta-phone">${_queueEsc(item.phone)}</span>`);
+  metaParts.push(`<span class="queue-item__meta-copy">Created ${_queueEsc(createdLabel)}</span>`);
+  metaParts.push('<span class="queue-item__meta-sep" aria-hidden="true"></span>');
+  metaParts.push(`<span class="queue-item__meta-copy">Latest ${_queueEsc(latestActivityLabel)}</span>`);
 
   return metaParts.join('');
 }
 
 function _buildQueueContext(item, tags = [], { compact = false } = {}) {
-  const visibleTags = tags.slice(0, compact ? 2 : 3);
+  const visibleTags = tags.slice(0, compact ? 2 : 2);
   const hiddenTagCount = tags.length - visibleTags.length;
   const confidenceLabel = String(item?.confidenceLabel || '').toLowerCase();
 
@@ -518,6 +519,17 @@ function _buildQueueContext(item, tags = [], { compact = false } = {}) {
       ${visibleTags.map((tag) => `<span class="tag-chip tag-chip--${_queueEsc(String(tag).toLowerCase().replace(/_/g, '-'))}">${_queueEsc(_formatQueueLabel(tag))}</span>`).join('')}
       ${hiddenTagCount > 0 ? `<span class="queue-item__facet queue-item__facet--count">+${hiddenTagCount}</span>` : ''}
     </div>`;
+}
+
+function _getQueueKicker(item, { featured = false } = {}) {
+  const reasonCodes = _getQueueReasonCodes(item);
+
+  if (featured) return 'Top of queue';
+  if (item?.isOverdue || reasonCodes.has('FOLLOW_UP_OVERDUE')) return 'Callback overdue';
+  if (String(item?.priority || '').toUpperCase() === 'HIGH') return 'Priority lead';
+  if (reasonCodes.has('WHATSAPP_RESPONSE_REQUIRED')) return 'WhatsApp response';
+  if (reasonCodes.has('LOW_CONFIDENCE_REVIEW')) return 'Review needed';
+  return 'Needs attention';
 }
 
 function _buildQueueSnoozeControl(item, { compact = false } = {}) {
@@ -565,6 +577,11 @@ function _buildQueueReasonPanel(reasons = [], { compact = false } = {}) {
 function _buildQueueActions(item, { compact = false, canMarkContacted = false } = {}) {
   return `
     <div class="queue-item__actions">
+      ${compact ? '' : `
+        <div class="queue-item__actions-head">
+          <span class="queue-item__actions-eyebrow">Operator controls</span>
+          <p class="queue-item__actions-sub">Move this lead forward now or bring it back into the queue later.</p>
+        </div>`}
       <button type="button" class="queue-item__open" data-queue-open="${_queueEsc(item.leadId)}">Open lead</button>
       <div class="queue-item__action-row">
         ${canMarkContacted ? `
@@ -579,11 +596,12 @@ function _buildQueueActions(item, { compact = false, canMarkContacted = false } 
     </div>`;
 }
 
-function _buildQueueItemHtml(item, { compact = false } = {}) {
+function _buildQueueItemHtml(item, { compact = false, featured = false } = {}) {
   const tags = Array.isArray(item?.tags) ? item.tags : [];
   const reasons = Array.isArray(item?.queueReasons) ? item.queueReasons : [];
   const canMarkContacted = _canQueueLeadBeMarkedContacted(item);
   const tone = _getQueueTone(item);
+  const kicker = _getQueueKicker(item, { featured });
   const dueAtLabel = item?.dueAt
     ? (ui?.fmtDate ? ui.fmtDate(item.dueAt) : new Date(item.dueAt).toLocaleString('en-IN'))
     : null;
@@ -600,6 +618,7 @@ function _buildQueueItemHtml(item, { compact = false } = {}) {
         <div class="queue-item__main">
           <div class="queue-item__header">
             <div class="queue-item__headline">
+              <span class="queue-item__kicker">${_queueEsc(kicker)}</span>
               <button type="button" class="lead-name-btn queue-item__name" data-queue-open="${_queueEsc(item.leadId)}">${_queueEsc(item.leadName || 'Unknown lead')}</button>
               <div class="queue-item__meta">
                 ${_buildQueueMeta(item, { createdLabel, latestActivityLabel })}
@@ -623,10 +642,14 @@ function _buildQueueItemHtml(item, { compact = false } = {}) {
   }
 
   return `
-    <article class="queue-item queue-item--${tone}" data-queue-item="${_queueEsc(item.leadId)}">
+    <article class="queue-item queue-item--${tone}${featured ? ' queue-item--featured' : ''}" data-queue-item="${_queueEsc(item.leadId)}">
       <div class="queue-item__main">
         <div class="queue-item__header">
           <div class="queue-item__headline">
+            <div class="queue-item__kicker-row">
+              <span class="queue-item__kicker">${_queueEsc(kicker)}</span>
+              ${featured ? '<span class="queue-item__spotlight">Handle next</span>' : ''}
+            </div>
             <button type="button" class="lead-name-btn queue-item__name" data-queue-open="${_queueEsc(item.leadId)}">${_queueEsc(item.leadName || 'Unknown lead')}</button>
             <div class="queue-item__meta">
               ${_buildQueueMeta(item, { createdLabel, latestActivityLabel })}
@@ -739,7 +762,7 @@ function renderActionQueueSection() {
     return;
   }
 
-  list.innerHTML = filteredItems.map((item) => _buildQueueItemHtml(item)).join('');
+  list.innerHTML = filteredItems.map((item, index) => _buildQueueItemHtml(item, { featured: index === 0 })).join('');
 }
 
 function renderActionQueueSurfaces() {

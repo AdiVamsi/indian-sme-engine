@@ -42,6 +42,7 @@ let activeDrawerDraft = { callbackTime: '', note: '', standaloneNote: '' };
 const LEAD_SORT_FIELDS = ['name', null, null, 'status', 'priority', 'score', 'createdAt'];
 const LEAD_PRIORITY_ORDER = { HIGH: 3, NORMAL: 2, LOW: 1 };
 const DASHBOARD_RECONCILE_INTERVAL_MS = 10_000;
+const DASH_ACTIVE_TAB_KEY = 'dashboard_active_tab';
 
 const $ = (id) => document.getElementById(id);
 
@@ -99,9 +100,36 @@ const ACTION_QUEUE_FILTERS = [
   },
 ];
 
+function getPersistedTab() {
+  try {
+    const stored = sessionStorage.getItem(DASH_ACTIVE_TAB_KEY);
+    return ALL_SECTIONS.includes(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistActiveTab(tab) {
+  if (!ALL_SECTIONS.includes(tab)) return;
+  try {
+    sessionStorage.setItem(DASH_ACTIVE_TAB_KEY, tab);
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+function clearPersistedTab() {
+  try {
+    sessionStorage.removeItem(DASH_ACTIVE_TAB_KEY);
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
 function getRequestedTab() {
   const hash = window.location.hash.slice(1);
-  return ALL_SECTIONS.includes(hash) ? hash : 'overview';
+  if (ALL_SECTIONS.includes(hash)) return hash;
+  return getPersistedTab() || 'overview';
 }
 
 /* ─────────────────────────────────────────────────
@@ -153,6 +181,7 @@ function doLogout(reason) {
   dashboardReconcileInFlight = false;
   activeTab = 'overview';
   loadedSections.clear();
+  clearPersistedTab();
   _allLeads = [];
   _actionQueue = [];
   _actionQueueRequestSeq = 0;
@@ -324,10 +353,6 @@ $('login-form').addEventListener('submit', async (e) => {
 
     /* Persist token for agent.html (separate page, same session) */
     localStorage.setItem('dash_token', data.token);
-
-    /* Fresh login always lands on Overview, regardless of any stale hash. */
-    activeTab = 'overview';
-    history.replaceState(null, '', '#overview');
 
     /* Schedule auto-logout at token expiry */
     checkTokenAndSchedule(data.token);
@@ -1075,7 +1100,10 @@ async function bootDashboard() {
   wireGoLiveCard(cfg);
 
   const startTab = getRequestedTab();
-  if (startTab !== 'overview') await switchTab(startTab);
+  persistActiveTab(startTab);
+  if (startTab !== activeTab || (window.location.hash && window.location.hash !== `#${startTab}`)) {
+    await switchTab(startTab);
+  }
 
   console.log('[Dashboard] Boot completed');
 }
@@ -1089,53 +1117,59 @@ document.querySelectorAll('.tab').forEach((btn) => {
 
 window.addEventListener('hashchange', () => {
   const tab = getRequestedTab();
-  if (tab !== activeTab) switchTab(tab);
+  void switchTab(tab);
 });
 
 async function switchTab(tab) {
-  if (tab === activeTab) return;
-  activeTab = tab;
-  history.replaceState(null, '', `#${tab}`);
+  const nextTab = ALL_SECTIONS.includes(tab) ? tab : 'overview';
+  persistActiveTab(nextTab);
+
+  if (window.location.hash !== `#${nextTab}`) {
+    history.replaceState(null, '', `#${nextTab}`);
+  }
+
+  if (nextTab === activeTab) return;
+  activeTab = nextTab;
 
   /* Close mobile sidebar when navigating */
   window._closeMobileSidebar?.();
 
   /* Hidden tab buttons (JS state signal) */
   document.querySelectorAll('.tab').forEach((b) =>
-    b.classList.toggle('tab--active', b.dataset.tab === tab)
+    b.classList.toggle('tab--active', b.dataset.tab === nextTab)
   );
 
   /* Sidebar active highlight */
   document.querySelectorAll('#sidebar-nav .sidebar__item[data-tab]').forEach((item) =>
-    item.classList.toggle('is-active', item.dataset.tab === tab)
+    item.classList.toggle('is-active', item.dataset.tab === nextTab)
   );
 
   ALL_SECTIONS.forEach((t) => {
     const el = $(`section-${t}`);
-    if (el) el.classList.toggle('hidden', t !== tab);
+    if (el) el.classList.toggle('hidden', t !== nextTab);
   });
 
-  await loadSection(tab);
+  await loadSection(nextTab);
 
   /* Force re-render of leads table if it grew/changed in background via websocket */
-  if (tab === 'leads' && ui) {
+  if (nextTab === 'leads' && ui) {
     _applyLeadFilters();
   }
 
   /* When returning to Overview, always refresh derived displays.
      loadSection early-returns for already-loaded sections, so we do it here. */
-  if (tab === 'overview' && ui) {
+  if (nextTab === 'overview' && ui) {
     ui.renderDonutChart(_allLeads);
     renderOverviewActivity(_allLeads);
     renderActionQueueSummary();
   }
 
-  if (tab === 'queue' && ui) {
+  if (nextTab === 'queue' && ui) {
     renderActionQueueSection();
     void refreshActionQueue();
   }
 
-  if (tab === 'automations' && ui) {
+  if (nextTab === 'automations' && ui) {
     renderAutomations(_allLeads);
   }
 }

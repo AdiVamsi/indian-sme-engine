@@ -479,26 +479,111 @@ function _getQueueLeadById(leadId) {
   return _actionQueue.find((item) => item.leadId === leadId) || null;
 }
 
+function _formatQueueLabel(value) {
+  return String(value || '')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function _getQueueTone(item) {
+  const reasonCodes = _getQueueReasonCodes(item);
+  if (item?.isOverdue) return 'critical';
+  if (String(item?.priority || '').toUpperCase() === 'HIGH') return 'high';
+  if (reasonCodes.has('WHATSAPP_RESPONSE_REQUIRED')) return 'whatsapp';
+  if (reasonCodes.has('LOW_CONFIDENCE_REVIEW')) return 'review';
+  return 'standard';
+}
+
+function _buildQueueMeta(item, { createdLabel, latestActivityLabel } = {}) {
+  const metaParts = [];
+
+  if (item?.phone) metaParts.push(`<span class="queue-item__meta-chip">${_queueEsc(item.phone)}</span>`);
+  metaParts.push(`<span class="queue-item__meta-chip">Created ${_queueEsc(createdLabel)}</span>`);
+  metaParts.push(`<span class="queue-item__meta-chip">Latest ${_queueEsc(latestActivityLabel)}</span>`);
+
+  return metaParts.join('');
+}
+
+function _buildQueueContext(item, tags = [], { compact = false } = {}) {
+  const visibleTags = tags.slice(0, compact ? 2 : 3);
+  const hiddenTagCount = tags.length - visibleTags.length;
+  const confidenceLabel = String(item?.confidenceLabel || '').toLowerCase();
+
+  return `
+    <div class="queue-item__context">
+      ${_buildQueueSourceBadge(item?.source)}
+      ${item?.bestCategory ? `<span class="queue-item__facet">${_queueEsc(_formatQueueLabel(item.bestCategory))}</span>` : ''}
+      ${confidenceLabel && confidenceLabel !== 'high' ? `<span class="queue-item__facet queue-item__facet--confidence">${_queueEsc(_formatQueueLabel(`${confidenceLabel} confidence`))}</span>` : ''}
+      ${visibleTags.map((tag) => `<span class="tag-chip tag-chip--${_queueEsc(String(tag).toLowerCase().replace(/_/g, '-'))}">${_queueEsc(_formatQueueLabel(tag))}</span>`).join('')}
+      ${hiddenTagCount > 0 ? `<span class="queue-item__facet queue-item__facet--count">+${hiddenTagCount}</span>` : ''}
+    </div>`;
+}
+
 function _buildQueueSnoozeControl(item, { compact = false } = {}) {
   if (compact) return '';
 
   return `
-    <select
-      class="queue-item__snooze"
-      data-queue-snooze-select="${_queueEsc(item.leadId)}"
-      aria-label="Snooze ${_queueEsc(item.leadName || 'lead')}"
-    >
-      <option value="">Snooze</option>
-      <option value="1">1 day</option>
-      <option value="3">3 days</option>
-      <option value="7">7 days</option>
-    </select>`;
+    <div class="queue-item__snooze-wrap">
+      <span class="queue-item__action-label">Defer</span>
+      <select
+        class="queue-item__snooze"
+        data-queue-snooze-select="${_queueEsc(item.leadId)}"
+        aria-label="Snooze ${_queueEsc(item.leadName || 'lead')}"
+      >
+        <option value="">Choose</option>
+        <option value="1">1 day</option>
+        <option value="3">3 days</option>
+        <option value="7">7 days</option>
+      </select>
+    </div>`;
+}
+
+function _buildQueueReasonPanel(reasons = [], { compact = false } = {}) {
+  if (!reasons.length) return '';
+
+  if (compact) {
+    return `
+      <div class="queue-item__reason-strip">
+        ${reasons.slice(0, 2).map((reason) => `<span class="queue-reason">${_queueEsc(reason.label)}</span>`).join('')}
+      </div>`;
+  }
+
+  return `
+    <section class="queue-item__panel queue-item__panel--reasons">
+      <span class="queue-item__panel-label">Why now</span>
+      <div class="queue-item__reasons">
+        ${reasons.map((reason) => `
+          <div class="queue-reason-row">
+            <span class="queue-reason">${_queueEsc(reason.label)}</span>
+            <p class="queue-reason-row__detail">${_queueEsc(reason.detail || '')}</p>
+          </div>`).join('')}
+      </div>
+    </section>`;
+}
+
+function _buildQueueActions(item, { compact = false, canMarkContacted = false } = {}) {
+  return `
+    <div class="queue-item__actions">
+      <button type="button" class="queue-item__open" data-queue-open="${_queueEsc(item.leadId)}">Open lead</button>
+      <div class="queue-item__action-row">
+        ${canMarkContacted ? `
+          <button
+            type="button"
+            class="queue-item__mark"
+            data-queue-mark-contacted="${_queueEsc(item.leadId)}"
+          >${compact ? 'Contacted' : 'Mark contacted'}</button>` : ''}
+        <a class="btn-timeline queue-item__timeline" href="/dashboard/lead-activity.html?leadId=${_queueEsc(item.leadId)}" title="View timeline">${compact ? 'Activity' : 'Timeline'}</a>
+      </div>
+      ${_buildQueueSnoozeControl(item, { compact })}
+    </div>`;
 }
 
 function _buildQueueItemHtml(item, { compact = false } = {}) {
   const tags = Array.isArray(item?.tags) ? item.tags : [];
   const reasons = Array.isArray(item?.queueReasons) ? item.queueReasons : [];
   const canMarkContacted = _canQueueLeadBeMarkedContacted(item);
+  const tone = _getQueueTone(item);
   const dueAtLabel = item?.dueAt
     ? (ui?.fmtDate ? ui.fmtDate(item.dueAt) : new Date(item.dueAt).toLocaleString('en-IN'))
     : null;
@@ -509,69 +594,80 @@ function _buildQueueItemHtml(item, { compact = false } = {}) {
     ? (ui?.fmtRelativeDate ? ui.fmtRelativeDate(item.latestRelevantActivityAt) : _fmtAge(item.latestRelevantActivityAt))
     : createdLabel;
 
+  if (compact) {
+    return `
+      <article class="queue-item queue-item--${tone} queue-item--compact" data-queue-item="${_queueEsc(item.leadId)}">
+        <div class="queue-item__main">
+          <div class="queue-item__header">
+            <div class="queue-item__headline">
+              <button type="button" class="lead-name-btn queue-item__name" data-queue-open="${_queueEsc(item.leadId)}">${_queueEsc(item.leadName || 'Unknown lead')}</button>
+              <div class="queue-item__meta">
+                ${_buildQueueMeta(item, { createdLabel, latestActivityLabel })}
+              </div>
+            </div>
+            <div class="queue-item__state">
+              ${_buildQueueDueState(item)}
+              ${_buildQueuePriorityBadge(item.priority)}
+            </div>
+          </div>
+
+          ${_buildQueueContext(item, tags, { compact: true })}
+
+          <p class="queue-item__message">${_queueEsc(item.messagePreview || 'No message provided.')}</p>
+
+          ${_buildQueueReasonPanel(reasons, { compact: true })}
+        </div>
+
+        ${_buildQueueActions(item, { compact: true, canMarkContacted })}
+      </article>`;
+  }
+
   return `
-    <article class="queue-item${compact ? ' queue-item--compact' : ''}" data-queue-item="${_queueEsc(item.leadId)}">
+    <article class="queue-item queue-item--${tone}" data-queue-item="${_queueEsc(item.leadId)}">
       <div class="queue-item__main">
         <div class="queue-item__header">
           <div class="queue-item__headline">
             <button type="button" class="lead-name-btn queue-item__name" data-queue-open="${_queueEsc(item.leadId)}">${_queueEsc(item.leadName || 'Unknown lead')}</button>
             <div class="queue-item__meta">
-              <span>${_queueEsc(createdLabel)}</span>
-              <span>&middot;</span>
-              <span>Latest activity ${_queueEsc(latestActivityLabel)}</span>
+              ${_buildQueueMeta(item, { createdLabel, latestActivityLabel })}
             </div>
           </div>
           <div class="queue-item__state">
-            ${_buildQueuePriorityBadge(item.priority)}
             ${_buildQueueDueState(item)}
+            ${_buildQueuePriorityBadge(item.priority)}
           </div>
         </div>
 
-        <div class="queue-item__badges">
-          ${_buildQueueSourceBadge(item.source)}
-          ${tags.map((tag) => `<span class="tag-chip tag-chip--${_queueEsc(String(tag).toLowerCase().replace(/_/g, '-'))}">${_queueEsc(tag)}</span>`).join('')}
+        ${_buildQueueContext(item, tags)}
+
+        <div class="queue-item__summary">
+          <span class="queue-item__summary-label">Lead message</span>
+          <p class="queue-item__message">${_queueEsc(item.messagePreview || 'No message provided.')}</p>
         </div>
 
-        <p class="queue-item__message">${_queueEsc(item.messagePreview || 'No message provided.')}</p>
+        <div class="queue-item__panels">
+          ${_buildQueueReasonPanel(reasons)}
 
-        ${reasons.length ? `
-          <div class="queue-item__reasons">
-            ${reasons.map((reason) => `
-              <div class="queue-reason-row">
-                <span class="queue-reason">${_queueEsc(reason.label)}</span>
-                ${compact ? '' : `<p class="queue-reason-row__detail">${_queueEsc(reason.detail || '')}</p>`}
-              </div>`).join('')}
-          </div>` : ''}
+          <section class="queue-item__panel queue-item__panel--next">
+            <span class="queue-item__panel-label">Next step</span>
+            <p class="queue-item__next-text">${_queueEsc(item.suggestedNextAction || 'Review the lead and take the next operator step.')}</p>
 
-        <div class="queue-item__next">
-          <span class="queue-item__next-label">Next action</span>
-          <p class="queue-item__next-text">${_queueEsc(item.suggestedNextAction || 'Review the lead and take the next operator step.')}</p>
+            ${item.dueAt ? `
+              <div class="queue-item__due">
+                <span class="queue-item__due-label">${item.isOverdue ? 'Due since' : 'Due at'}</span>
+                <span class="queue-item__due-value">${_queueEsc(dueAtLabel)}</span>
+              </div>` : ''}
+          </section>
+
+          ${item.outreachDraftPreview ? `
+            <section class="queue-item__panel queue-item__panel--draft">
+              <span class="queue-item__panel-label">Reply draft</span>
+              <p class="queue-item__draft-text">${_queueEsc(item.outreachDraftPreview)}</p>
+            </section>` : ''}
         </div>
-
-        ${item.dueAt ? `
-          <div class="queue-item__due">
-            <span class="queue-item__due-label">${item.isOverdue ? 'Due since' : 'Due at'}</span>
-            <span class="queue-item__due-value">${_queueEsc(dueAtLabel)}</span>
-          </div>` : ''}
-
-        ${!compact && item.outreachDraftPreview ? `
-          <div class="queue-item__draft">
-            <span class="queue-item__draft-label">Reply draft</span>
-            <p class="queue-item__draft-text">${_queueEsc(item.outreachDraftPreview)}</p>
-          </div>` : ''}
       </div>
 
-      <div class="queue-item__actions">
-        ${canMarkContacted ? `
-          <button
-            type="button"
-            class="queue-item__mark"
-            data-queue-mark-contacted="${_queueEsc(item.leadId)}"
-          >${compact ? 'Contacted' : 'Mark Contacted'}</button>` : ''}
-        ${_buildQueueSnoozeControl(item, { compact })}
-        <a class="btn-timeline" href="/dashboard/lead-activity.html?leadId=${_queueEsc(item.leadId)}" title="View timeline">⏱</a>
-        <button type="button" class="queue-item__open" data-queue-open="${_queueEsc(item.leadId)}">Open lead</button>
-      </div>
+      ${_buildQueueActions(item, { canMarkContacted })}
     </article>`;
 }
 

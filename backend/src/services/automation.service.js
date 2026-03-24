@@ -28,6 +28,25 @@ const STRUCTURED_ACADEMY_REPLY_REASONS = new Set([
   'SCHOLARSHIP_ENQUIRY',
   'GENERAL_ENQUIRY',
 ]);
+const DIRECT_BUSINESS_IDENTITY_PATTERN = /\b(is this|is it|are you|what is this(?: business)?|who are you|which business|which institute|what do you do)\b/;
+const DIRECT_BUSINESS_OFFERING_PATTERN = /\b(do you provide|do you offer|do you have|is this for|is it for|do you conduct)\b/;
+const CLASS_CLARIFICATION_PATTERN = /\b(?:class|std|standard|grade)\s*(9|10|11|12)\b|\b(9th|10th|11th|12th|ix|x|xi|xii)\b/;
+const INDUSTRY_ALIASES = {
+  academy: ['academy', 'coaching institute', 'coaching', 'institute', 'jee coaching', 'tuition'],
+  gym: ['gym', 'fitness centre', 'fitness center', 'fitness'],
+  salon: ['salon', 'beauty parlour', 'beauty salon', 'parlour'],
+  clinic: ['clinic', 'medical clinic', 'doctor clinic'],
+  restaurant: ['restaurant', 'cafe', 'food outlet'],
+  retail: ['shop', 'store', 'retail shop'],
+};
+const INDUSTRY_LABELS = {
+  academy: 'coaching institute',
+  gym: 'gym',
+  salon: 'salon',
+  clinic: 'clinic',
+  restaurant: 'restaurant',
+  retail: 'store',
+};
 
 function formatList(items = []) {
   const values = items.filter(Boolean);
@@ -39,6 +58,17 @@ function formatList(items = []) {
 
 function renderTemplate(template = '', tokens = {}) {
   return String(template || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, key) => tokens[key] || '');
+}
+
+function normalizeComparableText(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/classes/g, 'class')
+    .replace(/programmes/g, 'programme')
+    .replace(/services/g, 'service')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function getInstitutionLabel(replyConfig = {}) {
@@ -53,6 +83,160 @@ function getLanguageSupportSuffix(replyConfig = {}) {
   return /hindi/i.test(String(replyConfig?.preferredLanguage || ''))
     ? ' We can assist in Hindi as well.'
     : '';
+}
+
+function getBusinessIntro(businessName = null) {
+  return businessName ? `This is ${businessName}.` : 'This is our business.';
+}
+
+function getBusinessIntroWithAnswer(prefix = 'Yes', businessName = null) {
+  if (businessName) {
+    return `${prefix}, this is ${businessName}.`;
+  }
+
+  return `${prefix}, this is our business.`;
+}
+
+function getBusinessOfferingSentence({ businessIndustry = 'other', replyConfig = {} } = {}) {
+  if (businessIndustry === 'academy') {
+    return `We provide ${replyConfig?.primaryOffering || 'coaching services'}.`;
+  }
+
+  const industryLabel = INDUSTRY_LABELS[businessIndustry];
+  if (industryLabel) {
+    return `We are a ${industryLabel}.`;
+  }
+
+  return `We provide ${replyConfig?.primaryOffering || 'our services'}.`;
+}
+
+function findMentionedIndustry(message = '') {
+  const normalizedMessage = normalizeComparableText(message);
+
+  for (const [industry, aliases] of Object.entries(INDUSTRY_ALIASES)) {
+    const matchedAlias = aliases.find((alias) => normalizedMessage.includes(normalizeComparableText(alias)));
+    if (matchedAlias) {
+      return { industry, label: matchedAlias };
+    }
+  }
+
+  return null;
+}
+
+function getOfferCatalog(replyConfig = {}, { businessIndustry = 'other' } = {}) {
+  const catalog = [];
+
+  if (replyConfig?.primaryOffering) catalog.push(replyConfig.primaryOffering);
+  if (Array.isArray(replyConfig?.supportedOfferings)) {
+    catalog.push(...replyConfig.supportedOfferings);
+  }
+  if (businessIndustry === 'academy') {
+    catalog.push('JEE coaching');
+  }
+
+  return [...new Set(catalog.filter(Boolean).map((value) => String(value).trim()))];
+}
+
+function findMatchingOffering(message = '', { replyConfig = {}, businessIndustry = 'other' } = {}) {
+  const normalizedMessage = normalizeComparableText(message);
+
+  for (const offer of getOfferCatalog(replyConfig, { businessIndustry })) {
+    const normalizedOffer = normalizeComparableText(offer);
+    if (!normalizedOffer) continue;
+    if (normalizedMessage.includes(normalizedOffer)) return offer;
+
+    const offerTokens = normalizedOffer.split(' ').filter((token) => token.length > 2);
+    const matchedTokens = offerTokens.filter((token) => normalizedMessage.includes(token));
+    if (matchedTokens.length >= Math.min(2, offerTokens.length)) {
+      return offer;
+    }
+  }
+
+  return null;
+}
+
+function formatOfferingForReply(offer = '') {
+  const normalized = normalizeComparableText(offer);
+  if (normalized === 'demo class') return 'demo classes';
+  return String(offer || '').trim();
+}
+
+function buildDirectClarificationFollowUp({ replyConfig = {}, businessIndustry = 'other', asksClassSupport = false } = {}) {
+  if (asksClassSupport && businessIndustry === 'academy') {
+    return 'If you are asking about Class 11 or Class 12 guidance, I can help with the right batch details.';
+  }
+
+  const offeringsPrompt = getGeneralOfferingsPrompt(replyConfig);
+  return offeringsPrompt ? `If you need help with ${offeringsPrompt}, I can help.` : '';
+}
+
+function buildDirectBusinessClarificationPlan({
+  businessName = null,
+  businessIndustry = 'other',
+  message = '',
+  replyConfig = {},
+  flowIntent = null,
+  collected = {},
+  conversationMode = 'initial',
+  existingConversationState = null,
+} = {}) {
+  const normalizedMessage = normalizeComparableText(message);
+  if (!normalizedMessage) return null;
+
+  const asksIdentity = DIRECT_BUSINESS_IDENTITY_PATTERN.test(normalizedMessage);
+  const asksOffering = DIRECT_BUSINESS_OFFERING_PATTERN.test(normalizedMessage);
+  if (!asksIdentity && !asksOffering) return null;
+
+  const mentionedIndustry = findMentionedIndustry(message);
+  const matchedOffering = findMatchingOffering(message, { replyConfig, businessIndustry });
+  const asksClassSupport = asksOffering && CLASS_CLARIFICATION_PATTERN.test(normalizedMessage);
+  const replyParts = [];
+
+  if (mentionedIndustry) {
+    if (mentionedIndustry.industry === businessIndustry) {
+      replyParts.push(getBusinessIntroWithAnswer('Yes', businessName));
+      replyParts.push(getBusinessOfferingSentence({ businessIndustry, replyConfig }));
+    } else {
+      replyParts.push(getBusinessIntroWithAnswer('No', businessName));
+      replyParts.push(getBusinessOfferingSentence({ businessIndustry, replyConfig }));
+      replyParts.push(`We do not provide ${mentionedIndustry.label} services.`);
+    }
+  } else if (matchedOffering) {
+    replyParts.push(getBusinessIntroWithAnswer('Yes', businessName));
+    if (normalizeComparableText(matchedOffering) === normalizeComparableText(replyConfig?.primaryOffering || '')) {
+      replyParts.push(getBusinessOfferingSentence({ businessIndustry, replyConfig }));
+    } else {
+      replyParts.push(`We do offer ${formatOfferingForReply(matchedOffering)}.`);
+    }
+  } else {
+    replyParts.push(getBusinessIntro(businessName));
+    replyParts.push(getBusinessOfferingSentence({ businessIndustry, replyConfig }));
+  }
+
+  const followUp = buildDirectClarificationFollowUp({
+    replyConfig,
+    businessIndustry,
+    asksClassSupport,
+  });
+  if (followUp) replyParts.push(followUp);
+
+  return {
+    reason: 'DIRECT_BUSINESS_CLARIFICATION',
+    message: replyParts.join(' ').replace(/\s+/g, ' ').trim(),
+    conversationMode,
+    conversationState: existingConversationState
+      ? {
+          ...existingConversationState,
+          collected: {
+            ...(existingConversationState.collected || {}),
+            ...collected,
+          },
+        }
+      : buildKnowledgeFollowUpState({
+          flowIntent: flowIntent || 'GENERAL_ENQUIRY',
+          collected,
+        }),
+  };
 }
 
 function getGeneralOfferingsPrompt(replyConfig = {}) {
@@ -355,6 +539,9 @@ async function maybeBuildGroundedKnowledgeReplyPlan({
 }
 
 function buildAcademyFirstReplyPlan({
+  businessName = null,
+  businessIndustry = 'academy',
+  message = '',
   intent = null,
   tags = [],
   priorityScore = 0,
@@ -367,6 +554,18 @@ function buildAcademyFirstReplyPlan({
   const requiredFields = getRequiredCollectedFields(replyConfig, replyIntent);
   const pendingField = getPendingFieldForIntent(replyIntent, requiredFields);
   const languageSupportSuffix = getLanguageSupportSuffix(replyConfig);
+  const directClarificationPlan = buildDirectBusinessClarificationPlan({
+    businessName,
+    businessIndustry,
+    message,
+    replyConfig,
+    flowIntent: replyIntent || intent,
+    conversationMode: 'initial',
+  });
+
+  if (directClarificationPlan) {
+    return directClarificationPlan;
+  }
 
   if (confidenceLabel === 'low' || ['conflicting', 'weak'].includes(leadDisposition)) {
     return createConfiguredHandoffPlan({
@@ -561,7 +760,9 @@ function buildAcademyFirstReplyPlan({
 }
 
 function buildWhatsAppReplyPlan({
+  businessName = null,
   businessIndustry = 'other',
+  message = '',
   intent = null,
   tags = [],
   priorityScore = 0,
@@ -570,6 +771,18 @@ function buildWhatsAppReplyPlan({
   agentConfig = null,
 } = {}) {
   const replyConfig = resolveWhatsAppReplyConfig({ businessIndustry, agentConfig });
+  const directClarificationPlan = buildDirectBusinessClarificationPlan({
+    businessName,
+    businessIndustry,
+    message,
+    replyConfig,
+    flowIntent: intent,
+    conversationMode: 'initial',
+  });
+
+  if (directClarificationPlan) {
+    return directClarificationPlan;
+  }
 
   if (businessIndustry !== 'academy') {
     if (priorityScore >= HIGH_PRIORITY_THRESHOLD) {
@@ -586,6 +799,9 @@ function buildWhatsAppReplyPlan({
   }
 
   return buildAcademyFirstReplyPlan({
+    businessName,
+    businessIndustry,
+    message,
     intent,
     tags,
     priorityScore,
@@ -687,6 +903,8 @@ function extractCourseInterest(message = '') {
 }
 
 function buildAcademyContinuationPlan({
+  businessName = null,
+  businessIndustry = 'academy',
   conversationState,
   message,
   priorityScore = 0,
@@ -696,6 +914,20 @@ function buildAcademyContinuationPlan({
   const collected = { ...(conversationState?.collected || {}) };
   const institutionPhrase = getInstitutionPhrase(replyConfig);
   const requiredFields = getRequiredCollectedFields(replyConfig, flowIntent);
+  const directClarificationPlan = buildDirectBusinessClarificationPlan({
+    businessName,
+    businessIndustry,
+    message,
+    replyConfig,
+    flowIntent,
+    collected,
+    conversationMode: 'continuation',
+    existingConversationState: conversationState,
+  });
+
+  if (directClarificationPlan) {
+    return directClarificationPlan;
+  }
 
   if (!conversationState || conversationState.status === 'handoff') {
     return createConfiguredHandoffPlan({
@@ -1277,6 +1509,8 @@ async function continueWhatsAppConversation(leadId, {
     agentConfig,
   });
   const structuredReplyPlan = buildAcademyContinuationPlan({
+    businessName: lead.business.name,
+    businessIndustry: lead.business.industry || 'other',
     conversationState: priorState,
     message,
     priorityScore: context.priorityScore,
@@ -1341,7 +1575,9 @@ async function runLeadAutomations(leadId, {
   const creates = [];
   const resolvedAgentConfig = agentConfig || (businessId ? await getOrCreateAgentConfig(businessId) : null);
   const structuredReplyPlan = buildWhatsAppReplyPlan({
+    businessName,
     businessIndustry,
+    message: leadMessage,
     intent,
     tags,
     priorityScore,

@@ -115,6 +115,39 @@ describe('WhatsApp academy reply selection', () => {
     expect(plan.conversationState.status).toBe('closed');
   });
 
+  it('answers direct business identity questions before falling back to handoff', () => {
+    const plan = buildWhatsAppReplyPlan({
+      businessName: 'Sharma JEE Academy',
+      businessIndustry: 'academy',
+      message: 'Hello. is this a gym ?',
+      intent: 'GENERAL_ENQUIRY',
+      tags: ['GENERAL_ENQUIRY'],
+      priorityScore: 10,
+    });
+
+    expect(plan.reason).toBe('DIRECT_BUSINESS_CLARIFICATION');
+    expect(plan.message).toContain('Sharma JEE Academy');
+    expect(plan.message).toContain('IIT-JEE coaching');
+    expect(plan.message).toContain('do not provide gym services');
+    expect(plan.message).not.toContain('will continue with you on WhatsApp shortly');
+  });
+
+  it('answers direct offering clarification questions before asking for more details', () => {
+    const plan = buildWhatsAppReplyPlan({
+      businessName: 'Sharma JEE Academy',
+      businessIndustry: 'academy',
+      message: 'Do you provide JEE coaching?',
+      intent: 'GENERAL_ENQUIRY',
+      tags: ['GENERAL_ENQUIRY'],
+      priorityScore: 10,
+    });
+
+    expect(plan.reason).toBe('DIRECT_BUSINESS_CLARIFICATION');
+    expect(plan.message).toContain('Yes, this is Sharma JEE Academy.');
+    expect(plan.message).toContain('We provide IIT-JEE coaching.');
+    expect(plan.message).not.toContain('Please share the student\'s class');
+  });
+
   it('prioritizes the most actionable specific tag over admission', () => {
     const plan = buildWhatsAppReplyPlan({
       businessIndustry: 'academy',
@@ -359,6 +392,31 @@ describe('WhatsApp academy continuation planning', () => {
     });
 
     expect(plan.reason).toBe('OFF_FLOW_HANDOFF');
+    expect(plan.conversationState.status).toBe('handoff');
+  });
+
+  it('answers direct business clarification during handoff instead of generic in-progress wording', () => {
+    const plan = buildAcademyContinuationPlan({
+      businessName: 'Sharma JEE Academy',
+      businessIndustry: 'academy',
+      conversationState: {
+        flowIntent: 'ADMISSION',
+        pendingField: null,
+        collected: { studentClass: 'Class 11' },
+        status: 'handoff',
+      },
+      message: 'Hello. is this a gym ?',
+      priorityScore: 35,
+      replyConfig: {
+        primaryOffering: 'IIT-JEE coaching',
+      },
+    });
+
+    expect(plan.reason).toBe('DIRECT_BUSINESS_CLARIFICATION');
+    expect(plan.message).toContain('Sharma JEE Academy');
+    expect(plan.message).toContain('IIT-JEE coaching');
+    expect(plan.message).toContain('do not provide gym services');
+    expect(plan.message).not.toContain('will continue with you on WhatsApp shortly');
     expect(plan.conversationState.status).toBe('handoff');
   });
 

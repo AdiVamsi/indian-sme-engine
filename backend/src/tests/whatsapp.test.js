@@ -402,6 +402,44 @@ describe('WhatsApp webhook integration', () => {
     );
   });
 
+  it('answers direct business-identity questions before using generic WhatsApp handoff wording', async () => {
+    const phone = '+919833333333';
+    testPhones.push(phone);
+
+    const res = await request(app)
+      .post('/api/webhooks/whatsapp')
+      .send(buildWebhookPayload({
+        phone,
+        message: 'Hello. is this a gym ?',
+        messageId: 'wamid.message.identity',
+      }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true, accepted: 1 });
+
+    const lead = await waitForLeadByPhone(ctx.business.id, phone, (candidate) =>
+      candidate.activities.some((activity) =>
+        activity.type === 'AUTOMATION_ALERT'
+        && activity.metadata?.channel === 'whatsapp'
+        && activity.metadata?.direction === 'outbound'
+      )
+    );
+
+    expect(lead).toBeTruthy();
+
+    const outboundReply = lead.activities.find((activity) =>
+      activity.type === 'AUTOMATION_ALERT'
+      && activity.metadata?.channel === 'whatsapp'
+      && activity.metadata?.direction === 'outbound'
+    );
+
+    expect(outboundReply.metadata.replyIntent).toBe('DIRECT_BUSINESS_CLARIFICATION');
+    expect(outboundReply.metadata.replyMessage).toContain('Sharma JEE Academy');
+    expect(outboundReply.metadata.replyMessage).toContain('IIT-JEE coaching');
+    expect(outboundReply.metadata.replyMessage).toContain('do not provide gym services');
+    expect(outboundReply.metadata.replyMessage).not.toContain('will continue with you on WhatsApp shortly');
+  });
+
   it('records an operator-visible failure activity when Meta rejects the outbound WhatsApp reply because the access token expired', async () => {
     const phone = '+919822222222';
     testPhones.push(phone);

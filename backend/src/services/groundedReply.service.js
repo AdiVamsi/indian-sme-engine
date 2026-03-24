@@ -28,6 +28,7 @@ function buildGroundedReplySystemPrompt({ businessName, institutionLabel, busine
     `Industry: ${businessIndustry || 'other'}. Institution label: ${institutionLabel || 'team'}.`,
     'Answer only from the supplied business knowledge snippets.',
     'If the snippets do not clearly answer the customer question, return grounded=false and do not guess.',
+    'For direct business identity or service-clarification questions, answer the factual yes/no point in the first sentence.',
     'Keep the reply factual, warm, concise, and suitable for an Indian customer-service context.',
     'Do not use markdown. Do not mention information that is not present in the snippets.',
     'Return JSON only.',

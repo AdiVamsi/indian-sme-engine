@@ -41,6 +41,18 @@ function parseDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function getLatestSnoozedUntil(lead, activities = []) {
+  const directSnoozedUntil = parseDate(lead?.snoozedUntil);
+  if (directSnoozedUntil) return directSnoozedUntil;
+
+  const latestSnoozeActivity = getLatestMatchingActivity(activities, (activity) =>
+    activity?.metadata?.reason === 'OPERATOR_SNOOZED_QUEUE'
+    && Boolean(parseDate(activity?.metadata?.snoozedUntil))
+  );
+
+  return latestSnoozeActivity ? parseDate(latestSnoozeActivity.metadata?.snoozedUntil) : null;
+}
+
 function getLatestMatchingActivity(activities = [], predicate) {
   for (let index = activities.length - 1; index >= 0; index -= 1) {
     if (predicate(activities[index])) return activities[index];
@@ -351,6 +363,7 @@ async function getActionQueueForBusiness(businessId) {
       message: true,
       status: true,
       createdAt: true,
+      ...(includeSnoozeFilter ? { snoozedUntil: true } : {}),
       activities: {
         where: { type: { in: QUEUE_ACTIVITY_TYPES } },
         orderBy: { createdAt: 'asc' },
@@ -377,6 +390,8 @@ async function getActionQueueForBusiness(businessId) {
 
   for (const lead of leads) {
     if (TERMINAL_LEAD_STATUSES.has(String(lead.status || '').toUpperCase())) continue;
+    const snoozedUntil = getLatestSnoozedUntil(lead, lead.activities);
+    if (snoozedUntil && snoozedUntil.getTime() > now.getTime()) continue;
 
     const queueState = buildQueueReasons(lead, lead.activities, now);
     if (!queueState.reasons.length) continue;

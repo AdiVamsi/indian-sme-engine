@@ -17,27 +17,31 @@ const RECONNECT_DELAY = 3_000; // ms
 /**
  * @param {string}   token     JWT bearer token
  * @param {object}   handlers  Map of event name → handler function
+ * @param {{ onOpen?: () => void }} [opts]
  * @returns {{ close(): void }}
  */
-export function connectRealtime(token, handlers = {}) {
+export function connectRealtime(token, handlers = {}, { onOpen } = {}) {
   let socket;
   let reconnectTimer;
+  let closedByClient = false;
 
   /* ── Status indicator ── */
   const setStatus = (text, ok) => {
     const el = document.getElementById('ws-status');
     if (!el) return;
     el.textContent = text;
-    el.className   = `ws-status ${ok ? 'ws-status--ok' : 'ws-status--off'}`;
+    el.className   = `ws-status ${ok ? 'ws-status--on' : 'ws-status--off'}`;
   };
 
   /* ── Connect / reconnect ── */
   const connect = () => {
+    closedByClient = false;
     socket = new WebSocket(`${WS_BASE_URL}?token=${encodeURIComponent(token)}`);
 
     socket.addEventListener('open', () => {
       setStatus('● Live', true);
       clearTimeout(reconnectTimer);
+      onOpen?.();
     });
 
     socket.addEventListener('message', (evt) => {
@@ -50,6 +54,7 @@ export function connectRealtime(token, handlers = {}) {
     });
 
     socket.addEventListener('close', () => {
+      if (closedByClient) return;
       setStatus('○ Reconnecting…', false);
       reconnectTimer = setTimeout(connect, RECONNECT_DELAY);
     });
@@ -63,6 +68,7 @@ export function connectRealtime(token, handlers = {}) {
 
   return {
     close() {
+      closedByClient = true;
       clearTimeout(reconnectTimer);
       socket?.close();
     },

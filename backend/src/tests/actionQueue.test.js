@@ -274,6 +274,33 @@ describe('Action Queue API', () => {
     expect(res.body.some((item) => item.leadId === expiredSnoozeLead.id)).toBe(true);
   });
 
+  it('GET /api/admin/action-queue - excludes leads using snooze activity metadata when the lead column is unavailable', async () => {
+    await createQueueLead({
+      businessId: ctx.business.id,
+      name: 'Activity Snoozed Lead',
+      priorityScore: 36,
+      extraActivities: [
+        {
+          type: 'AUTOMATION_ALERT',
+          message: 'Operator snoozed this lead for 3 days.',
+          createdAt: minutesFromNow(-10),
+          metadata: {
+            channel: 'operator',
+            operatorAction: 'SNOOZE',
+            reason: 'OPERATOR_SNOOZED_QUEUE',
+            snoozeDays: 3,
+            snoozedUntil: minutesFromNow(3 * 24 * 60).toISOString(),
+          },
+        },
+      ],
+    });
+
+    const res = await request(app).get('/api/admin/action-queue').set(auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body.some((item) => item.leadName === 'Activity Snoozed Lead')).toBe(false);
+  });
+
   it('GET /api/admin/action-queue - includes leads whose scheduled callback is due or overdue', async () => {
     const lead = await createQueueLead({
       businessId: ctx.business.id,

@@ -59,6 +59,27 @@ function parseScheduledDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function getLatestSnoozedUntilFromActivities(activities = []) {
+  const latestSnooze = getSortedActivitiesNewestFirst(activities).find((activity) =>
+    activity?.metadata?.reason === 'OPERATOR_SNOOZED_QUEUE'
+    && parseScheduledDate(activity?.metadata?.snoozedUntil)
+  );
+
+  return latestSnooze ? parseScheduledDate(latestSnooze.metadata?.snoozedUntil) : null;
+}
+
+function withDerivedSnoozedUntil(lead, activities = []) {
+  if (!lead?.id || lead.snoozedUntil) return lead;
+
+  const derivedSnoozedUntil = getLatestSnoozedUntilFromActivities(activities);
+  if (!derivedSnoozedUntil) return lead;
+
+  return {
+    ...lead,
+    snoozedUntil: derivedSnoozedUntil,
+  };
+}
+
 function buildLeadSelect({ includeSnoozedUntil = false } = {}) {
   return {
     ...LEGACY_SAFE_LEAD_SELECT,
@@ -511,29 +532,42 @@ const runLeadOperatorAction = async (id, businessId, {
   }
 
   const statusChanged = nextStatus !== lead.status;
-  const hasLeadUpdate = statusChanged || Object.keys(leadUpdateData).length > 0;
 
-  await prisma.$transaction(async (tx) => {
-    if (hasLeadUpdate) {
-      await tx.lead.update({
-        where: { id },
+  const persistAction = async ({ persistSnoozedUntil = true } = {}) => {
+    await prisma.$transaction(async (tx) => {
+      const nextLeadData = {
+        ...(statusChanged ? { status: nextStatus } : {}),
+        ...(persistSnoozedUntil ? leadUpdateData : {}),
+      };
+
+      if (Object.keys(nextLeadData).length > 0) {
+        await tx.lead.update({
+          where: { id },
+          data: nextLeadData,
+          select: { id: true },
+        });
+      }
+
+      await tx.leadActivity.create({
         data: {
-          ...(statusChanged ? { status: nextStatus } : {}),
-          ...leadUpdateData,
+          leadId: id,
+          type: activityType,
+          message,
+          metadata,
         },
-        select: { id: true },
       });
+    });
+  };
+
+  try {
+    await persistAction();
+  } catch (err) {
+    if (!(action === 'SNOOZE' && isMissingLeadSnoozedUntilColumnError(err))) {
+      throw err;
     }
 
-    await tx.leadActivity.create({
-      data: {
-        leadId: id,
-        type: activityType,
-        message,
-        metadata,
-      },
-    });
-  });
+    await persistAction({ persistSnoozedUntil: false });
+  }
 
   logger.info(
     {
@@ -599,14 +633,14 @@ const getLeadActivity = async (id, businessId) => {
     }
     if (!existing) return null;
     return {
-      lead: existing,
+      lead: withDerivedSnoozedUntil(existing, []),
       activities: [],
       whatsappConversation: buildWhatsAppConversationSummary({ lead: existing, activities: [] }),
     };
   }
 
-  const lead       = rows[0].lead;
   const activities = rows.map(({ lead: _l, ...act }) => act);
+  const lead       = withDerivedSnoozedUntil(rows[0].lead, activities);
   return {
     lead,
     activities,

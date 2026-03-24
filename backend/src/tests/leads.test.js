@@ -3,6 +3,7 @@
 const { PrismaClient } = require('@prisma/client');
 const request = require('supertest');
 const app = require('../app');
+const { prisma: sharedPrisma } = require('../lib/prisma');
 const { createTestContext, installLlmFetchMock } = require('./_testHelpers');
 
 describe('Leads', () => {
@@ -155,6 +156,48 @@ describe('Leads', () => {
     const dbLead = await prisma.lead.findUnique({ where: { id: created.body.id } });
     expect(dbLead.snoozedUntil).toEqual(expect.any(Date));
     expect(dbLead.snoozedUntil.getTime()).toBeGreaterThan(Date.now() + (2.5 * 24 * 60 * 60 * 1000));
+  });
+
+  it('POST /api/leads/:id/actions - falls back to activity-based snooze when snoozedUntil persistence is unavailable', async () => {
+    const created = await request(app)
+      .post('/api/leads')
+      .set(auth())
+      .send({ name: 'Compat Snooze Lead', phone: '+91 88888 00038', message: 'Please follow up next week' });
+
+    const actualTransaction = sharedPrisma.$transaction.bind(sharedPrisma);
+    let shouldFailOnce = true;
+    const transactionSpy = jest.spyOn(sharedPrisma, '$transaction').mockImplementation(async (...args) => {
+      if (shouldFailOnce) {
+        shouldFailOnce = false;
+        throw new Error("The column 'Lead.snoozedUntil' does not exist in the current database.");
+      }
+
+      return actualTransaction(...args);
+    });
+
+    try {
+      const res = await request(app)
+        .post(`/api/leads/${created.body.id}/actions`)
+        .set(auth())
+        .send({
+          action: 'SNOOZE',
+          snoozeDays: 1,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.lead.id).toBe(created.body.id);
+      expect(res.body.lead.snoozedUntil).toEqual(expect.any(String));
+
+      const snoozeActivity = res.body.activities.find(
+        (activity) => activity.metadata?.reason === 'OPERATOR_SNOOZED_QUEUE'
+      );
+
+      expect(snoozeActivity).toBeTruthy();
+      expect(snoozeActivity.metadata.snoozeDays).toBe(1);
+      expect(snoozeActivity.metadata.snoozedUntil).toEqual(expect.any(String));
+    } finally {
+      transactionSpy.mockRestore();
+    }
   });
 
   it('POST /api/leads/:id/actions - rejects empty operator notes', async () => {

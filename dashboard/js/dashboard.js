@@ -25,6 +25,8 @@ let activeTab = 'overview';
 let loadedSections = new Set();
 let wsClient = null;
 let expiryTimer = null;
+let dashboardReconcileTimer = null;
+let dashboardReconcileInFlight = false;
 let _leadsSort = { col: null, dir: 'asc' };
 let _actionQueue = [];
 let _actionQueueRequestSeq = 0;
@@ -39,6 +41,7 @@ let activeDrawerDraft = { callbackTime: '', note: '', standaloneNote: '' };
 /* Maps tableColumns.leads index → sortable field (null = unsortable) */
 const LEAD_SORT_FIELDS = ['name', null, null, 'status', 'priority', 'score', 'createdAt'];
 const LEAD_PRIORITY_ORDER = { HIGH: 3, NORMAL: 2, LOW: 1 };
+const DASHBOARD_RECONCILE_INTERVAL_MS = 10_000;
 
 const $ = (id) => document.getElementById(id);
 
@@ -138,6 +141,7 @@ function checkTokenAndSchedule(token) {
 function doLogout(reason) {
   if (wsClient) wsClient.close();
   clearTimeout(expiryTimer);
+  clearInterval(dashboardReconcileTimer);
   localStorage.removeItem('dash_token');
 
   api = null;
@@ -145,6 +149,8 @@ function doLogout(reason) {
   config = null;
   wsClient = null;
   expiryTimer = null;
+  dashboardReconcileTimer = null;
+  dashboardReconcileInFlight = false;
   activeTab = 'overview';
   loadedSections.clear();
   _allLeads = [];
@@ -338,6 +344,7 @@ $('login-form').addEventListener('submit', async (e) => {
 
     try {
       await bootDashboard();
+      startDashboardReconcileLoop();
       startRealtime(data.token);
     } catch (err) {
       console.error('[Login] bootDashboard failed:', err);
@@ -1217,6 +1224,22 @@ function renderLeads(leads) {
   syncLeadDerivedViews();
 }
 
+function buildLeadRefreshSignature(leads = []) {
+  return leads.map((lead) => [
+    lead.id,
+    lead.status,
+    lead.priority,
+    lead.priorityScore ?? '',
+    lead.callbackAt ?? '',
+    lead.callbackTime ?? '',
+    lead.whatsappFailureAt ?? '',
+    lead.whatsappNeedsAttention ? '1' : '0',
+    lead.handoffReady ? '1' : '0',
+    lead.createdAt,
+    lead.updatedAt ?? '',
+  ].join('|')).join('||');
+}
+
 function syncLeadDerivedViews({ rerenderTable = false } = {}) {
   if (rerenderTable) _applyLeadFilters();
   ui?.renderDonutChart(_allLeads);
@@ -1224,6 +1247,38 @@ function syncLeadDerivedViews({ rerenderTable = false } = {}) {
   renderActionQueueSurfaces();
   if (activeTab === 'overview') renderOverviewActivity(_allLeads);
   if (activeTab === 'automations') renderAutomations(_allLeads);
+}
+
+async function reconcileDashboardState({ force = false } = {}) {
+  if (!api || dashboardReconcileInFlight) return false;
+  if (!force && document.visibilityState === 'hidden') return false;
+
+  dashboardReconcileInFlight = true;
+  const previousSignature = buildLeadRefreshSignature(_allLeads);
+
+  try {
+    const leads = await api.getLeads();
+    const normalizedLeads = Array.isArray(leads) ? leads : [];
+
+    if (buildLeadRefreshSignature(normalizedLeads) !== previousSignature) {
+      renderLeads(normalizedLeads);
+    }
+
+    await refreshActionQueue();
+    return true;
+  } catch (err) {
+    console.error('[Dashboard] background reconcile failed:', err);
+    return false;
+  } finally {
+    dashboardReconcileInFlight = false;
+  }
+}
+
+function startDashboardReconcileLoop() {
+  clearInterval(dashboardReconcileTimer);
+  dashboardReconcileTimer = setInterval(() => {
+    void reconcileDashboardState();
+  }, DASHBOARD_RECONCILE_INTERVAL_MS);
 }
 
 function _sortLeads(rows) {
@@ -1831,6 +1886,10 @@ function startRealtime(token) {
     'lead:new': onNewLead,
     'lead:deleted': onRemoteLeadDeleted,
     'lead:status_changed': onRemoteLeadStatusChange,
+  }, {
+    onOpen: () => {
+      void reconcileDashboardState({ force: true });
+    },
   });
 }
 
@@ -3161,9 +3220,20 @@ $('drawer-timeline')?.addEventListener('input', (event) => {
 
   try {
     await bootDashboard();
+    startDashboardReconcileLoop();
     startRealtime(stored);
   } catch (err) {
     console.error('[AutoLogin] bootDashboard failed:', err);
     doLogout('Could not load dashboard data. Please log in again.');
   }
 })();
+
+window.addEventListener('focus', () => {
+  void reconcileDashboardState({ force: true });
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    void reconcileDashboardState({ force: true });
+  }
+});

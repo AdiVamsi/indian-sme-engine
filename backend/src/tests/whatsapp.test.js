@@ -523,6 +523,63 @@ describe('WhatsApp webhook integration', () => {
     );
   });
 
+  it('surfaces provider-side 400 rejections clearly when Meta rejects the outbound WhatsApp payload', async () => {
+    const phone = '+919855555555';
+    testPhones.push(phone);
+
+    global.fetch.mockImplementation(async (url, options = {}) => {
+      if (String(url).includes('graph.facebook.com')) {
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({
+            error: {
+              message: 'Invalid parameter: text body is not allowed for this request.',
+              type: 'OAuthException',
+              code: 100,
+            },
+          }),
+        };
+      }
+
+      return defaultFetchImpl(url, options);
+    });
+
+    const res = await request(app)
+      .post('/api/webhooks/whatsapp')
+      .send(buildWebhookPayload({
+        phone,
+        message: 'Do you provide JEE coaching?',
+        messageId: 'wamid.message.meta-400',
+      }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true, accepted: 1 });
+
+    const lead = await waitForLeadByPhone(ctx.business.id, phone, (candidate) =>
+      candidate.activities.some((activity) =>
+        activity.type === 'AUTOMATION_ALERT'
+        && activity.metadata?.reason === 'WHATSAPP_AUTO_REPLY_FAILED'
+      )
+    );
+
+    expect(lead).toBeTruthy();
+
+    const outboundFailure = lead.activities.find((activity) =>
+      activity.type === 'AUTOMATION_ALERT'
+      && activity.metadata?.reason === 'WHATSAPP_AUTO_REPLY_FAILED'
+    );
+
+    expect(outboundFailure).toBeTruthy();
+    expect(typeof outboundFailure.metadata.replyIntent).toBe('string');
+    expect(outboundFailure.metadata.failureCategory).toBe('META_REQUEST_REJECTED');
+    expect(outboundFailure.metadata.failureTitle).toBe('Meta rejected the WhatsApp reply');
+    expect(outboundFailure.metadata.failureDetail).toContain('Invalid parameter: text body is not allowed for this request.');
+    expect(outboundFailure.metadata.providerStatus).toBe(400);
+    expect(outboundFailure.metadata.providerCode).toBe(100);
+    expect(outboundFailure.metadata.providerMessage).toBe('Invalid parameter: text body is not allowed for this request.');
+  });
+
   it('treats the next WhatsApp message as a continuation of the same academy lead conversation', async () => {
     const phone = '+919800000001';
 

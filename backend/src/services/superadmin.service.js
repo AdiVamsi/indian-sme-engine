@@ -2,6 +2,7 @@
 
 const bcrypt = require('bcrypt');
 const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
+const { LEGACY_SAFE_LEAD_SELECT } = require('../lib/leadCompat');
 const { prisma } = require('../lib/prisma');
 
 /**
@@ -96,11 +97,17 @@ async function getAllLeads() {
   const leads = await prisma.lead.findMany({
     orderBy: { createdAt: 'desc' },
     take: 100,
-    include: {
+    select: {
+      ...LEGACY_SAFE_LEAD_SELECT,
       business: { select: { id: true, name: true } },
       activities: {
         where: { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
         orderBy: { createdAt: 'desc' },
+        select: {
+          type: true,
+          metadata: true,
+          createdAt: true,
+        },
       },
     },
   });
@@ -138,10 +145,19 @@ async function getAutomationLogs() {
   const rows = await prisma.leadActivity.findMany({
     orderBy: { createdAt: 'desc' },
     take: 20,
-    include: {
+    select: {
+      type: true,
+      note: true,
+      createdAt: true,
       lead: {
-        include: {
-          business: true,
+        select: {
+          ...LEGACY_SAFE_LEAD_SELECT,
+          business: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       },
     },

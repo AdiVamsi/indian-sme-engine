@@ -4,6 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const request = require('supertest');
 
 const app = require('../app');
+const { prisma: sharedPrisma } = require('../lib/prisma');
 const { createTestContext } = require('./_testHelpers');
 
 describe('Action Queue API', () => {
@@ -299,6 +300,46 @@ describe('Action Queue API', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.some((item) => item.leadName === 'Activity Snoozed Lead')).toBe(false);
+  });
+
+  it('GET /api/admin/action-queue - falls back when Prisma reports the missing snooze column via P2022 metadata', async () => {
+    const lead = await createQueueLead({
+      businessId: ctx.business.id,
+      name: 'P2022 Fallback Lead',
+      priorityScore: 36,
+    });
+
+    const originalFindMany = sharedPrisma.lead.findMany.bind(sharedPrisma.lead);
+    const spy = jest.spyOn(sharedPrisma.lead, 'findMany');
+    let callCount = 0;
+
+    spy.mockImplementation((args) => {
+      callCount += 1;
+
+      if (callCount === 1) {
+        const err = new Error('The column `main.Lead.snoozedUntil` does not exist in the current database.');
+        err.code = 'P2022';
+        err.meta = {
+          modelName: 'Lead',
+          column: 'main.Lead.snoozedUntil',
+        };
+        throw err;
+      }
+
+      return originalFindMany(args);
+    });
+
+    try {
+      const res = await request(app).get('/api/admin/action-queue').set(auth());
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual(expect.arrayContaining([
+        expect.objectContaining({ leadId: lead.id }),
+      ]));
+      expect(callCount).toBe(2);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('GET /api/admin/action-queue - includes leads whose scheduled callback is due or overdue', async () => {

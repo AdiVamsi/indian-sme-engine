@@ -5,6 +5,7 @@ const { logger } = require('../lib/logger');
 const { normalizePhoneNumber } = require('./messageNormalizer');
 
 const GRAPH_API_BASE_URL = 'https://graph.facebook.com/v18.0';
+const MAX_WHATSAPP_TEXT_LENGTH = 4096;
 const META_TEST_PHONE_NUMBER_ID_TO_SLUG = {
   '1000851389785357': 'sharma-jee-academy-delhi',
 };
@@ -47,6 +48,34 @@ function createWhatsAppSendFailure({
     providerMessage,
     operatorActionRequired,
   };
+}
+
+function prepareWhatsAppTextMessage(message = '') {
+  const normalized = String(message || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+
+  if (!normalized) {
+    const err = new Error('WhatsApp reply message is empty after normalization');
+    err.name = 'WhatsAppSendError';
+    err.failureCategory = 'INVALID_WHATSAPP_MESSAGE';
+    err.operatorTitle = 'WhatsApp reply could not be prepared';
+    err.operatorDetail = 'The generated WhatsApp reply became empty after text normalization, so it was not sent.';
+    err.healthSeverity = 'warning';
+    err.retryable = false;
+    err.operatorActionRequired = 'Review the generated reply text and follow up manually if the lead needs a response now.';
+    throw err;
+  }
+
+  if (normalized.length <= MAX_WHATSAPP_TEXT_LENGTH) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, MAX_WHATSAPP_TEXT_LENGTH - 1).trimEnd()}…`;
 }
 
 function classifyWhatsAppResponseFailure({ status = null, payload = {} } = {}) {
@@ -105,6 +134,24 @@ function classifyWhatsAppResponseFailure({ status = null, payload = {} } = {}) {
       providerType,
       providerMessage,
       operatorActionRequired: 'Retry the reply later and handle urgent leads manually in the meantime.',
+    });
+  }
+
+  if (status === 400) {
+    return createWhatsAppSendFailure({
+      category: 'META_REQUEST_REJECTED',
+      title: 'Meta rejected the WhatsApp reply',
+      detail: providerMessage
+        ? `Meta rejected the outbound WhatsApp reply: ${providerMessage}`
+        : 'Meta rejected the outbound WhatsApp reply payload.',
+      healthSeverity: 'warning',
+      retryable: false,
+      status,
+      providerCode,
+      providerSubcode,
+      providerType,
+      providerMessage,
+      operatorActionRequired: 'Review the Meta error details, fix the outbound payload or WhatsApp configuration, and retry the reply manually if needed.',
     });
   }
 
@@ -343,6 +390,8 @@ async function sendWhatsAppMessage(phone, message) {
     throw new Error('Invalid WhatsApp recipient phone number');
   }
 
+  const preparedMessage = prepareWhatsAppTextMessage(message);
+
   const response = await fetch(`${GRAPH_API_BASE_URL}/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: {
@@ -353,7 +402,7 @@ async function sendWhatsAppMessage(phone, message) {
       messaging_product: 'whatsapp',
       to,
       type: 'text',
-      text: { body: message },
+      text: { body: preparedMessage },
     }),
   });
 
@@ -402,5 +451,6 @@ module.exports = {
   findBusinessForWhatsAppInbound,
   getWhatsAppConfig,
   normalizeWhatsAppSendError,
+  prepareWhatsAppTextMessage,
   sendWhatsAppMessage,
 };

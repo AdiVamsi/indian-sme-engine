@@ -4,7 +4,11 @@ const { prisma } = require('../lib/prisma');
 const { LEGACY_SAFE_LEAD_SELECT } = require('../lib/leadCompat');
 const { logger } = require('../lib/logger');
 const { getOrCreate: getOrCreateAgentConfig } = require('./agentConfig.service');
-const { normalizeWhatsAppSendError, sendWhatsAppMessage } = require('./whatsapp.service');
+const {
+  normalizeWhatsAppSendError,
+  prepareWhatsAppTextMessage,
+  sendWhatsAppMessage,
+} = require('./whatsapp.service');
 const { retrieveBusinessKnowledge } = require('./businessKnowledge.service');
 const { generateGroundedWhatsAppReply } = require('./groundedReply.service');
 const {
@@ -1375,8 +1379,10 @@ async function recordWhatsAppInboundTurn(leadId, {
 }
 
 async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
+  const preparedMessage = prepareWhatsAppTextMessage(replyPlan.message);
+
   try {
-    const replyResult = await sendWhatsAppMessage(phone, replyPlan.message);
+    const replyResult = await sendWhatsAppMessage(phone, preparedMessage);
     const providerMessageId = replyResult?.messages?.[0]?.id || null;
     const sentAt = new Date().toISOString();
 
@@ -1385,6 +1391,7 @@ async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
         leadId,
         phone,
         replyReason: replyPlan.reason,
+        replyLength: preparedMessage.length,
         groundedAnswer: Boolean(replyPlan.groundedAnswer),
         knowledgeSourceIds: replyPlan.knowledgeRetrieval?.sourceIds || [],
         providerMessageId,
@@ -1395,7 +1402,7 @@ async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
     await logWhatsAppActivity(leadId, {
       direction: 'outbound',
       phone,
-      messageText: replyPlan.message,
+      messageText: preparedMessage,
       providerMessageId,
       reason: 'WHATSAPP_AUTO_REPLY',
       replyIntent: replyPlan.reason,
@@ -1425,6 +1432,7 @@ async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
         leadId,
         phone,
         replyReason: replyPlan.reason,
+        replyLength: preparedMessage.length,
         groundedAnswer: Boolean(replyPlan.groundedAnswer),
         failureCategory: failure.category,
         failureTitle: failure.title,
@@ -1441,7 +1449,7 @@ async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
     await logWhatsAppActivity(leadId, {
       direction: 'outbound',
       phone,
-      messageText: replyPlan.message,
+      messageText: preparedMessage,
       reason: 'WHATSAPP_AUTO_REPLY_FAILED',
       replyIntent: replyPlan.reason,
       conversationMode: replyPlan.conversationMode || 'initial',

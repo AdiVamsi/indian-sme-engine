@@ -347,6 +347,7 @@ async function getActionQueueForBusiness(businessId) {
   const buildQueueLeadQuery = (includeSnoozeFilter = true) => ({
     where: {
       businessId,
+      isActivationTest: false,
       status: { in: Array.from(ACTIVE_LEAD_STATUSES) },
       ...(includeSnoozeFilter ? {
         OR: [

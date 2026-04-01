@@ -1005,16 +1005,13 @@ async function runActivationFlow() {
       errorEl.textContent = '';
 
       try {
-        const lead = await api.createLead({ name: '[Test] Lead', phone: '+91 00000 00000', message });
-        const activity = await api.getLeadActivity(lead.id);
+        const result = await api.runActivationProof(message);
+        if (result?.alreadyActivated) {
+          overlay.classList.add('hidden');
+          return resolve();
+        }
 
-        const classified = activity?.activities?.find((a) => a.type === 'AGENT_CLASSIFIED');
-        const prioritized = activity?.activities?.find((a) => a.type === 'AGENT_PRIORITIZED');
-
-        renderActivationResult({
-          ...(classified?.metadata ?? {}),
-          priorityScore: prioritized?.metadata?.priorityScore ?? 0,
-        });
+        renderActivationResult(result);
 
         formPanel.classList.add('hidden');
         resultPanel.classList.remove('hidden');
@@ -1572,10 +1569,34 @@ function renderAppointments(appts) {
 function wireApptRow(row) {
   const sel = row.querySelector('.status-select');
   const del = row.querySelector('.btn-delete');
+  const linkedLeadBtn = row.querySelector('.appt-linked-lead-btn');
   if (sel) sel.addEventListener('change', onApptStatusChange);
   if (del) del.addEventListener('click', (e) =>
     ui.showDeleteModal(e.currentTarget.dataset.id, doDeleteAppt, 'appointment')
   );
+  if (linkedLeadBtn) {
+    linkedLeadBtn.addEventListener('click', () => openLeadDrawer(linkedLeadBtn.dataset.leadId));
+  }
+}
+
+function isUpcomingAppointment(appt) {
+  if (!appt?.scheduledAt) return false;
+  if (!['NEW', 'CONFIRMED'].includes(String(appt.status || '').toUpperCase())) return false;
+  return new Date(appt.scheduledAt).getTime() >= Date.now();
+}
+
+function handleCreatedAppointment(appt, successMessage = 'Appointment created') {
+  if (loadedSections.has('appointments')) {
+    const row = ui.buildApptRow(appt);
+    wireApptRow(row);
+    ui.prependRow('appt-tbody', row);
+  }
+
+  ui.updateStat('totalAppointments', ui.getStat('totalAppointments') + 1);
+  if (isUpcomingAppointment(appt)) {
+    ui.updateStat('upcomingAppointments', ui.getStat('upcomingAppointments') + 1);
+  }
+  ui.showToast(successMessage, 'success');
 }
 
 async function onApptStatusChange(e) {
@@ -1631,11 +1652,7 @@ $('btn-new-appointment').addEventListener('click', () => {
     try {
       if (data.scheduledAt) data.scheduledAt = new Date(data.scheduledAt).toISOString();
       const appt = await api.createAppt(data);
-      const row = ui.buildApptRow(appt);
-      wireApptRow(row);
-      ui.prependRow('appt-tbody', row);
-      ui.updateStat('totalAppointments', ui.getStat('totalAppointments') + 1);
-      ui.showToast('Appointment created', 'success');
+      handleCreatedAppointment(appt, 'Appointment created');
     } catch (err) {
       console.error('[Dashboard] createAppt failed:', err);
       throw err;
@@ -2023,6 +2040,7 @@ const DRAWER_ACTIVITY_MAP = {
   AGENT_CLASSIFIED: { label: 'AI classified the lead', icon: '🏷️', dot: 'dtl-dot--classified' },
   AGENT_PRIORITIZED: { label: 'AI priority updated', icon: '⚡', dot: 'dtl-dot--prioritized' },
   FOLLOW_UP_SCHEDULED: { label: 'Follow-up scheduled', icon: '📅', dot: 'dtl-dot--followup' },
+  APPOINTMENT_CREATED: { label: 'Appointment created', icon: '🗓️', dot: 'dtl-dot--followup' },
   STATUS_CHANGED: { label: 'Lead status updated', icon: '🔄', dot: 'dtl-dot--default' },
   AUTOMATION_DEMO_INTENT: { label: 'Demo interest detected', icon: '🎓', dot: 'dtl-dot--automation' },
   AUTOMATION_ADMISSION_INTENT: { label: 'Admission interest detected', icon: '📘', dot: 'dtl-dot--automation' },
@@ -2096,6 +2114,18 @@ function _getLeadClosureLabel(lead) {
 
 function _resolveDrawerActivityPresentation(act) {
   const meta = act.metadata || {};
+
+  if (act.type === 'APPOINTMENT_CREATED') {
+    return {
+      label: 'Appointment created',
+      icon: '🗓️',
+      dot: 'dtl-dot--operator',
+      category: 'operator',
+      categoryLabel: 'Operator',
+      emphasis: 'high',
+      message: act.message || '',
+    };
+  }
 
   if (act.type === 'FOLLOW_UP_SCHEDULED' && meta.reason === 'OPERATOR_CALLBACK_SCHEDULED') {
     return {
@@ -2242,6 +2272,7 @@ function _resolveDrawerActivityPresentation(act) {
     LEAD_CREATED: { category: 'system', categoryLabel: 'System', emphasis: 'low' },
     AGENT_CLASSIFIED: { category: 'ai', categoryLabel: 'AI Assistant', emphasis: 'low' },
     AGENT_PRIORITIZED: { category: 'ai', categoryLabel: 'AI Assistant', emphasis: 'low' },
+    APPOINTMENT_CREATED: { category: 'operator', categoryLabel: 'Operator', emphasis: 'medium' },
     STATUS_CHANGED: { category: 'system', categoryLabel: 'System', emphasis: 'low' },
     AUTOMATION_DEMO_INTENT: { category: 'system', categoryLabel: 'Workflow', emphasis: 'medium' },
     AUTOMATION_ADMISSION_INTENT: { category: 'system', categoryLabel: 'Workflow', emphasis: 'medium' },
@@ -2506,6 +2537,56 @@ function _leadDrawerActionToast(action) {
     MARK_HANDOFF_COMPLETE: 'Handoff marked complete.',
     ADD_NOTE: 'Operator note saved.',
   }[action] || 'Lead action saved.';
+}
+
+function _buildLeadAppointmentCardHtml({ lead, appointments = [] }) {
+  if (!lead) return '';
+
+  const linkedAppointments = Array.isArray(appointments) ? appointments : [];
+  const itemsHtml = linkedAppointments.length
+    ? linkedAppointments.slice(0, 3).map((appt) => `
+        <div class="dtl-pills">
+          <span class="dtl-pill">${_escDrawer(_fmtDrawerTime(appt.scheduledAt))}</span>
+          <span class="dtl-pill">${_escDrawer(_titleCaseDrawer(appt.status || 'NEW'))}</span>
+          ${appt.notes ? `<span class="dtl-pill">${_escDrawer(String(appt.notes).slice(0, 80))}</span>` : ''}
+        </div>`).join('')
+    : '<p class="drawer-actions-card__hint">No linked appointments yet. Create one directly from this lead to keep the funnel connected.</p>';
+
+  return `
+    <div class="drawer-actions-card">
+      <div class="drawer-actions-card__header">
+        <div>
+          <div class="drawer-actions-card__eyebrow">Lead-linked appointments</div>
+          <div class="drawer-actions-card__title">Keep bookings attached to the lead</div>
+        </div>
+        <span class="drawer-actions-card__badge">${_escDrawer(String(linkedAppointments.length))} linked</span>
+      </div>
+      ${itemsHtml}
+      <div class="drawer-actions-card__buttons">
+        <button
+          type="button"
+          class="drawer-action-btn drawer-action-btn--neutral"
+          data-create-linked-appointment="true"
+        >
+          <span class="drawer-action-btn__label">Create Appointment</span>
+        </button>
+      </div>
+    </div>`;
+}
+
+async function _openLeadAppointmentModal() {
+  if (!activeDrawerLeadId || !activeDrawerData?.lead) return;
+
+  ui.showFormModal(`New Appointment for ${activeDrawerData.lead.name}`, [
+    { name: 'scheduledAt', label: 'Date & Time', type: 'datetime-local', required: true },
+    { name: 'notes', label: 'Notes', type: 'textarea', required: false },
+  ], async (data) => {
+    if (data.scheduledAt) data.scheduledAt = new Date(data.scheduledAt).toISOString();
+    const appointment = await api.createLeadAppt(activeDrawerLeadId, data);
+    handleCreatedAppointment(appointment, 'Appointment linked to lead');
+    const refreshed = await api.getLeadActivity(activeDrawerLeadId);
+    _applyLeadDrawerData(refreshed);
+  });
 }
 
 async function _runLeadDrawerAction(action) {
@@ -2957,6 +3038,7 @@ function _renderDrawerTimeline(data) {
   }
 
   const { lead, activities, whatsappConversation } = data;
+  const appointments = data?.appointments || [];
 
   /* Update header with authoritative data */
   $('drawer-name').textContent = lead?.name ?? '—';
@@ -2980,6 +3062,7 @@ function _renderDrawerTimeline(data) {
 
   if (!activities.length) {
     $('drawer-timeline').innerHTML = `
+      ${_buildLeadAppointmentCardHtml({ lead, appointments })}
       ${_buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })}
       ${_buildLeadClosureCardHtml({ lead, activities, whatsappConversation })}
       ${_buildLeadOperatorNotesHtml({ lead, activities })}
@@ -3001,6 +3084,15 @@ function _renderDrawerTimeline(data) {
     } else if (act.type === 'AGENT_PRIORITIZED') {
       const score = meta?.priorityScore ?? meta?.score;
       if (score != null) metaHtml = `<div class="dtl-pills"><span class="dtl-pill">Score: ${_escDrawer(score)}</span></div>`;
+    } else if (act.type === 'APPOINTMENT_CREATED') {
+      const pills = [];
+      if (meta?.scheduledAt) {
+        pills.push(`<span class="dtl-pill">Scheduled: ${_escDrawer(_fmtDrawerTime(meta.scheduledAt))}</span>`);
+      }
+      if (meta?.appointmentStatus) {
+        pills.push(`<span class="dtl-pill">Status: ${_escDrawer(_titleCaseDrawer(meta.appointmentStatus))}</span>`);
+      }
+      metaHtml = pills.length ? `<div class="dtl-pills">${pills.join('')}</div>` : '';
     } else if (act.type === 'FOLLOW_UP_SCHEDULED' && (meta?.callbackTime || meta?.callbackAt)) {
       const callbackDisplay = _getCallbackDisplayText(meta?.callbackTime, meta?.callbackAt);
       const callbackCue = getCallbackCue({
@@ -3038,6 +3130,7 @@ function _renderDrawerTimeline(data) {
   }).join('');
 
   $('drawer-timeline').innerHTML = `
+    ${_buildLeadAppointmentCardHtml({ lead, appointments })}
     ${_buildLeadDrawerActionsHtml({ lead, activities, whatsappConversation })}
     ${_buildLeadClosureCardHtml({ lead, activities, whatsappConversation })}
     ${_buildLeadOperatorNotesHtml({ lead, activities })}
@@ -3179,6 +3272,12 @@ document.querySelectorAll('.drawer__tab').forEach((tab) => {
 });
 
 $('drawer-timeline')?.addEventListener('click', (event) => {
+  const appointmentButton = event.target.closest('[data-create-linked-appointment]');
+  if (appointmentButton) {
+    _openLeadAppointmentModal();
+    return;
+  }
+
   const cancelButton = event.target.closest('[data-lead-action-cancel]');
   if (cancelButton) {
     activeDrawerSelectedAction = null;

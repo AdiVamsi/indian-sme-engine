@@ -1,11 +1,18 @@
 'use strict';
 
+const crypto = require('crypto');
+
 const { prisma } = require('../lib/prisma');
 const { logger } = require('../lib/logger');
 const { normalizePhoneNumber } = require('./messageNormalizer');
 
 const GRAPH_API_BASE_URL = 'https://graph.facebook.com/v18.0';
 const MAX_WHATSAPP_TEXT_LENGTH = 4096;
+/*
+ * Legacy demo fallbacks for pre-configured local/test showcase environments.
+ * Normal tenant routing should come from Business.whatsAppPhoneNumberId /
+ * Business.whatsAppDisplayPhoneNumber instead.
+ */
 const META_TEST_PHONE_NUMBER_ID_TO_SLUG = {
   '1000851389785357': 'sharma-jee-academy-delhi',
 };
@@ -19,6 +26,93 @@ function getWhatsAppConfig() {
     token: process.env.WHATSAPP_TOKEN,
     phoneNumberId: process.env.WHATSAPP_PHONE_ID,
     verifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
+    appSecret: process.env.WHATSAPP_APP_SECRET || null,
+  };
+}
+
+function getBusinessRoutingDisplayPhone(business = {}) {
+  return normalizePhoneNumber(
+    business.whatsAppDisplayPhoneNumber || business.phone || null
+  );
+}
+
+function toSelectedBusiness(business = {}) {
+  return {
+    id: business.id,
+    name: business.name,
+    slug: business.slug,
+    phone: business.phone || null,
+    industry: business.industry || null,
+    whatsAppPhoneNumberId: business.whatsAppPhoneNumberId || null,
+    whatsAppDisplayPhoneNumber: business.whatsAppDisplayPhoneNumber || null,
+  };
+}
+
+async function getBusinessWhatsAppConfig(businessId) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      phone: true,
+      industry: true,
+      whatsAppPhoneNumberId: true,
+      whatsAppDisplayPhoneNumber: true,
+    },
+  });
+
+  if (!business) return null;
+
+  const globalConfig = getWhatsAppConfig();
+  return {
+    business: toSelectedBusiness(business),
+    outbound: {
+      token: globalConfig.token || null,
+      phoneNumberId: business.whatsAppPhoneNumberId || globalConfig.phoneNumberId || null,
+      senderSelection: business.whatsAppPhoneNumberId
+        ? 'business_phone_number_id'
+        : 'global_phone_number_id',
+    },
+    inboundRouting: {
+      phoneNumberId: business.whatsAppPhoneNumberId || null,
+      displayPhoneNumber: getBusinessRoutingDisplayPhone(business),
+    },
+  };
+}
+
+function verifyWhatsAppSignature(rawBody, signatureHeader, appSecret) {
+  if (!appSecret) {
+    return { checked: false, valid: true, reason: 'app_secret_not_configured' };
+  }
+
+  if (!Buffer.isBuffer(rawBody) || rawBody.length === 0) {
+    return { checked: true, valid: false, reason: 'missing_raw_body' };
+  }
+
+  if (typeof signatureHeader !== 'string' || !signatureHeader.startsWith('sha256=')) {
+    return { checked: true, valid: false, reason: 'missing_signature_header' };
+  }
+
+  const providedDigest = signatureHeader.slice('sha256='.length).trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(providedDigest)) {
+    return { checked: true, valid: false, reason: 'malformed_signature' };
+  }
+
+  const expectedDigest = crypto
+    .createHmac('sha256', appSecret)
+    .update(rawBody)
+    .digest('hex');
+
+  const providedBuffer = Buffer.from(providedDigest, 'hex');
+  const expectedBuffer = Buffer.from(expectedDigest, 'hex');
+  const valid = providedBuffer.length === expectedBuffer.length
+    && crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+
+  return {
+    checked: true,
+    valid,
+    reason: valid ? 'ok' : 'signature_mismatch',
   };
 }
 
@@ -279,6 +373,112 @@ function extractIncomingMessages(payload = {}) {
 async function findBusinessForWhatsAppInbound({ displayPhoneNumber, phoneNumberId } = {}, log = logger) {
   const normalizedDestination = normalizePhoneNumber(displayPhoneNumber);
 
+  if (phoneNumberId) {
+    const businessesByPhoneNumberId = await prisma.business.findMany({
+      where: { whatsAppPhoneNumberId: phoneNumberId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        phone: true,
+        industry: true,
+        whatsAppPhoneNumberId: true,
+        whatsAppDisplayPhoneNumber: true,
+      },
+    });
+
+    if (businessesByPhoneNumberId.length === 1) {
+      const matchedBusiness = toSelectedBusiness(businessesByPhoneNumberId[0]);
+      log.info(
+        {
+          phoneNumberId,
+          slug: matchedBusiness.slug,
+          businessId: matchedBusiness.id,
+        },
+        'WhatsApp tenant matched by configured business phoneNumberId'
+      );
+      return matchedBusiness;
+    }
+
+    if (businessesByPhoneNumberId.length > 1) {
+      log.warn(
+        { phoneNumberId, businessIds: businessesByPhoneNumberId.map((business) => business.id) },
+        'WhatsApp tenant resolution failed: multiple businesses share the same configured phoneNumberId'
+      );
+      return null;
+    }
+  }
+
+  const businesses = await prisma.business.findMany({
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      phone: true,
+      industry: true,
+      whatsAppPhoneNumberId: true,
+      whatsAppDisplayPhoneNumber: true,
+    },
+  });
+
+  if (normalizedDestination) {
+    const explicitDisplayMatches = businesses.filter((business) =>
+      normalizePhoneNumber(business.whatsAppDisplayPhoneNumber) === normalizedDestination
+    );
+    if (explicitDisplayMatches.length === 1) {
+      const matchedBusiness = toSelectedBusiness(explicitDisplayMatches[0]);
+      log.info(
+        {
+          displayPhoneNumber: normalizedDestination,
+          slug: matchedBusiness.slug,
+          businessId: matchedBusiness.id,
+        },
+        'WhatsApp tenant matched by configured business display phone'
+      );
+      return matchedBusiness;
+    }
+
+    if (explicitDisplayMatches.length > 1) {
+      log.warn(
+        {
+          displayPhoneNumber: normalizedDestination,
+          businessIds: explicitDisplayMatches.map((business) => business.id),
+        },
+        'WhatsApp tenant resolution failed: multiple businesses share the same configured display phone'
+      );
+      return null;
+    }
+
+    const fallbackPhoneMatches = businesses.filter((business) =>
+      normalizePhoneNumber(business.phone) === normalizedDestination
+    );
+    if (fallbackPhoneMatches.length === 1) {
+      const matchedBusiness = toSelectedBusiness(fallbackPhoneMatches[0]);
+      log.info(
+        {
+          displayPhoneNumber: normalizedDestination,
+          slug: matchedBusiness.slug,
+          businessId: matchedBusiness.id,
+        },
+        'WhatsApp tenant matched by fallback business phone lookup'
+      );
+      return matchedBusiness;
+    }
+
+    if (fallbackPhoneMatches.length > 1) {
+      log.warn(
+        {
+          displayPhoneNumber: normalizedDestination,
+          businessIds: fallbackPhoneMatches.map((business) => business.id),
+        },
+        'WhatsApp tenant resolution failed: multiple businesses share the same fallback business phone'
+      );
+      return null;
+    }
+  } else {
+    log.warn({ displayPhoneNumber, phoneNumberId }, 'WhatsApp tenant resolution did not receive a usable destination phone');
+  }
+
   const mappedSlugByPhoneNumberId = phoneNumberId ? META_TEST_PHONE_NUMBER_ID_TO_SLUG[phoneNumberId] : null;
   if (mappedSlugByPhoneNumberId) {
     const mappedBusiness = await prisma.business.findUnique({
@@ -289,30 +489,31 @@ async function findBusinessForWhatsAppInbound({ displayPhoneNumber, phoneNumberI
         slug: true,
         phone: true,
         industry: true,
+        whatsAppPhoneNumberId: true,
+        whatsAppDisplayPhoneNumber: true,
       },
     });
 
     if (mappedBusiness) {
+      const selectedBusiness = toSelectedBusiness(mappedBusiness);
       log.info(
         {
           phoneNumberId,
-          slug: mappedBusiness.slug,
-          businessId: mappedBusiness.id,
+          slug: selectedBusiness.slug,
+          businessId: selectedBusiness.id,
         },
-        'WhatsApp tenant matched by phoneNumberId'
+        'WhatsApp tenant matched by legacy test phoneNumberId mapping'
       );
-      return mappedBusiness;
+      return selectedBusiness;
     }
 
     log.warn(
       { phoneNumberId, slug: mappedSlugByPhoneNumberId },
-      'WhatsApp test-mode phoneNumberId matched a slug, but the business is missing'
+      'WhatsApp legacy phoneNumberId mapping matched a slug, but the business is missing'
     );
   }
 
-  const mappedSlugByDisplayPhone = normalizedDestination
-    ? META_TEST_DISPLAY_PHONE_TO_SLUG[normalizedDestination]
-    : null;
+  const mappedSlugByDisplayPhone = META_TEST_DISPLAY_PHONE_TO_SLUG[normalizedDestination];
   if (mappedSlugByDisplayPhone) {
     const mappedBusiness = await prisma.business.findUnique({
       where: { slug: mappedSlugByDisplayPhone },
@@ -322,53 +523,28 @@ async function findBusinessForWhatsAppInbound({ displayPhoneNumber, phoneNumberI
         slug: true,
         phone: true,
         industry: true,
+        whatsAppPhoneNumberId: true,
+        whatsAppDisplayPhoneNumber: true,
       },
     });
 
     if (mappedBusiness) {
+      const selectedBusiness = toSelectedBusiness(mappedBusiness);
       log.info(
         {
           displayPhoneNumber: normalizedDestination,
-          slug: mappedBusiness.slug,
-          businessId: mappedBusiness.id,
+          slug: selectedBusiness.slug,
+          businessId: selectedBusiness.id,
         },
-        'WhatsApp tenant matched by display phone'
+        'WhatsApp tenant matched by legacy test display phone mapping'
       );
-      return mappedBusiness;
+      return selectedBusiness;
     }
 
     log.warn(
       { displayPhoneNumber: normalizedDestination, slug: mappedSlugByDisplayPhone },
-      'WhatsApp test-mode display phone matched a slug, but the business is missing'
+      'WhatsApp legacy display phone mapping matched a slug, but the business is missing'
     );
-  }
-
-  if (!normalizedDestination) {
-    log.warn({ displayPhoneNumber, phoneNumberId }, 'WhatsApp tenant resolution failed: no usable destination phone');
-    return null;
-  }
-
-  const businesses = await prisma.business.findMany({
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      phone: true,
-      industry: true,
-    },
-  });
-
-  const matchedBusiness = businesses.find((business) => normalizePhoneNumber(business.phone) === normalizedDestination) || null;
-  if (matchedBusiness) {
-    log.info(
-      {
-        displayPhoneNumber: normalizedDestination,
-        slug: matchedBusiness.slug,
-        businessId: matchedBusiness.id,
-      },
-      'WhatsApp tenant matched by existing business phone lookup'
-    );
-    return matchedBusiness;
   }
 
   log.warn(
@@ -378,8 +554,13 @@ async function findBusinessForWhatsAppInbound({ displayPhoneNumber, phoneNumberI
   return null;
 }
 
-async function sendWhatsAppMessage(phone, message) {
-  const { token, phoneNumberId } = getWhatsAppConfig();
+async function sendWhatsAppMessage({ businessId = null, phone, message }) {
+  const businessConfig = businessId ? await getBusinessWhatsAppConfig(businessId) : null;
+  const { token, phoneNumberId, senderSelection } = businessConfig?.outbound || {
+    token: getWhatsAppConfig().token,
+    phoneNumberId: getWhatsAppConfig().phoneNumberId,
+    senderSelection: 'global_phone_number_id',
+  };
 
   if (!token || !phoneNumberId) {
     throw new Error('WhatsApp API credentials are not configured');
@@ -442,15 +623,21 @@ async function sendWhatsAppMessage(phone, message) {
     throw err;
   }
 
-  return payload;
+  return {
+    payload,
+    phoneNumberId,
+    senderSelection,
+  };
 }
 
 module.exports = {
   classifyWhatsAppResponseFailure,
   extractIncomingMessages,
   findBusinessForWhatsAppInbound,
+  getBusinessWhatsAppConfig,
   getWhatsAppConfig,
   normalizeWhatsAppSendError,
   prepareWhatsAppTextMessage,
   sendWhatsAppMessage,
+  verifyWhatsAppSignature,
 };

@@ -146,12 +146,14 @@ const checkSlug = async (req, res) => {
 
 /* ── POST /api/superadmin/businesses ────────────────────────────────────────
    Onboards a new tenant: creates Business + owner User + default AgentConfig.
-   Body: { name, slug?, industry?, phone?, city?, timezone?, currency?,
+   Body: { name, slug?, industry?, phone?, whatsAppPhoneNumberId?, whatsAppDisplayPhoneNumber?,
+           city?, timezone?, currency?,
            ownerName, ownerEmail, ownerPassword, followUpMinutes?, autoReplyEnabled? }
 */
 const createBusiness = async (req, res) => {
   const {
     name, slug, industry, phone, city, timezone, currency,
+    whatsAppPhoneNumberId, whatsAppDisplayPhoneNumber,
     ownerName, ownerEmail, ownerPassword,
     followUpMinutes, autoReplyEnabled,
   } = req.body ?? {};
@@ -172,6 +174,8 @@ const createBusiness = async (req, res) => {
       slug:             slug?.trim()      || undefined,
       industry:         industry?.trim()  || undefined,
       phone:            phone?.trim()     || undefined,
+      whatsAppPhoneNumberId: whatsAppPhoneNumberId?.trim() || undefined,
+      whatsAppDisplayPhoneNumber: whatsAppDisplayPhoneNumber?.trim() || undefined,
       city:             city?.trim()      || undefined,
       timezone:         timezone?.trim()  || undefined,
       currency:         currency?.trim()  || undefined,

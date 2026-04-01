@@ -4,18 +4,45 @@ const { z } = require('zod');
 
 const {
   createAppointment,
+  createAppointmentForLead,
   findAppointmentsByBusiness,
   updateAppointmentStatus,
   deleteAppointment,
+  isLeadNotFoundError,
+  isInvalidScheduledAtError,
 } = require('../services/appointments.service');
 
 const appointmentStatusEnum = z.enum(['NEW', 'CONFIRMED', 'CANCELLED', 'COMPLETED']);
 
 const createSchema = z.object({
-  customerName: z.string().min(1),
-  phone: z.string().min(1),
+  leadId: z.string().min(1).optional(),
+  customerName: z.string().optional(),
+  phone: z.string().optional(),
   scheduledAt: z.string().min(1),
   notes: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (!data.leadId && !String(data.customerName || '').trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['customerName'],
+      message: 'Customer name is required.',
+    });
+  }
+
+  if (!data.leadId && !String(data.phone || '').trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['phone'],
+      message: 'Phone is required.',
+    });
+  }
+});
+
+const createForLeadSchema = z.object({
+  scheduledAt: z.string().min(1),
+  notes: z.string().optional(),
+  customerName: z.string().optional(),
+  phone: z.string().optional(),
 });
 
 const statusSchema = z.object({
@@ -32,6 +59,33 @@ const create = async (req, res) => {
     const appointment = await createAppointment(req.user.businessId, result.data);
     return res.status(201).json(appointment);
   } catch (err) {
+    if (isLeadNotFoundError(err)) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+    if (isInvalidScheduledAtError(err)) {
+      return res.status(400).json({ error: 'Invalid appointment date and time' });
+    }
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+const createForLead = async (req, res) => {
+  const result = createForLeadSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({ error: result.error.flatten() });
+  }
+
+  try {
+    const appointment = await createAppointmentForLead(req.user.businessId, req.params.id, result.data);
+    return res.status(201).json(appointment);
+  } catch (err) {
+    if (isLeadNotFoundError(err)) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+    if (isInvalidScheduledAtError(err)) {
+      return res.status(400).json({ error: 'Invalid appointment date and time' });
+    }
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
   }
@@ -87,4 +141,4 @@ const remove = async (req, res) => {
   }
 };
 
-module.exports = { create, list, updateStatus, remove };
+module.exports = { create, createForLead, list, updateStatus, remove };

@@ -347,8 +347,18 @@ export function DashUI(config) {
     tr.dataset.apptId = appt.id;
     tr.classList.add('row-enter');
 
+    const linkedLeadHtml = appt.lead
+      ? `<div class="lead-row__sub">
+          Linked lead:
+          <button type="button" class="lead-name-btn appt-linked-lead-btn" data-lead-id="${esc(appt.lead.id)}">${esc(appt.lead.name)}</button>
+        </div>`
+      : '';
+
     tr.innerHTML = `
-      <td>${esc(appt.customerName)}</td>
+      <td>
+        <div class="lead-row__primary">${esc(appt.customerName)}</div>
+        ${linkedLeadHtml}
+      </td>
       <td>${esc(appt.phone)}</td>
       <td>${fmtDate(appt.scheduledAt)}</td>
       <td>${buildStatusSelect(appt.id, appt.status, config.appointmentStatuses)}</td>

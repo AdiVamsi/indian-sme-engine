@@ -11,6 +11,7 @@ const {
   extractIncomingMessages,
   findBusinessForWhatsAppInbound,
   getWhatsAppConfig,
+  verifyWhatsAppSignature,
 } = require('../services/whatsapp.service');
 
 const router = Router();
@@ -186,6 +187,21 @@ router.get('/', (req, res) => {
 router.post('/', async (req, res, next) => {
   try {
     const log = req.log || logger;
+    const { appSecret } = getWhatsAppConfig();
+    const signatureHeader = req.get('x-hub-signature-256');
+    const signatureCheck = verifyWhatsAppSignature(req.rawBody, signatureHeader, appSecret);
+
+    if (signatureCheck.checked && !signatureCheck.valid) {
+      log.warn(
+        {
+          reason: signatureCheck.reason,
+          hasSignatureHeader: Boolean(signatureHeader),
+        },
+        'WhatsApp webhook signature verification failed'
+      );
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+
     const incomingMessages = extractIncomingMessages(req.body);
     const statusCount = countWebhookStatuses(req.body);
 
@@ -195,6 +211,7 @@ router.post('/', async (req, res, next) => {
         object: req.body?.object || null,
         messageCount: incomingMessages.length,
         statusCount,
+        signatureVerified: signatureCheck.checked,
       },
       'Inbound WhatsApp webhook POST received'
     );
@@ -203,10 +220,6 @@ router.post('/', async (req, res, next) => {
       log.info({ statusCount }, 'WhatsApp webhook accepted without inbound messages');
       return res.status(200).json({ received: true, processed: 0 });
     }
-
-    /* TODO: add Meta X-Hub-Signature-256 verification for POST requests. GET verification
-     * is correct today, but production POST authenticity should be validated via signature,
-     * not a custom shared header. */
     void processIncomingMessages(incomingMessages, log);
 
     return res.status(200).json({ received: true, accepted: incomingMessages.length });

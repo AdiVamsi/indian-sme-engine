@@ -318,6 +318,42 @@ describe('Admin API', () => {
     expect(Array.isArray(res.body)).toBe(true);
   });
 
+  it('GET /api/admin/appointments - includes linked lead details when an appointment is tied to a lead', async () => {
+    const lead = await prisma.lead.create({
+      data: {
+        businessId: ctx.business.id,
+        name: 'Appointment Linked Lead',
+        phone: '+91 99999 70111',
+      },
+    });
+
+    const appointment = await prisma.appointment.create({
+      data: {
+        businessId: ctx.business.id,
+        leadId: lead.id,
+        customerName: lead.name,
+        phone: lead.phone,
+        scheduledAt: new Date('2026-04-05T11:00:00.000Z'),
+      },
+    });
+
+    const res = await request(app).get('/api/admin/appointments').set(auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: appointment.id,
+          leadId: lead.id,
+          lead: expect.objectContaining({
+            id: lead.id,
+            name: 'Appointment Linked Lead',
+          }),
+        }),
+      ])
+    );
+  });
+
   /* ── Services ── */
   it('GET /api/admin/services - returns an array', async () => {
     const res = await request(app).get('/api/admin/services').set(auth());

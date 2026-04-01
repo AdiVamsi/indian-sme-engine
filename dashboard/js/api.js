@@ -101,10 +101,12 @@ export function DashAPI(token, { onUnauthorized } = {}) {
 
     /* ── Activation (first-run setup) ── */
     activate:     ()     => req('POST', '/api/admin/activate'),
+    runActivationProof: (message) => req('POST', '/api/admin/activate/proof', { message }),
     activateSkip: ()     => req('POST', '/api/admin/activate/skip'),
 
     /* ── Lead mutations ── */
     createLead:       (data)       => req('POST',   '/api/leads', data),
+    createLeadAppt:   (id, data)   => req('POST',   `/api/leads/${id}/appointments`, data),
     runLeadAction:    (id, data)   => req('POST',   `/api/leads/${id}/actions`, data),
     updateLeadStatus: (id, status) => req('PATCH',  `/api/leads/${id}/status`, { status }),
     deleteLead:       (id)         => req('DELETE', `/api/leads/${id}`),

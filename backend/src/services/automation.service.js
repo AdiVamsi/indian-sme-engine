@@ -34,6 +34,7 @@ const STRUCTURED_ACADEMY_REPLY_REASONS = new Set([
 ]);
 const DIRECT_BUSINESS_IDENTITY_PATTERN = /\b(is this|is it|are you|what is this(?: business)?|who are you|which business|which institute|what do you do)\b/;
 const DIRECT_BUSINESS_OFFERING_PATTERN = /\b(do you provide|do you offer|do you have|is this for|is it for|do you conduct)\b/;
+const INDUSTRY_MISMATCH_CONTEXT_PATTERN = /\b(fee|fees|price|cost|charges|details?|information|info|about|tell me|something)\b/;
 const CLASS_CLARIFICATION_PATTERN = /\b(?:class|std|standard|grade)\s*(9|10|11|12)\b|\b(9th|10th|11th|12th|ix|x|xi|xii)\b/;
 const INDUSTRY_ALIASES = {
   academy: ['academy', 'coaching institute', 'coaching', 'institute', 'jee coaching', 'tuition'],
@@ -187,11 +188,16 @@ function buildDirectBusinessClarificationPlan({
   const normalizedMessage = normalizeComparableText(message);
   if (!normalizedMessage) return null;
 
+  const mentionedIndustry = findMentionedIndustry(message);
   const asksIdentity = DIRECT_BUSINESS_IDENTITY_PATTERN.test(normalizedMessage);
   const asksOffering = DIRECT_BUSINESS_OFFERING_PATTERN.test(normalizedMessage);
-  if (!asksIdentity && !asksOffering) return null;
+  const asksIndustryMismatchClarification = Boolean(
+    mentionedIndustry
+    && mentionedIndustry.industry !== businessIndustry
+    && INDUSTRY_MISMATCH_CONTEXT_PATTERN.test(normalizedMessage)
+  );
+  if (!asksIdentity && !asksOffering && !asksIndustryMismatchClarification) return null;
 
-  const mentionedIndustry = findMentionedIndustry(message);
   const matchedOffering = findMatchingOffering(message, { replyConfig, businessIndustry });
   const asksClassSupport = asksOffering && CLASS_CLARIFICATION_PATTERN.test(normalizedMessage);
   const replyParts = [];
@@ -393,6 +399,10 @@ function selectPreferredAcademyReplyPlan({
 } = {}) {
   if (businessIndustry !== 'academy') {
     return groundedReplyPlan || structuredReplyPlan;
+  }
+
+  if (structuredReplyPlan?.reason === 'DIRECT_BUSINESS_CLARIFICATION') {
+    return structuredReplyPlan;
   }
 
   if (!groundedReplyPlan) {
@@ -1286,6 +1296,7 @@ function buildFailedConversationState(replyPlan, failure) {
 async function logWhatsAppActivity(leadId, {
   direction,
   phone = null,
+  phoneNumberId = null,
   messageText = '',
   messageId = null,
   providerMessageId = null,
@@ -1317,6 +1328,7 @@ async function logWhatsAppActivity(leadId, {
     direction,
     ...(direction === 'outbound' ? { deliveryStatus } : {}),
     ...(phone ? { phone } : {}),
+    ...(phoneNumberId ? { phoneNumberId } : {}),
     ...(messageText ? { messageText } : {}),
     ...(messageId ? { messageId } : {}),
     ...(providerMessageId ? { providerMessageId } : {}),
@@ -1378,12 +1390,70 @@ async function recordWhatsAppInboundTurn(leadId, {
   });
 }
 
-async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
+function buildManualWhatsAppHandoffState(replyPlan = {}) {
+  const baseState = replyPlan?.conversationState || {};
+
+  return {
+    version: baseState.version || 1,
+    channel: 'whatsapp',
+    flowIntent: baseState.flowIntent || replyPlan.reason || null,
+    stage: 'HANDOFF_QUEUED',
+    pendingField: null,
+    collected: {
+      ...(baseState.collected || {}),
+    },
+    status: 'handoff',
+  };
+}
+
+async function logSkippedWhatsAppReply(leadId, {
+  phone = null,
+  replyPlan,
+} = {}) {
+  const skippedAt = new Date().toISOString();
+  const conversationState = buildManualWhatsAppHandoffState(replyPlan);
+
+  await logWhatsAppActivity(leadId, {
+    direction: 'system',
+    phone,
+    reason: 'WHATSAPP_AUTO_REPLY_DISABLED',
+    replyIntent: replyPlan.reason,
+    conversationMode: replyPlan.conversationMode || 'initial',
+    conversationState,
+    operatorActionRequired: 'Automated WhatsApp replies are disabled for this business. Follow up manually from the queue.',
+    activityMessage: 'WhatsApp auto-reply skipped because automated WhatsApp replies are disabled',
+    timestamp: skippedAt,
+  });
+
+  return {
+    sent: false,
+    skipped: true,
+    providerMessageId: null,
+    failure: null,
+    conversationState,
+    timestamp: skippedAt,
+  };
+}
+
+async function sendAndLogWhatsAppReply(leadId, {
+  businessId = null,
+  phone = null,
+  replyPlan,
+  autoReplyEnabled = true,
+} = {}) {
+  if (!autoReplyEnabled) {
+    return logSkippedWhatsAppReply(leadId, { phone, replyPlan });
+  }
+
   const preparedMessage = prepareWhatsAppTextMessage(replyPlan.message);
 
   try {
-    const replyResult = await sendWhatsAppMessage(phone, preparedMessage);
-    const providerMessageId = replyResult?.messages?.[0]?.id || null;
+    const replyResult = await sendWhatsAppMessage({
+      businessId,
+      phone,
+      message: preparedMessage,
+    });
+    const providerMessageId = replyResult?.payload?.messages?.[0]?.id || null;
     const sentAt = new Date().toISOString();
 
     logger.info(
@@ -1402,6 +1472,7 @@ async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
     await logWhatsAppActivity(leadId, {
       direction: 'outbound',
       phone,
+      phoneNumberId: replyResult.phoneNumberId || null,
       messageText: preparedMessage,
       providerMessageId,
       reason: 'WHATSAPP_AUTO_REPLY',
@@ -1416,6 +1487,7 @@ async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
 
     return {
       sent: true,
+      skipped: false,
       providerMessageId,
       failure: null,
       conversationState: replyPlan.conversationState || null,
@@ -1473,6 +1545,7 @@ async function sendAndLogWhatsAppReply(leadId, phone, replyPlan) {
 
     return {
       sent: false,
+      skipped: false,
       providerMessageId: null,
       failure,
       conversationState: failedConversationState,
@@ -1516,6 +1589,7 @@ async function continueWhatsAppConversation(leadId, {
     businessIndustry: lead.business.industry || 'other',
     agentConfig,
   });
+  const autoReplyEnabled = Boolean(agentConfig?.autoReplyEnabled);
   const structuredReplyPlan = buildAcademyContinuationPlan({
     businessName: lead.business.name,
     businessIndustry: lead.business.industry || 'other',
@@ -1552,12 +1626,18 @@ async function continueWhatsAppConversation(leadId, {
     };
   }
 
-  const sendResult = await sendAndLogWhatsAppReply(leadId, phone, replyPlan);
+  const sendResult = await sendAndLogWhatsAppReply(leadId, {
+    businessId: lead.business.id,
+    phone,
+    replyPlan,
+    autoReplyEnabled,
+  });
   return {
     leadId,
     continued: true,
     replySent: sendResult.sent,
-    replyFailed: !sendResult.sent,
+    replySkipped: Boolean(sendResult.skipped),
+    replyFailed: !sendResult.sent && !sendResult.skipped,
     providerMessageId: sendResult.providerMessageId,
     conversationState: sendResult.conversationState,
     replyReason: replyPlan.reason,
@@ -1610,6 +1690,7 @@ async function runLeadAutomations(leadId, {
     structuredReplyPlan,
     groundedReplyPlan,
   });
+  const autoReplyEnabled = Boolean(resolvedAgentConfig?.autoReplyEnabled);
   const shouldSendWhatsAppReply = source === 'whatsapp'
     && Boolean(phone)
     && Boolean(replyPlan?.message);
@@ -1662,22 +1743,30 @@ async function runLeadAutomations(leadId, {
   }
 
   let whatsappReplySent = false;
+  let whatsappReplySkipped = false;
   let whatsappReplyFailed = false;
   let whatsappFailure = null;
   let whatsappFailureAt = null;
   let whatsappConversationState = replyPlan?.conversationState || null;
   if (shouldSendWhatsAppReply) {
-    const sendResult = await sendAndLogWhatsAppReply(leadId, phone, replyPlan);
+    const sendResult = await sendAndLogWhatsAppReply(leadId, {
+      businessId,
+      phone,
+      replyPlan,
+      autoReplyEnabled,
+    });
     whatsappReplySent = sendResult.sent;
-    whatsappReplyFailed = !sendResult.sent;
+    whatsappReplySkipped = Boolean(sendResult.skipped);
+    whatsappReplyFailed = !sendResult.sent && !sendResult.skipped;
     whatsappFailure = sendResult.failure;
-    whatsappFailureAt = sendResult.sent ? null : sendResult.timestamp || null;
+    whatsappFailureAt = sendResult.sent || sendResult.skipped ? null : sendResult.timestamp || null;
     whatsappConversationState = sendResult.conversationState;
   }
 
   return {
-    triggered: creates.length + ((whatsappReplySent || whatsappReplyFailed) ? 1 : 0),
+    triggered: creates.length + ((whatsappReplySent || whatsappReplyFailed || whatsappReplySkipped) ? 1 : 0),
     whatsappReplySent,
+    whatsappReplySkipped,
     whatsappReplyFailed,
     whatsappFailure,
     whatsappFailureAt,

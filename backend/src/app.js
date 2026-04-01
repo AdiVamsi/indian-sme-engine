@@ -14,6 +14,7 @@ const servicesRoutes = require('./routes/services.routes');
 const testimonialsRoutes = require('./routes/testimonials.routes');
 const appointmentsRoutes = require('./routes/appointments.routes');
 const publicRoutes = require('./routes/public.routes');
+const siteRoutes = require('./routes/site.routes');
 const whatsappRoutes = require('./routes/whatsapp.routes');
 const adminRoutes = require('./routes/admin.routes');
 const agentRoutes = require('./routes/agentConfig.routes');
@@ -52,7 +53,14 @@ app.use(cors({
 app.use(compression());
 app.use(attachRequestId);
 app.use(logRequests);
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({
+  limit: '100kb',
+  verify: (req, _res, buf) => {
+    if (req.originalUrl?.startsWith('/api/webhooks/whatsapp')) {
+      req.rawBody = Buffer.from(buf);
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 
 /* ── Health ── */
@@ -82,10 +90,10 @@ app.use('/api/superadmin', superadminRoutes);
 app.use('/admin',     express.static(path.join(__dirname, '../../admin')));
 app.use('/dashboard', express.static(path.join(__dirname, '../../dashboard')));
 
-/* ── Full business website (Sharma JEE Academy reference implementation) ──
-   Clean canonical URL: /site  e.g. http://localhost:3000/site
-   The same assets also remain accessible under /form/* (see below) for
-   backward-compatibility with any saved links. */
+/* ── Full business website ──────────────────────────────────────────────
+   Static fallback remains at /site, and tenant-specific sites resolve via
+   /site/:slug before falling through to static assets such as /site/style.css. */
+app.use('/site', siteRoutes);
 app.use('/site', express.static(path.join(__dirname, '../../frontend')));
 
 /* ── Public lead form (slug-aware, server-side rendered) ── */

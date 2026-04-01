@@ -20,6 +20,8 @@ const SHARMA_SHOWCASE = {
   name: 'Sharma JEE Academy',
   slug: 'sharma-jee-academy-delhi',
   phone: '+91 98765 43210',
+  whatsAppPhoneNumberId: '1000851389785357',
+  whatsAppDisplayPhoneNumber: '15556451322',
   email: 'admin@sharmajeeacademy.in',
   address: 'Connaught Place, New Delhi',
   industry: 'academy',
@@ -576,6 +578,8 @@ async function main() {
         name: SHARMA_SHOWCASE.name,
         slug: SHARMA_SHOWCASE.slug,
         phone: SHARMA_SHOWCASE.phone,
+        whatsAppPhoneNumberId: SHARMA_SHOWCASE.whatsAppPhoneNumberId,
+        whatsAppDisplayPhoneNumber: SHARMA_SHOWCASE.whatsAppDisplayPhoneNumber,
         email: SHARMA_SHOWCASE.email,
         address: SHARMA_SHOWCASE.address,
         industry: SHARMA_SHOWCASE.industry,
@@ -592,6 +596,8 @@ async function main() {
         name: SHARMA_SHOWCASE.name,
         slug: SHARMA_SHOWCASE.slug,
         phone: SHARMA_SHOWCASE.phone,
+        whatsAppPhoneNumberId: SHARMA_SHOWCASE.whatsAppPhoneNumberId,
+        whatsAppDisplayPhoneNumber: SHARMA_SHOWCASE.whatsAppDisplayPhoneNumber,
         email: SHARMA_SHOWCASE.email,
         address: SHARMA_SHOWCASE.address,
         industry: SHARMA_SHOWCASE.industry,
@@ -607,6 +613,8 @@ async function main() {
         name: SHARMA_SHOWCASE.name,
         slug: SHARMA_SHOWCASE.slug,
         phone: SHARMA_SHOWCASE.phone,
+        whatsAppPhoneNumberId: SHARMA_SHOWCASE.whatsAppPhoneNumberId,
+        whatsAppDisplayPhoneNumber: SHARMA_SHOWCASE.whatsAppDisplayPhoneNumber,
         email: SHARMA_SHOWCASE.email,
         address: SHARMA_SHOWCASE.address,
         industry: SHARMA_SHOWCASE.industry,
@@ -636,8 +644,8 @@ async function main() {
   /* Seed AgentConfig for primary business so expanded preset is active from first login */
   await prisma.agentConfig.upsert({
     where:  { businessId: primaryBiz.id },
-    update: getSharmaShowcaseAgentConfig(),
-    create: { businessId: primaryBiz.id, ...getSharmaShowcaseAgentConfig() },
+    update: { ...getSharmaShowcaseAgentConfig(), autoReplyEnabled: true },
+    create: { businessId: primaryBiz.id, ...getSharmaShowcaseAgentConfig(), autoReplyEnabled: true },
   });
 
   const aarohanBusiness = await prisma.business.upsert({
@@ -690,8 +698,8 @@ async function main() {
   const aarohanAgentConfig = await getAarohanShowcaseAgentConfig();
   await prisma.agentConfig.upsert({
     where: { businessId: aarohanBusiness.id },
-    update: aarohanAgentConfig,
-    create: { businessId: aarohanBusiness.id, ...aarohanAgentConfig },
+    update: { ...aarohanAgentConfig, autoReplyEnabled: true },
+    create: { businessId: aarohanBusiness.id, ...aarohanAgentConfig, autoReplyEnabled: true },
   });
 
   const lexiconBusiness = await prisma.business.upsert({
@@ -744,8 +752,8 @@ async function main() {
   const lexiconAgentConfig = await getLexiconShowcaseAgentConfig();
   await prisma.agentConfig.upsert({
     where: { businessId: lexiconBusiness.id },
-    update: lexiconAgentConfig,
-    create: { businessId: lexiconBusiness.id, ...lexiconAgentConfig },
+    update: { ...lexiconAgentConfig, autoReplyEnabled: true },
+    create: { businessId: lexiconBusiness.id, ...lexiconAgentConfig, autoReplyEnabled: true },
   });
 
   const demoAcademy = await prisma.business.upsert({
@@ -777,8 +785,8 @@ async function main() {
   /* Seed AgentConfig for demo academy too */
   await prisma.agentConfig.upsert({
     where:  { businessId: demoAcademy.id },
-    update: getAgentConfigPreset('academy'),
-    create: { businessId: demoAcademy.id, ...getAgentConfigPreset('academy') },
+    update: { ...getAgentConfigPreset('academy'), autoReplyEnabled: true },
+    create: { businessId: demoAcademy.id, ...getAgentConfigPreset('academy'), autoReplyEnabled: true },
   });
 
   /* ── 2. Wipe and recreate 10 demo businesses ─────────────────────────── */

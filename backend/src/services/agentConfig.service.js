@@ -63,7 +63,12 @@ const getResolved = async (businessId) => {
  * Uses upsert so it is safe whether or not the row exists yet.
  * Always scoped by businessId.
  */
-const update = async (businessId, { followUpMinutes, classificationRules, priorityRules }) => {
+const update = async (businessId, {
+  followUpMinutes,
+  classificationRules,
+  priorityRules,
+  autoReplyEnabled,
+}) => {
   const biz = await prisma.business.findUnique({
     where: { id: businessId },
     select: { industry: true },
@@ -107,6 +112,9 @@ const update = async (businessId, { followUpMinutes, classificationRules, priori
           ?? preset.priorityRules.weights,
       }
     : existing?.priorityRules ?? preset.priorityRules;
+  const nextAutoReplyEnabled = autoReplyEnabled !== undefined
+    ? autoReplyEnabled
+    : existing?.autoReplyEnabled ?? preset.autoReplyEnabled;
 
   return prisma.agentConfig.upsert({
     where: { businessId },
@@ -116,11 +124,13 @@ const update = async (businessId, { followUpMinutes, classificationRules, priori
       followUpMinutes: nextFollowUpMinutes,
       classificationRules: nextClassificationRules,
       priorityRules: nextPriorityRules,
+      autoReplyEnabled: nextAutoReplyEnabled,
     },
     update: {
       followUpMinutes: nextFollowUpMinutes,
       classificationRules: nextClassificationRules,
       priorityRules: nextPriorityRules,
+      autoReplyEnabled: nextAutoReplyEnabled,
     },
   });
 };

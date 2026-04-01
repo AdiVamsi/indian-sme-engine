@@ -3,6 +3,7 @@
 const { prisma } = require('../lib/prisma');
 const { LEGACY_SAFE_LEAD_SELECT } = require('../lib/leadCompat');
 const { buildLeadActivitySummary } = require('./leads.service');
+const { APPOINTMENT_WITH_LEAD_SELECT } = require('./appointments.service');
 
 const getDashboardSummary = async (businessId) => {
   const [
@@ -13,8 +14,8 @@ const getDashboardSummary = async (businessId) => {
     totalServices,
     totalTestimonials,
   ] = await Promise.all([
-    prisma.lead.count({ where: { businessId } }),
-    prisma.lead.count({ where: { businessId, status: 'NEW' } }),
+    prisma.lead.count({ where: { businessId, isActivationTest: false } }),
+    prisma.lead.count({ where: { businessId, isActivationTest: false, status: 'NEW' } }),
     prisma.appointment.count({ where: { businessId } }),
     prisma.appointment.count({
       where: {
@@ -39,7 +40,7 @@ const getDashboardSummary = async (businessId) => {
 
 const getLeads = async (businessId) => {
   const leads = await prisma.lead.findMany({
-    where:   { businessId },
+    where:   { businessId, isActivationTest: false },
     orderBy: { createdAt: 'desc' },
     select: {
       ...LEGACY_SAFE_LEAD_SELECT,
@@ -63,6 +64,7 @@ const getAppointments = (businessId) =>
   prisma.appointment.findMany({
     where:   { businessId },
     orderBy: { scheduledAt: 'asc' },
+    select: APPOINTMENT_WITH_LEAD_SELECT,
   });
 
 const getServices = (businessId) =>
@@ -112,7 +114,7 @@ const getLeadsByDay = async (businessId, timezone = 'Asia/Kolkata', days = 7) =>
   since.setHours(0, 0, 0, 0);
 
   const leads = await prisma.lead.findMany({
-    where:  { businessId, createdAt: { gte: since } },
+    where:  { businessId, isActivationTest: false, createdAt: { gte: since } },
     select: { createdAt: true },
   });
 

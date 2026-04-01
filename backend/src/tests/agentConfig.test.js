@@ -41,6 +41,7 @@ describe('AgentConfig API', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.industry).toBe('academy');
+    expect(res.body.autoReplyEnabled).toBe(false);
     expect(res.body.whatsappReplyConfig.institutionLabel).toBe('counsellor');
     expect(res.body.whatsappReplyConfig.primaryOffering).toBe('IIT-JEE coaching');
     expect(res.body.whatsappReplyPreset.institutionLabel).toBe('counsellor');
@@ -118,6 +119,26 @@ describe('AgentConfig API', () => {
       ])
     );
     expect(res.body.businessKnowledgeConfig.entries[0].id).toBeTruthy();
+  });
+
+  it('updates autoReplyEnabled through the existing agent config API', async () => {
+    const token = await loginAndGetToken();
+    const current = await request(app)
+      .get('/api/agent')
+      .set('Authorization', `Bearer ${token}`);
+
+    const res = await request(app)
+      .put('/api/agent')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        followUpMinutes: current.body.followUpMinutes,
+        autoReplyEnabled: true,
+        classificationRules: current.body.classificationRules,
+        priorityRules: current.body.priorityRules,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.autoReplyEnabled).toBe(true);
   });
 
   it('rejects invalid business knowledge entries', async () => {

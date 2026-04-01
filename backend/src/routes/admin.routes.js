@@ -19,7 +19,7 @@ const {
   leadSuggestions,
   leadOutreachDraft,
 } = require('../controllers/admin.controller');
-const { activate, skip } = require('../controllers/activation.controller');
+const { activate, runProof, skip } = require('../controllers/activation.controller');
 
 const router = Router();
 
@@ -43,6 +43,7 @@ router.get('/testimonials',  authenticate, testimonials);
 
 /* ── Activation (first-run setup) ── */
 router.post('/activate',      authenticate, activate);
+router.post('/activate/proof', authenticate, runProof);
 router.post('/activate/skip', authenticate, skip);
 
 module.exports = router;

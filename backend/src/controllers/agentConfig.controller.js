@@ -180,6 +180,7 @@ const getConfig = async (req, res) => {
     return res.json({
       toneStyle:           config.toneStyle,
       followUpMinutes:     config.followUpMinutes,
+      autoReplyEnabled:    config.autoReplyEnabled,
       classificationRules: config.classificationRules,
       priorityRules:       config.priorityRules,
       industry,
@@ -247,11 +248,11 @@ const previewKnowledge = async (req, res) => {
 
 /**
  * PUT /api/agent/config
- * Updates followUpMinutes, classificationRules, priorityRules.
+ * Updates followUpMinutes, autoReplyEnabled, classificationRules, priorityRules.
  * Validates structure before writing. Rejects malformed payloads with 400.
  */
 const updateConfig = async (req, res) => {
-  const { followUpMinutes, classificationRules, priorityRules } = req.body;
+  const { followUpMinutes, classificationRules, priorityRules, autoReplyEnabled } = req.body;
   const errors = [];
 
   /* Validate followUpMinutes */
@@ -260,6 +261,10 @@ const updateConfig = async (req, res) => {
     if (!Number.isInteger(mins) || mins < 1 || mins > 1440) {
       errors.push('followUpMinutes must be an integer between 1 and 1440');
     }
+  }
+
+  if (autoReplyEnabled !== undefined && typeof autoReplyEnabled !== 'boolean') {
+    errors.push('autoReplyEnabled must be a boolean');
   }
 
   /* Validate classificationRules */
@@ -281,6 +286,7 @@ const updateConfig = async (req, res) => {
       followUpMinutes:     followUpMinutes !== undefined ? Number(followUpMinutes) : undefined,
       classificationRules: classificationRules ?? undefined,
       priorityRules:       priorityRules       ?? undefined,
+      autoReplyEnabled:    autoReplyEnabled,
     });
     const {
       config,
@@ -296,6 +302,7 @@ const updateConfig = async (req, res) => {
       ok:                  true,
       toneStyle:           config.toneStyle,
       followUpMinutes:     config.followUpMinutes,
+      autoReplyEnabled:    config.autoReplyEnabled,
       classificationRules: config.classificationRules,
       priorityRules:       config.priorityRules,
       industry,

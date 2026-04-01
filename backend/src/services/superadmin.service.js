@@ -15,9 +15,14 @@ async function getOverview() {
 
   const [businesses, leads, users, logsToday] = await Promise.all([
     prisma.business.count(),
-    prisma.lead.count(),
+    prisma.lead.count({ where: { isActivationTest: false } }),
     prisma.user.count(),
-    prisma.leadActivity.count({ where: { createdAt: { gte: todayStart } } }),
+    prisma.leadActivity.count({
+      where: {
+        createdAt: { gte: todayStart },
+        lead: { isActivationTest: false },
+      },
+    }),
   ]);
 
   return { businesses, leads, users, logsToday };
@@ -39,10 +44,8 @@ async function getAllBusinesses() {
       city: true,
       country: true,
       createdAt: true,
-      _count: {
-        select: { leads: true },
-      },
       leads: {
+        where: { isActivationTest: false },
         orderBy: { createdAt: 'desc' },
         take: 1,
         select: { createdAt: true },
@@ -50,24 +53,42 @@ async function getAllBusinesses() {
     },
   });
 
-  /* Automation event count per business (AGENT_CLASSIFIED + AGENT_PRIORITIZED) */
   const bizIds = rows.map((r) => r.id);
-  const agentLeads = bizIds.length > 0
-    ? await prisma.lead.findMany({
-      where: { businessId: { in: bizIds } },
-      select: {
-        businessId: true,
-        _count: {
-          select: {
-            activities: {
-              where: { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
+  const [leadCounts, agentLeads] = bizIds.length > 0
+    ? await Promise.all([
+      prisma.lead.groupBy({
+        by: ['businessId'],
+        where: {
+          businessId: { in: bizIds },
+          isActivationTest: false,
+        },
+        _count: { _all: true },
+      }),
+      prisma.lead.findMany({
+        where: {
+          businessId: { in: bizIds },
+          isActivationTest: false,
+        },
+        select: {
+          businessId: true,
+          _count: {
+            select: {
+              activities: {
+                where: { type: { in: ['AGENT_CLASSIFIED', 'AGENT_PRIORITIZED'] } },
+              },
             },
           },
         },
-      },
-    })
-    : [];
+      }),
+    ])
+    : [[], []];
 
+  const bizLeadCounts = {};
+  for (const leadCount of leadCounts) {
+    bizLeadCounts[leadCount.businessId] = leadCount._count._all;
+  }
+
+  /* Automation event count per business (AGENT_CLASSIFIED + AGENT_PRIORITIZED) */
   const bizAutoCounts = {};
   for (const l of agentLeads) {
     bizAutoCounts[l.businessId] = (bizAutoCounts[l.businessId] ?? 0) + l._count.activities;
@@ -82,7 +103,7 @@ async function getAllBusinesses() {
     city: b.city,
     country: b.country,
     createdAt: b.createdAt,
-    leadCount: b._count.leads,
+    leadCount: bizLeadCounts[b.id] ?? 0,
     automationEventCount: bizAutoCounts[b.id] ?? 0,
     lastActivity: b.leads[0]?.createdAt ?? null,
   }));
@@ -95,6 +116,7 @@ async function getAllBusinesses() {
  */
 async function getAllLeads() {
   const leads = await prisma.lead.findMany({
+    where: { isActivationTest: false },
     orderBy: { createdAt: 'desc' },
     take: 100,
     select: {
@@ -143,11 +165,14 @@ async function getAllLeads() {
  */
 async function getAutomationLogs() {
   const rows = await prisma.leadActivity.findMany({
+    where: {
+      lead: { isActivationTest: false },
+    },
     orderBy: { createdAt: 'desc' },
     take: 20,
     select: {
       type: true,
-      note: true,
+      message: true,
       createdAt: true,
       lead: {
         select: {
@@ -165,7 +190,7 @@ async function getAutomationLogs() {
 
   return rows.map((a) => ({
     type: a.type,
-    note: a.note ?? null,
+    note: a.message ?? null,
     createdAt: a.createdAt,
     lead: {
       id: a.lead?.id,
@@ -201,7 +226,6 @@ async function updateBusinessStage(id, stage) {
  */
 async function getAnalytics() {
   const WEB_STAGES = new Set(['WEBSITE_LIVE', 'LEADS_ACTIVE', 'AUTOMATION_ACTIVE', 'SCALING']);
-  const LEAD_STAGES = new Set(['LEADS_ACTIVE', 'AUTOMATION_ACTIVE', 'SCALING']);
   const AUTO_STAGES = new Set(['AUTOMATION_ACTIVE', 'SCALING']);
 
   const [businesses, allLeads, prioActs, contactActs] = await Promise.all([
@@ -211,16 +235,17 @@ async function getAnalytics() {
     }),
     /* Lead statuses for contact-rate calculation */
     prisma.lead.findMany({
-      select: { id: true, status: true },
+      where: { isActivationTest: false },
+      select: { id: true, businessId: true, status: true },
     }),
     /* Priority scores from agent activities */
     prisma.leadActivity.findMany({
-      where: { type: 'AGENT_PRIORITIZED' },
+      where: { type: 'AGENT_PRIORITIZED', lead: { isActivationTest: false } },
       select: { metadata: true },
     }),
     /* First STATUS_CHANGED per lead for time-to-contact */
     prisma.leadActivity.findMany({
-      where: { type: 'STATUS_CHANGED' },
+      where: { type: 'STATUS_CHANGED', lead: { isActivationTest: false } },
       orderBy: { createdAt: 'asc' },
       select: {
         leadId: true,
@@ -253,18 +278,16 @@ async function getAnalytics() {
   /* ── Growth metrics ─────────────────────────────────────────────────── */
   const total = businesses.length;
   const withWebsite = businesses.filter((b) => WEB_STAGES.has(b.stage)).length;
-  const generatingLeads = businesses.filter((b) => LEAD_STAGES.has(b.stage)).length;
+  const generatingLeads = new Set(allLeads.map((lead) => lead.businessId)).size;
   const usingAutomation = businesses.filter((b) => AUTO_STAGES.has(b.stage)).length;
   const scaling = businesses.filter((b) => b.stage === 'SCALING').length;
   const activationRate = total > 0 ? Math.round((generatingLeads / total) * 100) : 0;
 
   /* ── Lead signals ───────────────────────────────────────────────────── */
   const totalLeads = allLeads.length;
-  const contacted = allLeads.filter((l) =>
-    ['CONTACTED', 'QUALIFIED', 'CLOSED_WON'].includes(l.status)
-  ).length;
+  const contacted = allLeads.filter((l) => l.status !== 'NEW').length;
   const qualifiedOrWon = allLeads.filter((l) =>
-    ['QUALIFIED', 'CLOSED_WON'].includes(l.status)
+    ['QUALIFIED', 'WON'].includes(l.status)
   ).length;
 
   /* Average priority score */
@@ -327,6 +350,7 @@ async function checkSlug(slug) {
  */
 async function createBusiness({
   name, slug, industry, phone, city, timezone, currency,
+  whatsAppPhoneNumberId, whatsAppDisplayPhoneNumber,
   ownerName, ownerEmail, ownerPassword,
   followUpMinutes, autoReplyEnabled,
 }) {
@@ -360,6 +384,8 @@ async function createBusiness({
         slug: finalSlug,
         industry: industry || null,
         phone: phone || null,
+        whatsAppPhoneNumberId: whatsAppPhoneNumberId || null,
+        whatsAppDisplayPhoneNumber: whatsAppDisplayPhoneNumber || null,
         city: city || null,
         timezone: timezone || 'Asia/Kolkata',
         currency: currency || 'INR',
@@ -395,6 +421,8 @@ async function createBusiness({
     name: business.name,
     slug: business.slug,
     industry: business.industry,
+    whatsAppPhoneNumberId: business.whatsAppPhoneNumberId,
+    whatsAppDisplayPhoneNumber: business.whatsAppDisplayPhoneNumber,
     city: business.city,
     timezone: business.timezone,
     currency: business.currency,

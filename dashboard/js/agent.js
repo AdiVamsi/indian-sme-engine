@@ -705,6 +705,7 @@ async function init() {
     const config = await fetchConfig();
 
     $('followUpMinutes').value = config.followUpMinutes ?? 30;
+    $('autoReplyEnabled').checked = Boolean(config.autoReplyEnabled);
     populateClassRules(config.classificationRules);
     populatePrioRules(config.priorityRules);
     populateWhatsAppReplyConfig(
@@ -864,6 +865,7 @@ $('btn-save').addEventListener('click', async () => {
   btn.textContent = 'Saving…';
 
   const followUpMinutes = parseInt($('followUpMinutes').value, 10);
+  const autoReplyEnabled = $('autoReplyEnabled').checked;
   const classificationRules = readClassificationRules();
   const priorityRules = readPrioRules();
   const whatsappReplyConfig = classificationRules.whatsappReplyConfig;
@@ -893,7 +895,8 @@ $('btn-save').addEventListener('click', async () => {
   }
 
   try {
-    const saved = await saveConfig({ followUpMinutes, classificationRules, priorityRules });
+    const saved = await saveConfig({ followUpMinutes, autoReplyEnabled, classificationRules, priorityRules });
+    $('autoReplyEnabled').checked = Boolean(saved.autoReplyEnabled);
     populateWhatsAppReplyConfig(
       saved.whatsappReplyConfig || saved.classificationRules?.whatsappReplyConfig || {},
       saved.whatsappReplyPreset || whatsappPreset || {},

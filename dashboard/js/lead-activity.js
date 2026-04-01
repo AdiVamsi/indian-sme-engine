@@ -61,6 +61,11 @@ const ACTIVITY_MAP = {
     icon: '📅',
     dotClass: 'tl-dot--followup',
   },
+  APPOINTMENT_CREATED: {
+    label: 'Appointment created',
+    icon: '🗓️',
+    dotClass: 'tl-dot--followup',
+  },
   STATUS_CHANGED: {
     label: 'Status updated',
     icon: '🔄',
@@ -197,6 +202,24 @@ function renderMeta(type, meta) {
       parts.push(`<span class="tl-meta__kv">
         <span class="tl-meta__kv-label">Callback:</span>
         <span class="tl-meta__kv-value">${escHtml(String(meta.callbackTime))}</span>
+      </span>`);
+    }
+    if (!parts.length) return '';
+    return `<div class="tl-meta">${parts.join('')}</div>`;
+  }
+
+  if (type === 'APPOINTMENT_CREATED') {
+    const parts = [];
+    if (meta.scheduledAt) {
+      parts.push(`<span class="tl-meta__kv">
+        <span class="tl-meta__kv-label">Scheduled:</span>
+        <span class="tl-meta__kv-value">${escHtml(formatDateTime(meta.scheduledAt))}</span>
+      </span>`);
+    }
+    if (meta.appointmentStatus) {
+      parts.push(`<span class="tl-meta__kv">
+        <span class="tl-meta__kv-label">Status:</span>
+        <span class="tl-meta__kv-value">${escHtml(String(meta.appointmentStatus))}</span>
       </span>`);
     }
     if (!parts.length) return '';

@@ -148,6 +148,23 @@ describe('WhatsApp academy reply selection', () => {
     expect(plan.message).not.toContain('Please share the student\'s class');
   });
 
+  it('answers wrong-business fee questions directly instead of using generic handoff wording', () => {
+    const plan = buildWhatsAppReplyPlan({
+      businessName: 'Sharma JEE Academy',
+      businessIndustry: 'academy',
+      message: 'tell me something about the gym fee',
+      intent: 'FEE_ENQUIRY',
+      tags: ['FEE_ENQUIRY'],
+      priorityScore: 10,
+    });
+
+    expect(plan.reason).toBe('DIRECT_BUSINESS_CLARIFICATION');
+    expect(plan.message).toContain('Sharma JEE Academy');
+    expect(plan.message).toContain('IIT-JEE coaching');
+    expect(plan.message).toContain('do not provide gym services');
+    expect(plan.message).not.toContain('will continue with you on WhatsApp shortly');
+  });
+
   it('prioritizes the most actionable specific tag over admission', () => {
     const plan = buildWhatsAppReplyPlan({
       businessIndustry: 'academy',

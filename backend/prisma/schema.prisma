@@ -18,6 +18,7 @@ enum ActivityType {
   FOLLOW_UP_SCHEDULED
   SLA_ALERT
   STATUS_CHANGED
+  APPOINTMENT_CREATED
   AUTOMATION_ALERT
   AUTOMATION_DEMO_INTENT
   AUTOMATION_ADMISSION_INTENT
@@ -52,6 +53,8 @@ model Business {
   name      String
   slug      String   @unique
   phone     String?
+  whatsAppPhoneNumberId String?
+  whatsAppDisplayPhoneNumber String?
   email     String?
   address   String?
 
@@ -101,6 +104,7 @@ model Lead {
   phone      String
   email      String?
   message    String?
+  isActivationTest Boolean @default(false)
   status     LeadStatus @default(NEW)
   snoozedUntil DateTime?
 
@@ -108,6 +112,7 @@ model Lead {
   updatedAt  DateTime @updatedAt
 
   activities LeadActivity[]
+  appointments Appointment[]
 }
 
 model Service {
@@ -143,6 +148,9 @@ model Appointment {
 
   businessId   String
   business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  leadId       String?
+  lead         Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   customerName String
   phone        String

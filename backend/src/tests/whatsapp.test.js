@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 jest.mock('../realtime/socket', () => {
   const actual = jest.requireActual('../realtime/socket');
   return {
@@ -14,12 +16,20 @@ const { broadcast } = require('../realtime/socket');
 const app = require('../app');
 
 const prisma = new PrismaClient();
+const DEFAULT_TEST_PHONE_NUMBER_ID = '1000851389785357';
+const DEFAULT_TEST_DISPLAY_PHONE = '15556451322';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildWebhookPayload({ phone, message, messageId }) {
+function buildWebhookPayload({
+  phone,
+  message,
+  messageId,
+  displayPhoneNumber = DEFAULT_TEST_DISPLAY_PHONE,
+  phoneNumberId = DEFAULT_TEST_PHONE_NUMBER_ID,
+}) {
   return {
     object: 'whatsapp_business_account',
     entry: [
@@ -30,8 +40,8 @@ function buildWebhookPayload({ phone, message, messageId }) {
             field: 'messages',
             value: {
               metadata: {
-                display_phone_number: '15556451322',
-                phone_number_id: '1000851389785357',
+                display_phone_number: displayPhoneNumber,
+                phone_number_id: phoneNumberId,
               },
               contacts: [
                 {
@@ -54,6 +64,13 @@ function buildWebhookPayload({ phone, message, messageId }) {
       },
     ],
   };
+}
+
+function buildSignatureHeader(payload, appSecret) {
+  return `sha256=${crypto
+    .createHmac('sha256', appSecret)
+    .update(JSON.stringify(payload))
+    .digest('hex')}`;
 }
 
 function buildClassificationForMessage(message) {
@@ -142,6 +159,7 @@ describe('WhatsApp webhook integration', () => {
   let ctx;
   let originalFetch;
   let defaultFetchImpl;
+  let previousAppSecret;
   const testPhones = ['+919876543210', '+919800000001', '+919811111111'];
 
   beforeAll(async () => {
@@ -151,6 +169,8 @@ describe('WhatsApp webhook integration', () => {
     process.env.OPENAI_API_KEY = 'test-openai-key';
     process.env.LLM_CLASSIFIER_PROVIDER = 'openai';
     process.env.LLM_CLASSIFIER_MODEL = 'gpt-4o-mini';
+    previousAppSecret = process.env.WHATSAPP_APP_SECRET;
+    delete process.env.WHATSAPP_APP_SECRET;
 
     const existingShowcase = await prisma.business.findUnique({
       where: { slug: 'sharma-jee-academy-delhi' },
@@ -163,6 +183,8 @@ describe('WhatsApp webhook integration', () => {
           data: {
             phone: '+91 70000 11111',
             industry: existingShowcase.industry || 'academy',
+            whatsAppPhoneNumberId: DEFAULT_TEST_PHONE_NUMBER_ID,
+            whatsAppDisplayPhoneNumber: DEFAULT_TEST_DISPLAY_PHONE,
           },
         }),
         cleanup: async () => {},
@@ -174,6 +196,8 @@ describe('WhatsApp webhook integration', () => {
           slug: 'sharma-jee-academy-delhi',
           industry: 'academy',
           phone: '+91 70000 11111',
+          whatsAppPhoneNumberId: DEFAULT_TEST_PHONE_NUMBER_ID,
+          whatsAppDisplayPhoneNumber: DEFAULT_TEST_DISPLAY_PHONE,
         },
       });
 
@@ -222,7 +246,7 @@ describe('WhatsApp webhook integration', () => {
         businessId: ctx.business.id,
         toneStyle: 'professional',
         followUpMinutes: 30,
-        autoReplyEnabled: false,
+        autoReplyEnabled: true,
         classificationRules: {
           keywords: {
             ADMISSION: ['admission', 'coaching', 'join'],
@@ -316,12 +340,27 @@ describe('WhatsApp webhook integration', () => {
   }, 15000);
 
   afterAll(async () => {
+    if (previousAppSecret === undefined) delete process.env.WHATSAPP_APP_SECRET;
+    else process.env.WHATSAPP_APP_SECRET = previousAppSecret;
     global.fetch = originalFetch;
     await ctx.cleanup();
     await prisma.$disconnect();
   });
 
   beforeEach(async () => {
+    delete process.env.WHATSAPP_APP_SECRET;
+    await prisma.business.update({
+      where: { id: ctx.business.id },
+      data: {
+        phone: '+91 70000 11111',
+        whatsAppPhoneNumberId: DEFAULT_TEST_PHONE_NUMBER_ID,
+        whatsAppDisplayPhoneNumber: DEFAULT_TEST_DISPLAY_PHONE,
+      },
+    });
+    await prisma.agentConfig.update({
+      where: { businessId: ctx.business.id },
+      data: { autoReplyEnabled: true },
+    });
     await prisma.lead.deleteMany({
       where: {
         businessId: ctx.business.id,
@@ -349,6 +388,98 @@ describe('WhatsApp webhook integration', () => {
 
     expect(res.status).toBe(200);
     expect(res.text).toBe('challenge-ok');
+  });
+
+  it('routes inbound and outbound WhatsApp through the business-specific phone number id when configured', async () => {
+    const phone = '+919877777777';
+    const configuredPhoneNumberId = 'business-phone-id-456';
+    const configuredDisplayPhone = '15550000001';
+    testPhones.push(phone);
+
+    await prisma.business.update({
+      where: { id: ctx.business.id },
+      data: {
+        whatsAppPhoneNumberId: configuredPhoneNumberId,
+        whatsAppDisplayPhoneNumber: configuredDisplayPhone,
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/webhooks/whatsapp')
+      .send(buildWebhookPayload({
+        phone,
+        message: 'I need coaching immediately',
+        messageId: 'wamid.message.tenant-route',
+        displayPhoneNumber: configuredDisplayPhone,
+        phoneNumberId: configuredPhoneNumberId,
+      }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true, accepted: 1 });
+
+    const lead = await waitForLeadByPhone(ctx.business.id, phone, (candidate) =>
+      candidate.activities.some((activity) =>
+        activity.type === 'AUTOMATION_ALERT'
+        && activity.metadata?.channel === 'whatsapp'
+        && activity.metadata?.direction === 'outbound'
+      )
+    );
+
+    expect(lead).toBeTruthy();
+    const graphCall = global.fetch.mock.calls.find(([url]) => String(url).includes('graph.facebook.com'));
+    expect(graphCall).toBeTruthy();
+    expect(String(graphCall[0])).toContain(`/${configuredPhoneNumberId}/messages`);
+  });
+
+  it('accepts signed webhook POSTs when Meta signature verification is enabled and valid', async () => {
+    const phone = '+919877700001';
+    const appSecret = 'whatsapp-app-secret';
+    const payload = buildWebhookPayload({
+      phone,
+      message: 'I need coaching immediately',
+      messageId: 'wamid.message.signed-valid',
+    });
+    testPhones.push(phone);
+    process.env.WHATSAPP_APP_SECRET = appSecret;
+
+    const res = await request(app)
+      .post('/api/webhooks/whatsapp')
+      .set('X-Hub-Signature-256', buildSignatureHeader(payload, appSecret))
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true, accepted: 1 });
+
+    const lead = await waitForLeadByPhone(ctx.business.id, phone, (candidate) =>
+      candidate.activities.some((activity) => activity.type === 'AGENT_CLASSIFIED')
+    );
+    expect(lead).toBeTruthy();
+  });
+
+  it('rejects webhook POSTs when Meta signature verification is enabled and invalid', async () => {
+    const phone = '+919877700002';
+    const appSecret = 'whatsapp-app-secret';
+    const payload = buildWebhookPayload({
+      phone,
+      message: 'I need coaching immediately',
+      messageId: 'wamid.message.signed-invalid',
+    });
+    testPhones.push(phone);
+    process.env.WHATSAPP_APP_SECRET = appSecret;
+
+    const res = await request(app)
+      .post('/api/webhooks/whatsapp')
+      .set('X-Hub-Signature-256', 'sha256=0000000000000000000000000000000000000000000000000000000000000000')
+      .send(payload);
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'Invalid webhook signature' });
+
+    await sleep(100);
+    const lead = await prisma.lead.findFirst({
+      where: { businessId: ctx.business.id, phone },
+    });
+    expect(lead).toBeNull();
   });
 
   it('creates a lead, runs AI classification, sends the first academy follow-up reply, and broadcasts websocket updates', async () => {
@@ -402,6 +533,53 @@ describe('WhatsApp webhook integration', () => {
     );
   });
 
+  it('does not send automated WhatsApp replies when autoReplyEnabled is false, but keeps the lead in operator-visible WhatsApp state', async () => {
+    const phone = '+919877700003';
+    testPhones.push(phone);
+
+    await prisma.agentConfig.update({
+      where: { businessId: ctx.business.id },
+      data: { autoReplyEnabled: false },
+    });
+
+    const res = await request(app)
+      .post('/api/webhooks/whatsapp')
+      .send(buildWebhookPayload({
+        phone,
+        message: 'I need coaching immediately',
+        messageId: 'wamid.message.autoreply-disabled',
+      }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true, accepted: 1 });
+
+    const lead = await waitForLeadByPhone(ctx.business.id, phone, (candidate) =>
+      candidate.activities.some((activity) =>
+        activity.type === 'AUTOMATION_ALERT'
+        && activity.metadata?.reason === 'WHATSAPP_AUTO_REPLY_DISABLED'
+      )
+    );
+
+    expect(lead).toBeTruthy();
+
+    const skippedReply = lead.activities.find((activity) =>
+      activity.type === 'AUTOMATION_ALERT'
+      && activity.metadata?.reason === 'WHATSAPP_AUTO_REPLY_DISABLED'
+    );
+    const outboundReply = lead.activities.find((activity) =>
+      activity.type === 'AUTOMATION_ALERT'
+      && activity.metadata?.channel === 'whatsapp'
+      && activity.metadata?.direction === 'outbound'
+    );
+
+    expect(skippedReply).toBeTruthy();
+    expect(skippedReply.metadata.conversationState.status).toBe('handoff');
+    expect(outboundReply).toBeUndefined();
+
+    const graphCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('graph.facebook.com'));
+    expect(graphCalls).toHaveLength(0);
+  });
+
   it('answers direct business-identity questions before using generic WhatsApp handoff wording', async () => {
     const phone = '+919833333333';
     testPhones.push(phone);
@@ -412,6 +590,44 @@ describe('WhatsApp webhook integration', () => {
         phone,
         message: 'Hello. is this a gym ?',
         messageId: 'wamid.message.identity',
+      }));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true, accepted: 1 });
+
+    const lead = await waitForLeadByPhone(ctx.business.id, phone, (candidate) =>
+      candidate.activities.some((activity) =>
+        activity.type === 'AUTOMATION_ALERT'
+        && activity.metadata?.channel === 'whatsapp'
+        && activity.metadata?.direction === 'outbound'
+      )
+    );
+
+    expect(lead).toBeTruthy();
+
+    const outboundReply = lead.activities.find((activity) =>
+      activity.type === 'AUTOMATION_ALERT'
+      && activity.metadata?.channel === 'whatsapp'
+      && activity.metadata?.direction === 'outbound'
+    );
+
+    expect(outboundReply.metadata.replyIntent).toBe('DIRECT_BUSINESS_CLARIFICATION');
+    expect(outboundReply.metadata.replyMessage).toContain('Sharma JEE Academy');
+    expect(outboundReply.metadata.replyMessage).toContain('IIT-JEE coaching');
+    expect(outboundReply.metadata.replyMessage).toContain('do not provide gym services');
+    expect(outboundReply.metadata.replyMessage).not.toContain('will continue with you on WhatsApp shortly');
+  });
+
+  it('answers wrong-business fee questions directly before any generic WhatsApp handoff', async () => {
+    const phone = '+919866666666';
+    testPhones.push(phone);
+
+    const res = await request(app)
+      .post('/api/webhooks/whatsapp')
+      .send(buildWebhookPayload({
+        phone,
+        message: 'tell me something about the gym fee',
+        messageId: 'wamid.message.gym-fee',
       }));
 
     expect(res.status).toBe(200);

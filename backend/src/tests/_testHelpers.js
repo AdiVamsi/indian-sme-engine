@@ -250,7 +250,7 @@ function installLlmFetchMock(options = {}) {
 
 const createTestContext = async () => {
   const prisma = new PrismaClient();
-  const slug = `test-biz-${Date.now()}`;
+  const slug = `test-biz-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const password = 'Test@12345';
 
   const business = await prisma.business.create({

@@ -266,6 +266,11 @@ export function DashUI(config) {
     return `<span class="lead-workflow-badge" title="The AI handoff is ready for an operator follow-up.">Handoff ready</span>`;
   }
 
+  function buildLeadProcessingBadge(lead) {
+    if (lead?.hasClassification !== false) return '';
+    return '<span class="lead-workflow-badge lead-workflow-badge--pending" title="AI classification is still running.">AI processing</span>';
+  }
+
   function buildLeadWhatsAppFailureBadge(lead) {
     if (!lead?.whatsappNeedsAttention) return '';
     const title = lead.whatsappFailureTitle || 'WhatsApp reply failed';
@@ -299,9 +304,16 @@ export function DashUI(config) {
     }
 
     const tags = Array.isArray(lead.tags) ? lead.tags : [];
+    const isPendingClassification = lead.hasClassification === false;
     const tagHtml = tags.length
       ? `<div class="tag-chips">${tags.map((t) => `<span class="tag-chip tag-chip--${esc(t.toLowerCase().replace(/_/g, '-'))}">${esc(t)}</span>`).join('')}</div>`
-      : '';
+      : isPendingClassification
+        ? '<div class="tag-chips"><span class="tag-chip tag-chip--pending">AI processing</span></div>'
+        : '';
+    const scoreValue = isPendingClassification ? 'Pending' : String(lead.priorityScore ?? 0);
+    const scoreClass = isPendingClassification
+      ? 'pending'
+      : (lead.priorityScore ?? 0) >= 40 ? 'high' : (lead.priorityScore ?? 0) >= 20 ? 'mid' : 'low';
 
     const messagePreview = lead.message
       ? `<div class="lead-row__sub"><span class="message-preview" title="${esc(lead.message)}">↳ ${esc(truncateText(lead.message))}</span></div>`
@@ -322,6 +334,7 @@ export function DashUI(config) {
             ${isTerminal ? '' : buildLeadCallbackBadge(lead)}
             ${isTerminal ? '' : buildLeadWhatsAppFailureBadge(lead)}
             ${isTerminal ? '' : buildLeadWorkflowBadge(lead)}
+            ${isTerminal ? '' : buildLeadProcessingBadge(lead)}
             ${buildLeadSourceBadge(lead.source)}
           </div>
         </div>
@@ -332,7 +345,7 @@ export function DashUI(config) {
       <td><span class="lead-row__contact lead-row__contact--email">${esc(lead.email || '—')}</span></td>
       <td>${buildStatusSelect(lead.id, lead.status, config.leadStatuses)}</td>
       <td>${buildPriorityBadge(lead.priority)}</td>
-      <td><span class="score-val score-val--${(lead.priorityScore ?? 0) >= 40 ? 'high' : (lead.priorityScore ?? 0) >= 20 ? 'mid' : 'low'}">${esc(String(lead.priorityScore ?? 0))}</span>${tagHtml}</td>
+      <td><span class="score-val score-val--${scoreClass}">${esc(scoreValue)}</span>${tagHtml}</td>
       <td class="td-reltime" title="${esc(fmtDate(lead.createdAt))}">${esc(fmtRelativeDate(lead.createdAt))}</td>
       <td style="white-space:nowrap">
         <a class="btn-timeline" href="/dashboard/lead-activity.html?leadId=${esc(lead.id)}" title="View timeline">⏱</a>

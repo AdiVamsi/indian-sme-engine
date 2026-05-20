@@ -2,6 +2,7 @@
 
 const { getPromptPack } = require('./llm/promptPacks');
 const { buildJsonSchema, buildOutputSchema } = require('./llm/schema');
+const { logger } = require('../lib/logger');
 
 const DEFAULT_MODEL = process.env.LLM_CLASSIFIER_MODEL || 'gpt-4o-mini';
 const DEFAULT_PROVIDER = (process.env.LLM_CLASSIFIER_PROVIDER || 'openai').toLowerCase();
@@ -229,7 +230,7 @@ async function classifyWithModel({ lead, business, config = null }) {
 
   if (!apiKey) {
     if (!warnedMissingKey) {
-      console.warn('[ModelClassifier] OPENAI_API_KEY not set — classifier will fall back safely');
+      logger.warn('OPENAI_API_KEY not set; classifier will use safe fallback');
       warnedMissingKey = true;
     }
     return safeFallback({
@@ -278,7 +279,7 @@ async function classifyWithModel({ lead, business, config = null }) {
       rawOutput,
     });
   } catch (err) {
-    console.error('[ModelClassifier] Classification failed:', err.message);
+    logger.error({ err }, 'Model classification failed');
     return safeFallback({
       pack,
       provider,

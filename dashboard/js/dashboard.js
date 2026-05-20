@@ -41,7 +41,7 @@ let activeDrawerDraft = { callbackTime: '', note: '', standaloneNote: '' };
 /* Maps tableColumns.leads index → sortable field (null = unsortable) */
 const LEAD_SORT_FIELDS = ['name', null, null, 'status', 'priority', 'score', 'createdAt'];
 const LEAD_PRIORITY_ORDER = { HIGH: 3, NORMAL: 2, LOW: 1 };
-const DASHBOARD_RECONCILE_INTERVAL_MS = 10_000;
+const DASHBOARD_RECONCILE_INTERVAL_MS = 5_000;
 const DASH_ACTIVE_TAB_KEY = 'dashboard_active_tab';
 
 const $ = (id) => document.getElementById(id);
@@ -410,7 +410,7 @@ function wireGoLiveCard(cfg) {
   const slug = cfg?.business?.slug;
   if (!slug) return;
 
-  const formUrl = `${window.location.origin}/form/${slug}`;
+  const formUrl = getPublicFormUrl(slug);
   const urlEl = $('golive-url');
   const copyBtn = $('golive-copy');
   const openLink = $('golive-open');
@@ -431,6 +431,70 @@ function wireGoLiveCard(cfg) {
       }
     });
   }
+}
+
+function getPublicFormUrl(slug) {
+  return `${window.location.origin}/form/${slug}`;
+}
+
+function getPublicSiteUrl(slug) {
+  return `${window.location.origin}/site/${slug}`;
+}
+
+function getDashboardUrl() {
+  return `${window.location.origin}/dashboard`;
+}
+
+function renderSettingsSection() {
+  const el = $('settings-content');
+  const biz = config?.business;
+  if (!el || !biz) return;
+
+  const slug = biz.slug || '';
+  const dashboardUrl = getDashboardUrl();
+  const formUrl = slug ? getPublicFormUrl(slug) : '—';
+  const siteUrl = slug ? getPublicSiteUrl(slug) : '—';
+  const industry = biz.industry ? biz.industry.charAt(0).toUpperCase() + biz.industry.slice(1) : '—';
+  const city = [biz.city, biz.country].filter(Boolean).join(', ') || '—';
+
+  const field = (label, value) => `
+    <div class="settings-info__row">
+      <span class="settings-info__label">${_queueEsc(label)}</span>
+      <span class="settings-info__value">${_queueEsc(value || '—')}</span>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="settings-panel__header">
+      <div>
+        <p class="settings-panel__eyebrow">Demo workspace</p>
+        <h3 class="settings-panel__title">${_queueEsc(biz.name || 'Business')}</h3>
+        <p class="settings-panel__sub">Read-only details for testing this tenant and sharing demo links.</p>
+      </div>
+      <a class="settings-panel__agent-link" href="/dashboard/agent.html">Open Agent Config</a>
+    </div>
+
+    <div class="settings-grid">
+      <section class="settings-info" aria-label="Business details">
+        <h4 class="settings-info__title">Business</h4>
+        ${field('Name', biz.name)}
+        ${field('Slug', slug)}
+        ${field('Industry', industry)}
+        ${field('Location', city)}
+      </section>
+
+      <section class="settings-info" aria-label="Demo links">
+        <h4 class="settings-info__title">Demo links</h4>
+        ${field('Dashboard', dashboardUrl)}
+        ${field('Public form', formUrl)}
+        ${field('Public site', siteUrl)}
+      </section>
+    </div>
+
+    <div class="settings-actions">
+      <a class="settings-action" href="${_queueEsc(dashboardUrl)}">Dashboard</a>
+      <a class="settings-action" href="${_queueEsc(formUrl)}" target="_blank" rel="noopener noreferrer">Public form</a>
+      <a class="settings-action" href="${_queueEsc(siteUrl)}" target="_blank" rel="noopener noreferrer">Public site</a>
+    </div>`;
 }
 
 /* ─────────────────────────────────────────────────
@@ -984,7 +1048,11 @@ async function runActivationFlow() {
       .then((result) => {
         if (result.alreadyActivated) {
           overlay.classList.add('hidden');
-          return resolve();
+          if (config) {
+            config.needsActivation = false;
+            if (config.business && result.stage) config.business.stage = result.stage;
+          }
+          return resolve({ completed: true });
         }
         msgArea.value = result.testMessage ?? '';
       })
@@ -1008,13 +1076,22 @@ async function runActivationFlow() {
         const result = await api.runActivationProof(message);
         if (result?.alreadyActivated) {
           overlay.classList.add('hidden');
-          return resolve();
+          if (config) {
+            config.needsActivation = false;
+            if (config.business && result.stage) config.business.stage = result.stage;
+          }
+          return resolve({ completed: true });
         }
 
         renderActivationResult(result);
 
         formPanel.classList.add('hidden');
         resultPanel.classList.remove('hidden');
+
+        if (config) {
+          config.needsActivation = Boolean(result.needsActivation);
+          if (config.business && result.stage) config.business.stage = result.stage;
+        }
       } catch {
         submitBtn.disabled = false;
         submitLabel.textContent = 'Submit';
@@ -1025,7 +1102,7 @@ async function runActivationFlow() {
     /* Continue after seeing result */
     continueBtn.addEventListener('click', () => {
       overlay.classList.add('hidden');
-      resolve();
+      resolve({ completed: true });
     });
 
     /* Skip — upserts config server-side, stage stays STARTING */
@@ -1034,7 +1111,7 @@ async function runActivationFlow() {
       skipBtn.textContent = 'Skipping…';
       try { await api.activateSkip(); } catch { /* ignore */ }
       overlay.classList.add('hidden');
-      resolve();
+      resolve({ skipped: true });
     });
   });
 }
@@ -1049,7 +1126,11 @@ async function bootDashboard() {
 
   /* Show activation overlay for STARTING businesses before rendering dashboard */
   if (cfg.needsActivation) {
-    await runActivationFlow();
+    const activationState = await runActivationFlow();
+    if (activationState?.completed) {
+      cfg.needsActivation = false;
+      if (cfg.business) cfg.business.stage = 'LEADS_ACTIVE';
+    }
   }
 
   ui = DashUI(cfg);
@@ -1095,6 +1176,7 @@ async function bootDashboard() {
 
   /* Go Live card — fills URL and wires copy button */
   wireGoLiveCard(cfg);
+  renderSettingsSection();
 
   const startTab = getRequestedTab();
   persistActiveTab(startTab);
@@ -1195,6 +1277,8 @@ async function loadSection(tab) {
 
   } else if (tab === 'automations') {
     renderAutomations(_allLeads);
+  } else if (tab === 'settings') {
+    renderSettingsSection();
   }
 }
 
@@ -1205,7 +1289,7 @@ async function loadSection(tab) {
 /* Leads empty state — with copy-to-clipboard enquiry link */
 function buildLeadsEmptyState(tbody, colSpan) {
   const slug = config.business?.slug ?? '';
-  const url = `https://indian-sme-engine.onrender.com/api/public/${slug}/leads`;
+  const url = getPublicFormUrl(slug);
 
   tbody.innerHTML = `
     <tr class="empty-row">
@@ -1213,7 +1297,7 @@ function buildLeadsEmptyState(tbody, colSpan) {
         <div class="empty-state">
           <p class="empty-state__icon">📭</p>
           <p class="empty-state__title">No enquiries yet</p>
-          <p class="empty-state__sub">Share your public enquiry endpoint to start capturing leads</p>
+          <p class="empty-state__sub">Share your public enquiry form to start capturing leads</p>
           <div class="empty-state__row">
             <code class="empty-state__url">${url}</code>
             <button class="btn-copy">Copy link</button>
@@ -1252,6 +1336,7 @@ let _allLeads = [];
 function renderLeads(leads) {
   _allLeads = leads ?? [];
   _applyLeadFilters();
+  updateLeadStatsFromLeads();
   syncLeadDerivedViews();
 }
 
@@ -1261,6 +1346,9 @@ function buildLeadRefreshSignature(leads = []) {
     lead.status,
     lead.priority,
     lead.priorityScore ?? '',
+    Array.isArray(lead.tags) ? lead.tags.join(',') : '',
+    lead.hasClassification === false ? '0' : '1',
+    lead.hasPrioritization === false ? '0' : '1',
     lead.callbackAt ?? '',
     lead.callbackTime ?? '',
     lead.whatsappFailureAt ?? '',
@@ -1269,6 +1357,17 @@ function buildLeadRefreshSignature(leads = []) {
     lead.createdAt,
     lead.updatedAt ?? '',
   ].join('|')).join('||');
+}
+
+function updateLeadStatsFromLeads(leads = _allLeads) {
+  if (!ui) return;
+
+  const rows = Array.isArray(leads) ? leads : [];
+  const freshStatus = config?.leadStatuses?.[0] || 'NEW';
+  const freshCount = rows.filter((lead) => lead.status === freshStatus).length;
+
+  ui.updateStat('totalLeads', rows.length);
+  ui.updateStat('newLeads', freshCount);
 }
 
 function syncLeadDerivedViews({ rerenderTable = false } = {}) {

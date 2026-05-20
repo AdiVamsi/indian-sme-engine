@@ -34,6 +34,11 @@ const healthPayload = () => ({
   uptime: process.uptime(),
   timestamp: new Date().toISOString(),
 });
+const fullHealthPayload = () => ({
+  ...healthPayload(),
+  environment: NODE_ENV,
+  memory: process.memoryUsage(),
+});
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: NODE_ENV === 'production' ? 300 : 1000,
@@ -66,6 +71,7 @@ app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 /* ── Health ── */
 app.get('/health', (_req, res) => res.json(healthPayload()));
 app.get('/api/health', (_req, res) => res.json(healthPayload()));
+app.get('/api/health/full', (_req, res) => res.json(fullHealthPayload()));
 app.use('/api', apiLimiter);
 
 /* ── Routes ── */

@@ -182,7 +182,8 @@ npm install          # also runs prisma generate via postinstall
 
 # 2. Create environment file
 cp .env.example .env
-# Edit DATABASE_URL and JWT_SECRET
+# Edit DATABASE_URL, JWT_SECRET, SUPERADMIN_PASSWORD, and SUPERADMIN_SECRET.
+# OPENAI_API_KEY is optional for local demo; missing keys use llm_fallback.
 
 # 3. Apply migrations
 npx prisma migrate dev
@@ -290,6 +291,8 @@ npm start
 | `JWT_EXPIRES_IN` | — | Token lifetime (default: `7d`) |
 | `PORT` | — | Server port (default: `4000`) |
 | `NODE_ENV` | — | `development` or `production` |
+| `OPENAI_API_KEY` | Local optional / production required by default | Enables real OpenAI classification. Without it in local/dev/test, leads use the safe `llm_fallback` path and remain auditable. |
+| `REQUIRE_OPENAI_API_KEY` | — | Set to `false` only for an intentional production fallback-only demo. |
 
 ### Admin Control Center (SuperAdmin)
 

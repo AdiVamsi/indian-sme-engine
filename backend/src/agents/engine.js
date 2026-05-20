@@ -4,6 +4,7 @@ const { classify } = require('./classifier');
 const { runLeadAutomations } = require('../services/automation.service');
 const { getAgentConfigPreset } = require('../constants/agentConfig.presets');
 const { LEGACY_SAFE_LEAD_SELECT } = require('../lib/leadCompat');
+const { logger } = require('../lib/logger');
 const { prisma } = require('../lib/prisma');
 
 /**
@@ -145,9 +146,9 @@ async function run({ type, leadId, businessId, source = 'web', externalMessageId
     whatsappFailure = automationResult.whatsappFailure || null;
     whatsappFailureAt = automationResult.whatsappFailureAt || null;
     conversationState = automationResult.conversationState || null;
-    console.log(`[AgentEngine] Automations triggered for lead ${lead.id}: ${automationsTriggered}`);
+    logger.debug({ leadId: lead.id, automationsTriggered }, 'Agent automations evaluated');
   } catch (err) {
-    console.error(`[AgentEngine] runLeadAutomations failed for lead ${lead.id} —`, err.message);
+    logger.error({ err, leadId: lead.id }, 'Agent automation run failed');
   }
 
   /* 7. Return structured result — Lead table is NOT mutated. */

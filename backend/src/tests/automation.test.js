@@ -1,10 +1,13 @@
 'use strict';
 
+const { PrismaClient } = require('@prisma/client');
 const {
   buildWhatsAppReplyPlan,
   buildAcademyContinuationPlan,
   maybeBuildGroundedKnowledgeReplyPlan,
+  runLeadAutomations,
 } = require('../services/automation.service');
+const { createTestContext } = require('./_testHelpers');
 
 describe('WhatsApp academy reply selection', () => {
   let originalFetch;
@@ -497,5 +500,94 @@ describe('WhatsApp academy continuation planning', () => {
     expect(plan.message).toContain('fee details and batch timings');
     expect(plan.conversationState.collected.courseInterest).toBe('IELTS');
     expect(plan.conversationState.status).toBe('handoff');
+  });
+});
+
+describe('runLeadAutomations - trigger correctness', () => {
+  const prisma = new PrismaClient();
+  let ctx;
+
+  beforeAll(async () => {
+    ctx = await createTestContext();
+  }, 15000);
+
+  afterAll(async () => {
+    await ctx.cleanup();
+    await prisma.$disconnect();
+  });
+
+  async function createLead(name) {
+    return prisma.lead.create({
+      data: {
+        businessId: ctx.business.id,
+        name,
+        phone: '+91 90000 55555',
+        message: 'test message',
+      },
+    });
+  }
+
+  it('fires AUTOMATION_DEMO_INTENT when a demo tag is present', async () => {
+    const lead = await createLead('Demo Intent Lead');
+
+    await runLeadAutomations(lead.id, {
+      businessId: ctx.business.id,
+      businessIndustry: 'academy',
+      tags: ['DEMO_REQUEST'],
+      priorityScore: 20,
+      source: 'web',
+    });
+
+    const activities = await prisma.leadActivity.findMany({ where: { leadId: lead.id } });
+    expect(activities.some((a) => a.type === 'AUTOMATION_DEMO_INTENT')).toBe(true);
+    expect(activities.some((a) => a.type === 'AUTOMATION_ADMISSION_INTENT')).toBe(false);
+  });
+
+  it('fires AUTOMATION_ADMISSION_INTENT when an admission tag is present', async () => {
+    const lead = await createLead('Admission Intent Lead');
+
+    await runLeadAutomations(lead.id, {
+      businessId: ctx.business.id,
+      businessIndustry: 'academy',
+      tags: ['ADMISSION'],
+      priorityScore: 20,
+      source: 'web',
+    });
+
+    const activities = await prisma.leadActivity.findMany({ where: { leadId: lead.id } });
+    expect(activities.some((a) => a.type === 'AUTOMATION_ADMISSION_INTENT')).toBe(true);
+    expect(activities.some((a) => a.type === 'AUTOMATION_DEMO_INTENT')).toBe(false);
+  });
+
+  it('fires both when tags include both demo and admission intent', async () => {
+    const lead = await createLead('Demo And Admission Lead');
+
+    await runLeadAutomations(lead.id, {
+      businessId: ctx.business.id,
+      businessIndustry: 'academy',
+      tags: ['DEMO_REQUEST', 'ADMISSION'],
+      priorityScore: 30,
+      source: 'web',
+    });
+
+    const activities = await prisma.leadActivity.findMany({ where: { leadId: lead.id } });
+    expect(activities.some((a) => a.type === 'AUTOMATION_DEMO_INTENT')).toBe(true);
+    expect(activities.some((a) => a.type === 'AUTOMATION_ADMISSION_INTENT')).toBe(true);
+  });
+
+  it('fires neither demo nor admission intent activities for unrelated tags', async () => {
+    const lead = await createLead('Fee Enquiry Only Lead');
+
+    await runLeadAutomations(lead.id, {
+      businessId: ctx.business.id,
+      businessIndustry: 'academy',
+      tags: ['FEE_ENQUIRY'],
+      priorityScore: 15,
+      source: 'web',
+    });
+
+    const activities = await prisma.leadActivity.findMany({ where: { leadId: lead.id } });
+    expect(activities.some((a) => a.type === 'AUTOMATION_DEMO_INTENT')).toBe(false);
+    expect(activities.some((a) => a.type === 'AUTOMATION_ADMISSION_INTENT')).toBe(false);
   });
 });

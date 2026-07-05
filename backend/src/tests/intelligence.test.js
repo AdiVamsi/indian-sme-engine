@@ -79,7 +79,7 @@ describe('LLM lead classifier', () => {
     expect(result.bestCategory).toBe('TRIAL_REQUEST');
   });
 
-  it('falls back safely on invalid JSON', async () => {
+  it('falls back to the local engine on invalid JSON, still deriving intent from the message', async () => {
     restoreFetch();
     restoreFetch = installLlmFetchMock({ rawContent: 'not valid json' });
 
@@ -88,8 +88,23 @@ describe('LLM lead classifier', () => {
       business: { name: 'Sharma JEE Academy', industry: 'academy' },
     });
 
-    expect(result.via).toBe('llm_fallback');
-    expect(result.bestCategory).toBe('GENERAL_ENQUIRY');
-    expect(result.priority).toBe('LOW');
+    expect(result.via).toBe('local_fallback');
+    expect(result.bestCategory).toBe('ADMISSION');
+    expect(result.disposition).toBe('valid');
+  });
+
+  it('retries once on transport failure, then falls back to the local engine', async () => {
+    restoreFetch();
+    restoreFetch = installLlmFetchMock({ transportError: 'network unreachable' });
+
+    const result = await classify({
+      lead: { message: 'I dont need coaching. just wasting your time' },
+      business: { name: 'Sharma JEE Academy', industry: 'academy' },
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(result.via).toBe('local_fallback');
+    expect(result.bestCategory).toBe('JUNK');
+    expect(result.disposition).toBe('junk');
   });
 });

@@ -26,6 +26,12 @@ services:
         generateValue: true
       - key: JWT_EXPIRES_IN
         value: 7d
+      # Required in production — set to the deployed dashboard/admin origin(s).
+      - key: CORS_ORIGIN
+        sync: false
+      # Only required if WHATSAPP_TOKEN/WHATSAPP_PHONE_ID are also set below.
+      - key: WHATSAPP_APP_SECRET
+        sync: false
 
 databases:
   - name: sme-engine-db

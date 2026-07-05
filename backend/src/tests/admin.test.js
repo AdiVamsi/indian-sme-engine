@@ -367,4 +367,90 @@ describe('Admin API', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
   });
+
+  /* ── Lead-scoped endpoints: happy path + cross-tenant isolation ── */
+  describe('lead-scoped endpoints', () => {
+    let leadId;
+
+    beforeAll(async () => {
+      const lead = await prisma.lead.create({
+        data: {
+          businessId: ctx.business.id,
+          name: 'Admin Scoped Lead',
+          phone: '+91 90000 22222',
+          message: 'Need admission details',
+        },
+      });
+      leadId = lead.id;
+    });
+
+    it('GET /api/admin/leads/:id/activity - returns the lead and its activity', async () => {
+      const res = await request(app).get(`/api/admin/leads/${leadId}/activity`).set(auth());
+      expect(res.status).toBe(200);
+    });
+
+    it('GET /api/admin/leads/:id/suggestions - returns suggestions for the lead', async () => {
+      const res = await request(app).get(`/api/admin/leads/${leadId}/suggestions`).set(auth());
+      expect(res.status).toBe(200);
+    });
+
+    it('GET /api/admin/leads/:id/outreach-draft - returns a draft for the lead', async () => {
+      const res = await request(app).get(`/api/admin/leads/${leadId}/outreach-draft`).set(auth());
+      expect(res.status).toBe(200);
+    });
+
+    it('PATCH /api/admin/leads/:id/status - updates the lead status', async () => {
+      const res = await request(app)
+        .patch(`/api/admin/leads/${leadId}/status`)
+        .set(auth())
+        .send({ status: 'CONTACTED' });
+
+      expect(res.status).toBe(200);
+    });
+
+    describe('cross-tenant isolation', () => {
+      let otherCtx;
+      let otherLeadId;
+
+      beforeAll(async () => {
+        otherCtx = await createTestContext();
+        const otherLead = await prisma.lead.create({
+          data: {
+            businessId: otherCtx.business.id,
+            name: 'Other Tenant Admin Lead',
+            phone: '+91 90000 33333',
+          },
+        });
+        otherLeadId = otherLead.id;
+      });
+
+      afterAll(async () => {
+        await otherCtx.cleanup();
+      });
+
+      it('GET /api/admin/leads/:id/activity - returns 404 for a lead from another tenant', async () => {
+        const res = await request(app).get(`/api/admin/leads/${otherLeadId}/activity`).set(auth());
+        expect(res.status).toBe(404);
+      });
+
+      it('GET /api/admin/leads/:id/suggestions - returns 404 for a lead from another tenant', async () => {
+        const res = await request(app).get(`/api/admin/leads/${otherLeadId}/suggestions`).set(auth());
+        expect(res.status).toBe(404);
+      });
+
+      it('GET /api/admin/leads/:id/outreach-draft - returns 404 for a lead from another tenant', async () => {
+        const res = await request(app).get(`/api/admin/leads/${otherLeadId}/outreach-draft`).set(auth());
+        expect(res.status).toBe(404);
+      });
+
+      it('PATCH /api/admin/leads/:id/status - returns 404 for a lead from another tenant', async () => {
+        const res = await request(app)
+          .patch(`/api/admin/leads/${otherLeadId}/status`)
+          .set(auth())
+          .send({ status: 'CONTACTED' });
+
+        expect(res.status).toBe(404);
+      });
+    });
+  });
 });

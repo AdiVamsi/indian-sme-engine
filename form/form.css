@@ -77,7 +77,9 @@ body {
   padding: 0.65rem 0.875rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  font-size: 0.9rem;
+  /* Absolute (not rem-relative) 16px — below this, iOS Safari auto-zooms
+     the viewport on focus, which is jarring on the highest-traffic page. */
+  font-size: 16px;
   font-family: inherit;
   color: #EDEFF2;
   background: #161B24;
@@ -90,6 +92,11 @@ body {
 .field textarea:focus {
   border-color: #F5B301;
   box-shadow: 0 0 0 3px rgba(245, 179, 1, 0.15);
+}
+
+.field input[aria-invalid="true"],
+.field textarea[aria-invalid="true"] {
+  border-color: #EF4444;
 }
 
 .field input::placeholder,
@@ -225,3 +232,21 @@ body {
 .not-found__icon { font-size: 2.5rem; margin-bottom: 1rem; line-height: 1; opacity: 0.7; }
 .not-found__heading { font-size: 1.15rem; font-weight: 700; color: #EDEFF2; margin-bottom: 0.5rem; }
 .not-found__sub { font-size: 0.875rem; color: #9AA4B2; }
+
+/* ── Trust line ── */
+.form-trust {
+  font-size: 0.75rem;
+  color: #5A6478;
+  text-align: center;
+  margin-top: 0.85rem;
+  line-height: 1.5;
+}
+
+.form-trust strong { color: #9AA4B2; font-weight: 600; }
+
+/* ── Small screens: reclaim padding for the card ── */
+@media (max-width: 420px) {
+  body { padding: 0.75rem; }
+
+  .form-card { padding: 1.75rem 1.25rem; }
+}

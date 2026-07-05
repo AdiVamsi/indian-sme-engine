@@ -355,4 +355,55 @@ describe('Leads', () => {
     const res = await request(app).get('/api/leads');
     expect(res.status).toBe(401);
   });
+
+  describe('cross-tenant isolation', () => {
+    let otherCtx;
+    let otherLeadId;
+
+    beforeAll(async () => {
+      otherCtx = await createTestContext();
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ businessSlug: otherCtx.slug, email: otherCtx.email, password: otherCtx.password });
+      const otherToken = loginRes.body.token;
+
+      const leadRes = await request(app)
+        .post('/api/leads')
+        .set({ Authorization: `Bearer ${otherToken}` })
+        .send({ name: 'Other Tenant Lead', phone: '+91 90000 11111' });
+      otherLeadId = leadRes.body.id;
+    }, 15000);
+
+    afterAll(async () => {
+      await otherCtx.cleanup();
+    });
+
+    it('PATCH /api/leads/:id/status - returns 404 for a lead from another tenant', async () => {
+      const res = await request(app)
+        .patch(`/api/leads/${otherLeadId}/status`)
+        .set(auth())
+        .send({ status: 'CONTACTED' });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('GET /api/leads/:id/activity - returns 404 for a lead from another tenant', async () => {
+      const res = await request(app)
+        .get(`/api/leads/${otherLeadId}/activity`)
+        .set(auth());
+
+      expect(res.status).toBe(404);
+    });
+
+    it('DELETE /api/leads/:id - returns 404 for a lead from another tenant', async () => {
+      const res = await request(app)
+        .delete(`/api/leads/${otherLeadId}`)
+        .set(auth());
+
+      expect(res.status).toBe(404);
+
+      const stillThere = await prisma.lead.findUnique({ where: { id: otherLeadId } });
+      expect(stillThere).not.toBeNull();
+    });
+  });
 });

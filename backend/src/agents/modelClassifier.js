@@ -2,6 +2,7 @@
 
 const { getPromptPack } = require('./llm/promptPacks');
 const { buildJsonSchema, buildOutputSchema } = require('./llm/schema');
+const { analyzeMessage } = require('./intelligence');
 const { logger } = require('../lib/logger');
 
 const DEFAULT_MODEL = process.env.LLM_CLASSIFIER_MODEL || 'gpt-4o-mini';
@@ -9,6 +10,7 @@ const DEFAULT_PROVIDER = (process.env.LLM_CLASSIFIER_PROVIDER || 'openai').toLow
 const DEFAULT_BASE_URL = process.env.LLM_CLASSIFIER_BASE_URL || 'https://api.openai.com/v1';
 const DEFAULT_TIMEOUT_MS = Number(process.env.LLM_CLASSIFIER_TIMEOUT_MS || 12000);
 const DEFAULT_TEMPERATURE = Number(process.env.LLM_CLASSIFIER_TEMPERATURE || 0.1);
+const RETRY_DELAY_MS = Number(process.env.LLM_CLASSIFIER_RETRY_DELAY_MS || 300);
 
 let warnedMissingKey = false;
 
@@ -94,7 +96,9 @@ function normalizeText(value, fallback) {
   return trimmed || fallback;
 }
 
-function safeFallback({ pack, reason, provider, model, rawOutput }) {
+/* Last-resort static fallback — used only if the local intelligence engine
+   itself throws. Carries no information about the lead's actual content. */
+function staticFallback({ pack, reason, provider, model, rawOutput }) {
   return {
     intent: pack.safeIntent,
     priority: 'LOW',
@@ -114,6 +118,69 @@ function safeFallback({ pack, reason, provider, model, rawOutput }) {
     schemaVersion: pack.version,
     rawOutput: rawOutput ?? null,
   };
+}
+
+/* Picks a single intent from the local engine's tags, preferring disposition-
+   specific intents (WRONG_FIT/NOT_INTERESTED/JUNK) when they apply. */
+function deriveLocalIntent(tags, disposition, pack) {
+  if (disposition === 'wrong_fit' && pack.allowedIntents.includes('WRONG_FIT')) return 'WRONG_FIT';
+  if (disposition === 'not_interested' && pack.allowedIntents.includes('NOT_INTERESTED')) return 'NOT_INTERESTED';
+  if (disposition === 'junk' && pack.allowedIntents.includes('JUNK')) return 'JUNK';
+  return tags.find((tag) => pack.allowedIntents.includes(tag)) || pack.safeIntent;
+}
+
+/* Primary fallback path — runs the local rule-based engine (agents/intelligence)
+   against the lead's actual message so an LLM outage still produces a real,
+   content-derived classification instead of a flat generic stub. The engine's
+   tag/disposition/priority vocabulary is already aligned with the prompt packs
+   (see COMMON_DISPOSITIONS in llm/promptPacks.js), so results are filtered
+   through the pack's allow-lists as a defensive measure, same as the LLM path. */
+function localFallback({ pack, lead, config, reason, provider, model, rawOutput }) {
+  try {
+    const local = analyzeMessage(lead?.message || '', config);
+    const allowedTags = new Set(pack.allowedTags);
+    const tags = Array.isArray(local.tags)
+      ? local.tags.filter((tag) => allowedTags.has(tag)).slice(0, 6)
+      : [];
+    const disposition = pack.allowedDispositions.includes(local.leadDisposition)
+      ? local.leadDisposition
+      : 'weak';
+    const intent = deriveLocalIntent(tags, disposition, pack);
+    const priorityScore = clampScore(local.priorityScore);
+    const priority = derivePriorityFromScore(priorityScore);
+    const confidenceLabel = ['low', 'medium', 'high'].includes(local.confidence) ? local.confidence : 'low';
+    const confidence = typeof local.confidenceScore === 'number'
+      ? Math.max(0, Math.min(1, local.confidenceScore))
+      : 0;
+    const explanation = normalizeText(local.explanation, 'no local signals matched');
+    const reasoning = normalizeText(
+      reason ? `${reason} Local engine: ${explanation}` : `Local engine: ${explanation}`,
+      'Classified locally; manual review recommended.'
+    ).slice(0, 160);
+
+    return {
+      intent,
+      priority,
+      priorityScore,
+      tags,
+      confidence,
+      confidenceLabel,
+      disposition,
+      languageMode: 'other',
+      reasoning,
+      suggestedNextAction: priority === 'HIGH' ? 'Call soon' : 'Review manually',
+      via: 'local_fallback',
+      provider,
+      model,
+      vertical: pack.vertical,
+      promptKey: pack.key,
+      schemaVersion: pack.version,
+      rawOutput: rawOutput ?? null,
+    };
+  } catch (err) {
+    logger.error({ err }, 'Local fallback engine failed; using static fallback');
+    return staticFallback({ pack, reason, provider, model, rawOutput });
+  }
 }
 
 function normalizeClassification({ parsed, pack, provider, model, rawOutput }) {
@@ -173,6 +240,15 @@ function normalizeClassification({ parsed, pack, provider, model, rawOutput }) {
   };
 }
 
+/* A `.status` on the error means we got an HTTP response and it was a
+   definitive client error (e.g. 400/401) — retrying won't help. Anything
+   else (timeout, DNS/connection failure) never reached a response and is
+   worth one retry, same as 429/5xx. */
+function isTransientError(err) {
+  if (typeof err?.status === 'number') return err.status === 429 || err.status >= 500;
+  return true;
+}
+
 async function requestOpenAIClassification({ apiKey, model, baseUrl, systemPrompt, userPrompt, schema }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
@@ -202,7 +278,9 @@ async function requestOpenAIClassification({ apiKey, model, baseUrl, systemPromp
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
+      const err = new Error(`HTTP ${response.status}: ${errorText}`);
+      err.status = response.status;
+      throw err;
     }
 
     const payload = await response.json();
@@ -213,6 +291,20 @@ async function requestOpenAIClassification({ apiKey, model, baseUrl, systemPromp
   }
 }
 
+/* One retry on transient failures (timeout/429/5xx) before giving up to the
+   fallback path — cheap protection against a single blip taking down a
+   classification that would otherwise succeed on the next attempt. */
+async function requestOpenAIClassificationWithRetry(params) {
+  try {
+    return await requestOpenAIClassification(params);
+  } catch (err) {
+    if (!isTransientError(err)) throw err;
+    logger.warn({ err: err.message }, 'Transient LLM classification failure; retrying once');
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    return requestOpenAIClassification(params);
+  }
+}
+
 async function classifyWithModel({ lead, business, config = null }) {
   const pack = getPromptPack(business?.industry);
   const provider = DEFAULT_PROVIDER;
@@ -220,8 +312,10 @@ async function classifyWithModel({ lead, business, config = null }) {
   const apiKey = process.env.OPENAI_API_KEY || process.env.LLM_CLASSIFIER_API_KEY;
 
   if (provider !== 'openai') {
-    return safeFallback({
+    return localFallback({
       pack,
+      lead,
+      config,
       provider,
       model,
       reason: `Unsupported LLM provider: ${provider}`,
@@ -230,20 +324,24 @@ async function classifyWithModel({ lead, business, config = null }) {
 
   if (!apiKey) {
     if (!warnedMissingKey) {
-      logger.warn('OPENAI_API_KEY not set; classifier will use safe fallback');
+      logger.warn('OPENAI_API_KEY not set; classifier will use local fallback');
       warnedMissingKey = true;
     }
-    return safeFallback({
+    return localFallback({
       pack,
+      lead,
+      config,
       provider,
       model,
-      reason: 'LLM API key missing; manual review needed.',
+      reason: 'LLM API key missing; classified locally.',
     });
   }
 
   if (!lead?.message?.trim()) {
-    return safeFallback({
+    return localFallback({
       pack,
+      lead,
+      config,
       provider,
       model,
       reason: 'Lead message is empty; manual review needed.',
@@ -260,7 +358,7 @@ async function classifyWithModel({ lead, business, config = null }) {
   const outputSchema = buildOutputSchema(pack);
 
   try {
-    const { rawOutput } = await requestOpenAIClassification({
+    const { rawOutput } = await requestOpenAIClassificationWithRetry({
       apiKey,
       model,
       baseUrl: DEFAULT_BASE_URL,
@@ -280,12 +378,14 @@ async function classifyWithModel({ lead, business, config = null }) {
     });
   } catch (err) {
     logger.error({ err }, 'Model classification failed');
-    return safeFallback({
+    return localFallback({
       pack,
+      lead,
+      config,
       provider,
       model,
       rawOutput: err.name === 'SyntaxError' ? 'INVALID_JSON' : null,
-      reason: 'Classifier failed validation; manual review needed.',
+      reason: 'Classifier failed validation; classified locally.',
     });
   }
 }

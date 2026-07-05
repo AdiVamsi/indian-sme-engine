@@ -283,6 +283,7 @@ function buildQueueReasons(lead, activities = [], now = new Date()) {
       || disposition === 'weak'
       || disposition === 'conflicting'
       || via === 'llm_fallback'
+      || via === 'local_fallback'
     )
   ) {
     reasons.push(buildQueueReason(

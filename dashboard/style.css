@@ -1047,11 +1047,6 @@ textarea:focus-visible {
 .donut-legend-count { font-weight: 700; color: var(--text); font-family: var(--font-mono); }
 
 /* ══════════════════════════════════════════════
-   TABS (hidden — sidebar drives nav)
-══════════════════════════════════════════════ */
-.tabs { display: none !important; }
-
-/* ══════════════════════════════════════════════
    LEADS TOOLBAR — floating command bar
 ══════════════════════════════════════════════ */
 .leads-toolbar {

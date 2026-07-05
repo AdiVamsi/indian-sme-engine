@@ -113,33 +113,33 @@
     <nav class="sidebar__nav" id="sidebar-nav">
 
       <p class="sidebar__section-label">Main</p>
-      <a class="sidebar__item is-active" data-tab="overview" href="#" role="button">
+      <a class="sidebar__item is-active" data-tab="overview" href="#" role="button" aria-current="page">
         <span class="sidebar__item-icon">◈</span>
         <span class="sidebar__item-label">Overview</span>
       </a>
-      <a class="sidebar__item" data-tab="queue" href="#" role="button">
+      <a class="sidebar__item" data-tab="queue" href="#" role="button" aria-current="false">
         <span class="sidebar__item-icon">◍</span>
         <span class="sidebar__item-label">Needs Attention</span>
       </a>
-      <a class="sidebar__item" data-tab="leads" href="#" role="button">
+      <a class="sidebar__item" data-tab="leads" href="#" role="button" aria-current="false">
         <span class="sidebar__item-icon">◎</span>
         <span class="sidebar__item-label">Leads</span>
       </a>
-      <a class="sidebar__item" data-tab="automations" href="#" role="button">
+      <a class="sidebar__item" data-tab="automations" href="#" role="button" aria-current="false">
         <span class="sidebar__item-icon">⚡</span>
         <span class="sidebar__item-label">Automations</span>
       </a>
 
       <p class="sidebar__section-label">Manage</p>
-      <a class="sidebar__item" data-tab="appointments" href="#" role="button">
+      <a class="sidebar__item" data-tab="appointments" href="#" role="button" aria-current="false">
         <span class="sidebar__item-icon">◷</span>
         <span class="sidebar__item-label">Appointments</span>
       </a>
-      <a class="sidebar__item" data-tab="services" href="#" role="button">
+      <a class="sidebar__item" data-tab="services" href="#" role="button" aria-current="false">
         <span class="sidebar__item-icon">◈</span>
         <span class="sidebar__item-label">Services</span>
       </a>
-      <a class="sidebar__item" data-tab="testimonials" href="#" role="button">
+      <a class="sidebar__item" data-tab="testimonials" href="#" role="button" aria-current="false">
         <span class="sidebar__item-icon">◉</span>
         <span class="sidebar__item-label">Testimonials</span>
       </a>
@@ -149,7 +149,7 @@
         <span class="sidebar__item-icon">◑</span>
         <span class="sidebar__item-label">Agent Config</span>
       </a>
-      <a class="sidebar__item" data-tab="settings" href="#" role="button">
+      <a class="sidebar__item" data-tab="settings" href="#" role="button" aria-current="false">
         <span class="sidebar__item-icon">◎</span>
         <span class="sidebar__item-label">Settings</span>
       </a>
@@ -374,18 +374,6 @@
         </div>
         <div id="settings-content" class="settings-panel"></div>
       </section>
-
-      <!-- Hidden nav tabs kept for JS compatibility -->
-      <nav class="tabs" role="tablist" aria-hidden="true">
-        <button type="button" class="tab" data-tab="overview"      role="tab">Overview</button>
-        <button type="button" class="tab" data-tab="queue"         role="tab">Needs Attention</button>
-        <button type="button" class="tab" data-tab="leads"         role="tab">Leads</button>
-        <button type="button" class="tab" data-tab="automations"   role="tab">Automations</button>
-        <button type="button" class="tab" data-tab="appointments"  role="tab">Appointments</button>
-        <button type="button" class="tab" data-tab="services"      role="tab">Services</button>
-        <button type="button" class="tab" data-tab="testimonials"  role="tab">Testimonials</button>
-        <button type="button" class="tab" data-tab="settings"      role="tab">Settings</button>
-      </nav>
 
     </main>
   </div><!-- .dash-body -->

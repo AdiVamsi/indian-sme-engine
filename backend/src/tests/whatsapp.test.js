@@ -160,7 +160,7 @@ describe('WhatsApp webhook integration', () => {
   let originalFetch;
   let defaultFetchImpl;
   let previousAppSecret;
-  const testPhones = ['+919876543210', '+919800000001', '+919811111111'];
+  const testPhones = ['+919876543210', '+919800000001', '+919811111111', '+919822222222'];
 
   beforeAll(async () => {
     process.env.WHATSAPP_VERIFY_TOKEN = 'whatsapp-test-token';
@@ -531,6 +531,43 @@ describe('WhatsApp webhook integration', () => {
         tags: expect.arrayContaining(['ADMISSION']),
       })
     );
+  });
+
+  it('ignores a redelivered webhook for a message id it already processed', async () => {
+    const phone = '+919822222222';
+    const messageId = 'wamid.duplicate.1';
+    const payload = buildWebhookPayload({
+      phone,
+      message: 'I need coaching immediately',
+      messageId,
+    });
+
+    const firstRes = await request(app).post('/api/webhooks/whatsapp').send(payload);
+    expect(firstRes.status).toBe(200);
+
+    const lead = await waitForLeadByPhone(ctx.business.id, phone, (candidate) =>
+      candidate.activities.some((activity) =>
+        activity.type === 'AUTOMATION_ALERT'
+        && activity.metadata?.channel === 'whatsapp'
+        && activity.metadata?.direction === 'outbound'
+      )
+    );
+    expect(lead).toBeTruthy();
+
+    const secondRes = await request(app).post('/api/webhooks/whatsapp').send(payload);
+    expect(secondRes.status).toBe(200);
+    await sleep(300);
+
+    const allLeadsForPhone = await prisma.lead.findMany({
+      where: { businessId: ctx.business.id, phone },
+      include: { activities: true },
+    });
+    expect(allLeadsForPhone).toHaveLength(1);
+
+    const inboundTurnsForMessage = allLeadsForPhone[0].activities.filter(
+      (activity) => activity.metadata?.messageId === messageId && activity.metadata?.direction === 'inbound'
+    );
+    expect(inboundTurnsForMessage).toHaveLength(1);
   });
 
   it('does not send automated WhatsApp replies when autoReplyEnabled is false, but keeps the lead in operator-visible WhatsApp state', async () => {

@@ -62,4 +62,35 @@ describe('Testimonials', () => {
     const res = await request(app).get('/api/testimonials');
     expect(res.status).toBe(401);
   });
+
+  describe('cross-tenant isolation', () => {
+    let otherCtx;
+    let otherTestimonialId;
+
+    beforeAll(async () => {
+      otherCtx = await createTestContext();
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ businessSlug: otherCtx.slug, email: otherCtx.email, password: otherCtx.password });
+      const otherToken = loginRes.body.token;
+
+      const testimonialRes = await request(app)
+        .post('/api/testimonials')
+        .set({ Authorization: `Bearer ${otherToken}` })
+        .send({ customerName: 'Other Tenant Customer', text: 'Great service', rating: 5 });
+      otherTestimonialId = testimonialRes.body.id;
+    }, 15000);
+
+    afterAll(async () => {
+      await otherCtx.cleanup();
+    });
+
+    it('DELETE /api/testimonials/:id - returns 404 for a testimonial from another tenant', async () => {
+      const res = await request(app)
+        .delete(`/api/testimonials/${otherTestimonialId}`)
+        .set(auth());
+
+      expect(res.status).toBe(404);
+    });
+  });
 });

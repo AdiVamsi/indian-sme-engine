@@ -96,4 +96,55 @@ describe('Superadmin API', () => {
     expect(res.body.leadSignals.pctContacted).toBe(80);
     expect(res.body.leadSignals.pctQualifiedOrWon).toBe(40);
   });
+
+  describe('PATCH /api/superadmin/businesses/:id/stage', () => {
+    it('updates the business stage with a valid value', async () => {
+      const res = await request(app)
+        .patch(`/api/superadmin/businesses/${ctx.business.id}/stage`)
+        .set({ Authorization: `Bearer ${superadminToken}` })
+        .send({ stage: 'LEADS_ACTIVE' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.stage).toBe('LEADS_ACTIVE');
+
+      const updated = await prisma.business.findUnique({ where: { id: ctx.business.id } });
+      expect(updated.stage).toBe('LEADS_ACTIVE');
+    });
+
+    it('returns 400 for an invalid stage value', async () => {
+      const res = await request(app)
+        .patch(`/api/superadmin/businesses/${ctx.business.id}/stage`)
+        .set({ Authorization: `Bearer ${superadminToken}` })
+        .send({ stage: 'NOT_A_REAL_STAGE' });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toHaveProperty('error');
+    });
+
+    it('returns 404 for a non-existent business id', async () => {
+      const res = await request(app)
+        .patch('/api/superadmin/businesses/nonexistent-id/stage')
+        .set({ Authorization: `Bearer ${superadminToken}` })
+        .send({ stage: 'LEADS_ACTIVE' });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('rejects a tenant business token on a superadmin route', async () => {
+      const res = await request(app)
+        .patch(`/api/superadmin/businesses/${ctx.business.id}/stage`)
+        .set({ Authorization: `Bearer ${businessToken}` })
+        .send({ stage: 'LEADS_ACTIVE' });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects a stage update with no token', async () => {
+      const res = await request(app)
+        .patch(`/api/superadmin/businesses/${ctx.business.id}/stage`)
+        .send({ stage: 'LEADS_ACTIVE' });
+
+      expect(res.status).toBe(401);
+    });
+  });
 });

@@ -234,13 +234,12 @@ function doLogout(reason) {
   const acBadgeEl = $('ac-badge');
   if (acBadgeEl) acBadgeEl.textContent = '';
 
-  /* Reset tabs + sidebar */
-  document.querySelectorAll('.tab').forEach((b) =>
-    b.classList.toggle('tab--active', b.dataset.tab === 'overview')
-  );
-  document.querySelectorAll('#sidebar-nav .sidebar__item[data-tab]').forEach((item) =>
-    item.classList.toggle('is-active', item.dataset.tab === 'overview')
-  );
+  /* Reset sidebar */
+  document.querySelectorAll('#sidebar-nav .sidebar__item[data-tab]').forEach((item) => {
+    const isActive = item.dataset.tab === 'overview';
+    item.classList.toggle('is-active', isActive);
+    item.setAttribute('aria-current', isActive ? 'page' : 'false');
+  });
   ALL_SECTIONS.forEach((t) => {
     const el = $(`section-${t}`);
     if (el) el.classList.toggle('hidden', t !== 'overview');
@@ -1187,13 +1186,6 @@ async function bootDashboard() {
   console.log('[Dashboard] Boot completed');
 }
 
-/* ─────────────────────────────────────────────────
-   TABS
-───────────────────────────────────────────────── */
-document.querySelectorAll('.tab').forEach((btn) => {
-  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-});
-
 window.addEventListener('hashchange', () => {
   const tab = getRequestedTab();
   void switchTab(tab);
@@ -1213,15 +1205,12 @@ async function switchTab(tab) {
   /* Close mobile sidebar when navigating */
   window._closeMobileSidebar?.();
 
-  /* Hidden tab buttons (JS state signal) */
-  document.querySelectorAll('.tab').forEach((b) =>
-    b.classList.toggle('tab--active', b.dataset.tab === nextTab)
-  );
-
   /* Sidebar active highlight */
-  document.querySelectorAll('#sidebar-nav .sidebar__item[data-tab]').forEach((item) =>
-    item.classList.toggle('is-active', item.dataset.tab === nextTab)
-  );
+  document.querySelectorAll('#sidebar-nav .sidebar__item[data-tab]').forEach((item) => {
+    const isActive = item.dataset.tab === nextTab;
+    item.classList.toggle('is-active', isActive);
+    item.setAttribute('aria-current', isActive ? 'page' : 'false');
+  });
 
   ALL_SECTIONS.forEach((t) => {
     const el = $(`section-${t}`);

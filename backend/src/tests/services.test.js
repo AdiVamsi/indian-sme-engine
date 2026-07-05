@@ -72,4 +72,44 @@ describe('Services', () => {
     const res = await request(app).get('/api/services');
     expect(res.status).toBe(401);
   });
+
+  describe('cross-tenant isolation', () => {
+    let otherCtx;
+    let otherServiceId;
+
+    beforeAll(async () => {
+      otherCtx = await createTestContext();
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ businessSlug: otherCtx.slug, email: otherCtx.email, password: otherCtx.password });
+      const otherToken = loginRes.body.token;
+
+      const svcRes = await request(app)
+        .post('/api/services')
+        .set({ Authorization: `Bearer ${otherToken}` })
+        .send({ title: 'Other Tenant Service', description: 'n/a', priceInr: 5000 });
+      otherServiceId = svcRes.body.id;
+    }, 15000);
+
+    afterAll(async () => {
+      await otherCtx.cleanup();
+    });
+
+    it('PATCH /api/services/:id - returns 404 for a service from another tenant', async () => {
+      const res = await request(app)
+        .patch(`/api/services/${otherServiceId}`)
+        .set(auth())
+        .send({ priceInr: 1 });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('DELETE /api/services/:id - returns 404 for a service from another tenant', async () => {
+      const res = await request(app)
+        .delete(`/api/services/${otherServiceId}`)
+        .set(auth());
+
+      expect(res.status).toBe(404);
+    });
+  });
 });

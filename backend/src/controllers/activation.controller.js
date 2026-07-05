@@ -96,6 +96,10 @@ const runProof = async (req, res) => {
     const activity = await getLeadActivity(lead.id, businessId, { includeActivationTest: true });
     const classified = activity?.activities?.find((item) => item.type === 'AGENT_CLASSIFIED');
     const prioritized = activity?.activities?.find((item) => item.type === 'AGENT_PRIORITIZED');
+    const updatedBusiness = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { stage: true },
+    });
 
     return res.json({
       leadId: lead.id,
@@ -103,6 +107,8 @@ const runProof = async (req, res) => {
       tags: Array.isArray(classified?.metadata?.tags) ? classified.metadata.tags : [],
       via: classified?.metadata?.via || null,
       priorityScore: prioritized?.metadata?.priorityScore ?? 0,
+      stage: updatedBusiness?.stage || business.stage,
+      needsActivation: updatedBusiness?.stage === 'STARTING',
     });
   } catch (err) {
     console.error('[Activation] runProof failed:', err.message);

@@ -2,6 +2,6 @@
 
 module.exports = {
   testEnvironment: 'node',
-  setupFiles: ['dotenv/config'],
+  setupFiles: ['<rootDir>/src/tests/jest.setup.js'],
   forceExit: true,
 };

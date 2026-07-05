@@ -554,6 +554,24 @@ async function findBusinessForWhatsAppInbound({ displayPhoneNumber, phoneNumberI
   return null;
 }
 
+/* Meta redelivers webhook events at-least-once, so the same inbound message id
+   can arrive more than once. Every inbound turn is logged with `messageId` in
+   LeadActivity metadata (see logWhatsAppActivity), so that log doubles as the
+   idempotency record — no schema change needed. */
+async function hasProcessedWhatsAppMessage(businessId, messageId) {
+  if (!businessId || !messageId) return false;
+
+  const existing = await prisma.leadActivity.findFirst({
+    where: {
+      lead: { businessId },
+      metadata: { path: ['messageId'], equals: messageId },
+    },
+    select: { id: true },
+  });
+
+  return Boolean(existing);
+}
+
 async function sendWhatsAppMessage({ businessId = null, phone, message }) {
   const businessConfig = businessId ? await getBusinessWhatsAppConfig(businessId) : null;
   const { token, phoneNumberId, senderSelection } = businessConfig?.outbound || {
@@ -636,6 +654,7 @@ module.exports = {
   findBusinessForWhatsAppInbound,
   getBusinessWhatsAppConfig,
   getWhatsAppConfig,
+  hasProcessedWhatsAppMessage,
   normalizeWhatsAppSendError,
   prepareWhatsAppTextMessage,
   sendWhatsAppMessage,

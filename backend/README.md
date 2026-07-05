@@ -7,7 +7,9 @@
 ![Jest](https://img.shields.io/badge/Tests-28%20passing-brightgreen?logo=jest&logoColor=white)
 ![Render](https://img.shields.io/badge/Deployed-Render-46E3B7?logo=render&logoColor=white)
 
-A **multi-tenant CRM REST API** for Indian small businesses. One hosted instance serves multiple businesses — each fully isolated by `businessId`. Designed and built from scratch over 8 days.
+A **multi-tenant CRM REST API** for Indian small businesses. One hosted instance serves multiple businesses — each fully isolated by `businessId`.
+
+> This file covers backend-specific setup and reference. For the full picture — the AI classification pipeline, WhatsApp integration, admin control center, activation flow, and the dashboard/admin/form/landing frontends this API serves — see the [root README](../README.md).
 
 ---
 
@@ -15,13 +17,14 @@ A **multi-tenant CRM REST API** for Indian small businesses. One hosted instance
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  CLIENT (Browser)                    │
-│           Netlify-hosted Vanilla JS SPA              │
+│         CLIENT (Browser) — dashboard, admin,          │
+│    per-tenant site, and public lead form, all         │
+│    served directly by this Express app (no SPA host)  │
 └────────────────────────┬────────────────────────────┘
                          │ HTTPS
                          ▼
 ┌─────────────────────────────────────────────────────┐
-│              EXPRESS REST API (Render)               │
+│                 EXPRESS REST API                     │
 │                                                      │
 │  ┌──────────┐  ┌────────────┐  ┌─────────────────┐  │
 │  │  Routes  │→ │Controllers │→ │    Services      │  │
@@ -36,11 +39,11 @@ A **multi-tenant CRM REST API** for Indian small businesses. One hosted instance
 ┌─────────────────────────────────────────────────────┐
 │              PostgreSQL Database                     │
 │   Business · User · Lead · Service · Testimonial    │
-│   Appointment                                        │
+│   Appointment · AgentConfig · LeadActivity           │
 └─────────────────────────────────────────────────────┘
 ```
 
-**Multi-tenancy model:** Every resource (Lead, Service, Testimonial, Appointment) belongs to a `Business` via `businessId`. Users authenticate per-business. There is no cross-business data access.
+**Multi-tenancy model:** Every resource (Lead, Service, Testimonial, Appointment, AgentConfig) belongs to a `Business` via `businessId`, always sourced from the JWT — never from the request body or params. Users authenticate per-business. There is no cross-business data access. The SuperAdmin (platform owner) role is a separate auth system with its own signing secret.
 
 ---
 
@@ -143,6 +146,8 @@ Send `Authorization: Bearer <token>` on every request.
 | `PATCH` | `/api/appointments/:id/status` | Update appointment status |
 | `DELETE` | `/api/appointments/:id` | Delete an appointment |
 
+This table covers the core CRUD surface. The AI agent config (`/api/agent`), business dashboard aggregation and activation flow (`/api/admin/*`), SuperAdmin control center (`/api/superadmin/*`), and the WhatsApp webhook (`/api/webhooks/whatsapp`) are documented in the [root README's API Reference](../README.md#api-reference).
+
 ---
 
 ## Authentication
@@ -182,7 +187,8 @@ npm install          # also runs prisma generate via postinstall
 
 # 2. Create environment file
 cp .env.example .env
-# Edit DATABASE_URL and JWT_SECRET
+# Edit DATABASE_URL, JWT_SECRET, SUPERADMIN_PASSWORD, and SUPERADMIN_SECRET.
+# OPENAI_API_KEY is optional for local demo; missing keys use llm_fallback.
 
 # 3. Apply migrations
 npx prisma migrate dev
@@ -203,7 +209,7 @@ npm run dev
 npm test
 ```
 
-- **28 tests** across 7 test suites
+- **193 tests** across 22 test suites
 - Each test creates its own isolated `Business` + `User` and deletes them on completion
 - Safe to run against any local dev database — no shared state
 
@@ -218,7 +224,7 @@ The `render.yaml` blueprint in `backend/` declares the service and PostgreSQL da
 | Runtime | Node |
 | Build command | `npm install` (triggers `postinstall → prisma generate`) |
 | Start command | `npm start` |
-| Required env vars | `DATABASE_URL`, `JWT_SECRET`, `SUPERADMIN_PASSWORD`, `SUPERADMIN_SECRET` |
+| Required env vars | `DATABASE_URL`, `JWT_SECRET`, `SUPERADMIN_PASSWORD`, `SUPERADMIN_SECRET`, `CORS_ORIGIN` |
 
 On each deploy, Render runs `npm install` → `prisma generate` (via postinstall hook) → `npm start`.
 
@@ -230,7 +236,7 @@ On each deploy, Render runs `npm install` → `prisma generate` (via postinstall
 2. In Render, create a Blueprint deployment and point it at this repo.
 3. Use `backend/render.yaml` from the `backend/` directory.
 4. Set the required secrets:
-   `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `SUPERADMIN_PASSWORD`, `SUPERADMIN_SECRET`
+   `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `SUPERADMIN_PASSWORD`, `SUPERADMIN_SECRET`, `CORS_ORIGIN` (plus `WHATSAPP_APP_SECRET` if WhatsApp is configured)
 5. Render will run:
    `npm install && npm run build && npm run migrate:deploy`
 6. The service will start with:
@@ -242,10 +248,12 @@ Required for production:
 - `PORT`
 - `NODE_ENV`
 - `DATABASE_URL`
-- `JWT_SECRET`
-- `OPENAI_API_KEY`
+- `JWT_SECRET` (≥32 characters)
+- `CORS_ORIGIN`
+- `OPENAI_API_KEY` (unless `REQUIRE_OPENAI_API_KEY=false`)
 - `SUPERADMIN_PASSWORD`
 - `SUPERADMIN_SECRET`
+- `WHATSAPP_APP_SECRET` (if WhatsApp is configured, unless `REQUIRE_WHATSAPP_APP_SECRET=false`)
 
 Reference values live in `backend/.env.example`.
 
@@ -286,10 +294,15 @@ npm start
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `JWT_SECRET` | ✅ | Secret key for signing business-user JWTs |
+| `JWT_SECRET` | ✅ (≥32 chars in production) | Secret key for signing business-user JWTs |
 | `JWT_EXPIRES_IN` | — | Token lifetime (default: `7d`) |
 | `PORT` | — | Server port (default: `4000`) |
 | `NODE_ENV` | — | `development` or `production` |
+| `CORS_ORIGIN` | ✅ in production | Comma-separated allowed origins. Without it, CORS reflects any origin with credentials enabled — acceptable for local dev only. |
+| `OPENAI_API_KEY` | Local optional / production required by default | Enables real OpenAI classification. Without it, leads are classified by the local rule-based engine (`via: local_fallback`) and remain fully auditable. |
+| `REQUIRE_OPENAI_API_KEY` | — | Set to `false` only for an intentional production fallback-only demo. |
+| `WHATSAPP_APP_SECRET` | ✅ in production, if `WHATSAPP_TOKEN`/`WHATSAPP_PHONE_ID` are set | Enables webhook signature verification. Without it, the WhatsApp webhook trusts any POST unchecked. |
+| `REQUIRE_WHATSAPP_APP_SECRET` | — | Set to `false` to explicitly opt out. |
 
 ### Admin Control Center (SuperAdmin)
 
@@ -318,11 +331,13 @@ See `.env.example` for the full template.
 ## Security Measures
 
 - **Helmet** — sets secure HTTP headers
-- **CORS** — configurable origin control
-- **Rate limiting** — 20 requests / 15 min on the public lead endpoint
+- **CORS** — required allow-list origin control in production (fails fast if `CORS_ORIGIN` is unset)
+- **Rate limiting** — 20 requests / 15 min on public lead submission and public GET routes (`/form/:slug`, `/site/:slug`); a stricter 10 requests / 15 min limiter on both login endpoints
 - **Honeypot field** — rejects bot-submitted lead forms silently
-- **Bcrypt** — passwords hashed with cost factor 10
-- **JWT expiry** — tokens expire and cannot be refreshed without re-login
+- **Bcrypt** — passwords hashed with cost factor 12
+- **JWT expiry** — tokens expire and cannot be refreshed without re-login; `JWT_SECRET` must be ≥32 characters in production
+- **WhatsApp webhook signature verification** — required in production whenever WhatsApp is configured; constant-time HMAC-SHA256 comparison
 - **Zod validation** — all request bodies validated at the route layer
-- **JSON body limit** — `10kb` cap prevents payload flooding
+- **JSON body limit** — `100kb` cap prevents payload flooding (rejected with `413`)
+- **PII redaction in logs** — phone numbers are redacted from structured logs
 - **Cascade deletes** — Prisma enforces referential integrity at the DB level

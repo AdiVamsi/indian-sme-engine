@@ -17,14 +17,41 @@
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   function validate(body) {
-    if (!body.name || body.name.length < 2) return 'Please enter your name (at least 2 characters).';
-    if (!body.phone) return 'Please enter your phone number.';
-    if (!PHONE_RE.test(body.phone)) return 'Please enter a valid phone number.';
+    if (!body.name || body.name.length < 2) {
+      return { field: 'name', message: 'Please enter your name (at least 2 characters).' };
+    }
+    if (!body.phone) return { field: 'phone', message: 'Please enter your phone number.' };
+    if (!PHONE_RE.test(body.phone)) {
+      return { field: 'phone', message: 'Please enter a valid phone number.' };
+    }
     const digits = body.phone.replace(/\D/g, '');
-    if (digits.length < 7 || digits.length > 15) return 'Phone number must have 7–15 digits.';
-    if (body.email && !EMAIL_RE.test(body.email)) return 'Please enter a valid email address.';
+    if (digits.length < 7 || digits.length > 15) {
+      return { field: 'phone', message: 'Phone number must have 7–15 digits.' };
+    }
+    if (body.email && !EMAIL_RE.test(body.email)) {
+      return { field: 'email', message: 'Please enter a valid email address.' };
+    }
     return null;
   }
+
+  function clearFieldErrors() {
+    ['name', 'phone', 'email', 'message'].forEach((field) => {
+      formEl.elements[field]?.setAttribute('aria-invalid', 'false');
+    });
+  }
+
+  function markFieldError(field) {
+    clearFieldErrors();
+    formEl.elements[field]?.setAttribute('aria-invalid', 'true');
+    formEl.elements[field]?.focus();
+  }
+
+  /* Clear a field's invalid state as soon as the user edits it */
+  ['name', 'phone', 'email', 'message'].forEach((field) => {
+    formEl.elements[field]?.addEventListener('input', () => {
+      formEl.elements[field].setAttribute('aria-invalid', 'false');
+    });
+  });
 
   /* ── Submit ── */
   formEl.addEventListener('submit', async (e) => {
@@ -42,9 +69,11 @@
     /* Client-side validation */
     const err = validate(body);
     if (err) {
-      errorEl.textContent = err;
+      errorEl.textContent = err.message;
+      markFieldError(err.field);
       return;
     }
+    clearFieldErrors();
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Sending…';

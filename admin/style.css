@@ -1474,6 +1474,39 @@ a      { color: inherit; text-decoration: none; }
   word-break: break-all;
 }
 
+.success-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.success-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.35rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-decoration: none;
+  text-align: center;
+}
+
+.success-link:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+@media (max-width: 720px) {
+  .success-links {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Full-width button modifier ─────────────────────────────────────────── */
 .btn--full { width: 100%; justify-content: center; }
 
@@ -1520,8 +1553,12 @@ a      { color: inherit; text-decoration: none; }
   animation: wizardPanelIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
 }
 
+#wizard-step-3:not([hidden]) .success-links {
+  animation: wizardPanelIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both;
+}
+
 #wizard-step-3:not([hidden]) .modal__actions {
-  animation: wizardPanelIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.26s both;
+  animation: wizardPanelIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
 }
 
 /* ── Connector turns green when preceding step is completed ─────────────── */

@@ -1,8 +1,19 @@
 'use strict';
 
 const { Router } = require('express');
+const rateLimit = require('express-rate-limit');
 const { findBusinessBySlug } = require('../services/auth.service');
 const { getIndustryConfig }  = require('../constants/industry.config');
+
+/* Sits outside /api, so the general apiLimiter in app.js never covers this —
+   guards against slug enumeration / DB-query DoS on an unauthenticated route. */
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { error: 'Too many requests' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const router = Router();
 
@@ -20,7 +31,7 @@ const router = Router();
  */
 const SLUG_RE = /^[a-z0-9-]+$/;
 
-router.get('/:slug', async (req, res, next) => {
+router.get('/:slug', limiter, async (req, res, next) => {
   const { slug } = req.params;
 
   /* If the segment looks like a static asset (contains a dot, or fails the
@@ -39,16 +50,19 @@ router.get('/:slug', async (req, res, next) => {
     return res.status(404).send(renderNotFound());
   }
 
-  return res.send(renderForm(business.name, slug, business.industry));
+  return res.send(renderForm(business.name, slug, business.industry, business.phone));
 });
 
 /* ── HTML helpers ── */
 
-function renderForm(businessName, slug, industry) {
+function renderForm(businessName, slug, industry, phone) {
   const name    = escHtml(businessName);
   const s       = escHtml(slug);
   const copy    = getIndustryConfig(industry).formCopy;
   const label   = copy.industryLabel ? `<p class="form-brand">${escHtml(copy.industryLabel)}</p>` : '';
+  const trust   = phone
+    ? `<p class="form-trust">Prefer to call? <strong>${escHtml(phone)}</strong> &middot; We only use your number to follow up on this enquiry.</p>`
+    : `<p class="form-trust">We only use your number to follow up on this enquiry &mdash; never shared or sold.</p>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -71,19 +85,19 @@ function renderForm(businessName, slug, industry) {
       <form id="enquiry-form" data-slug="${s}" novalidate>
         <div class="field">
           <label for="f-name">Name *</label>
-          <input id="f-name" name="name" type="text" placeholder="Your name" required autocomplete="name" />
+          <input id="f-name" name="name" type="text" placeholder="Your name" required autocomplete="name" aria-describedby="form-error" />
         </div>
         <div class="field">
           <label for="f-phone">Phone *</label>
-          <input id="f-phone" name="phone" type="tel" placeholder="+91 98765 43210" required autocomplete="tel" />
+          <input id="f-phone" name="phone" type="tel" placeholder="+91 98765 43210" required autocomplete="tel" aria-describedby="form-error" />
         </div>
         <div class="field">
           <label for="f-email">Email <span class="field__optional">(optional)</span></label>
-          <input id="f-email" name="email" type="email" placeholder="you@example.com" autocomplete="email" />
+          <input id="f-email" name="email" type="email" placeholder="you@example.com" autocomplete="email" aria-describedby="form-error" />
         </div>
         <div class="field">
           <label for="f-message">Message <span class="field__optional">(optional)</span></label>
-          <textarea id="f-message" name="message" placeholder="${escHtml(copy.placeholder)}"></textarea>
+          <textarea id="f-message" name="message" placeholder="${escHtml(copy.placeholder)}" aria-describedby="form-error"></textarea>
         </div>
 
         <!-- honeypot: hidden from real users, visible to bots -->
@@ -94,6 +108,7 @@ function renderForm(businessName, slug, industry) {
 
         <p id="form-error" class="form-error" role="alert"></p>
         <button type="submit" id="submit-btn" class="btn-submit">${escHtml(copy.submitLabel)}</button>
+        ${trust}
       </form>
 
       <ol class="form-steps" aria-label="What happens next">

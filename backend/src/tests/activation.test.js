@@ -39,6 +39,16 @@ describe('Activation proof flow', () => {
   const superAuth = () => ({ Authorization: `Bearer ${superadminToken}` });
 
   it('runs activation proof through the real pipeline without polluting operational surfaces', async () => {
+    const baselineOverview = await request(app)
+      .get('/api/superadmin/overview')
+      .set(superAuth());
+    expect(baselineOverview.status).toBe(200);
+
+    const baselineAnalytics = await request(app)
+      .get('/api/superadmin/analytics')
+      .set(superAuth());
+    expect(baselineAnalytics.status).toBe(200);
+
     const activate = await request(app)
       .post('/api/admin/activate')
       .set(adminAuth());
@@ -121,8 +131,8 @@ describe('Activation proof flow', () => {
       .get('/api/superadmin/overview')
       .set(superAuth());
     expect(overview.status).toBe(200);
-    expect(overview.body.leads).toBe(0);
-    expect(overview.body.logsToday).toBe(0);
+    expect(overview.body.leads).toBe(baselineOverview.body.leads);
+    expect(overview.body.logsToday).toBe(baselineOverview.body.logsToday);
 
     const superLeads = await request(app)
       .get('/api/superadmin/leads')
@@ -140,8 +150,22 @@ describe('Activation proof flow', () => {
       .get('/api/superadmin/analytics')
       .set(superAuth());
     expect(analytics.status).toBe(200);
-    expect(analytics.body.leadSignals.totalLeads).toBe(0);
-    expect(analytics.body.growthMetrics.generatingLeads).toBe(0);
-    expect(analytics.body.growthMetrics.activationRate).toBe(0);
+    expect(analytics.body.leadSignals.totalLeads).toBe(baselineAnalytics.body.leadSignals.totalLeads);
+    expect(analytics.body.growthMetrics.generatingLeads).toBe(baselineAnalytics.body.growthMetrics.generatingLeads);
+    expect(analytics.body.growthMetrics.activationRate).toBe(baselineAnalytics.body.growthMetrics.activationRate);
+
+    const nonActivationLeadsForBusiness = await prisma.lead.count({
+      where: { businessId: ctx.business.id, isActivationTest: false },
+    });
+    const nonActivationActivitiesForBusiness = await prisma.leadActivity.count({
+      where: {
+        lead: {
+          businessId: ctx.business.id,
+          isActivationTest: false,
+        },
+      },
+    });
+    expect(nonActivationLeadsForBusiness).toBe(0);
+    expect(nonActivationActivitiesForBusiness).toBe(0);
   });
 });

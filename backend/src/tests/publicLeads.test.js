@@ -192,4 +192,69 @@ describe('Public Lead Capture', () => {
     releaseEngine();
     await new Promise((resolve) => setTimeout(resolve, 150));
   });
+
+  it('POST with a missing name returns 400', async () => {
+    const res = await request(app).post(url()).send({ phone: '+91 99999 00002' });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST with an invalid phone number returns 400', async () => {
+    const res = await request(app).post(url()).send({ name: 'Bad Phone Lead', phone: 'not-a-phone' });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('POST with an oversized payload is rejected before reaching validation', async () => {
+    const res = await request(app).post(url()).send({
+      name: 'Oversized Lead',
+      phone: '+91 99999 00003',
+      message: 'x'.repeat(200000),
+    });
+
+    expect(res.status).toBe(413);
+  });
+
+  it('POST with script-tag content stores it as inert text rather than executing or stripping it', async () => {
+    const before = await prisma.lead.count({ where: { businessId: ctx.business.id } });
+
+    const res = await request(app).post(url()).send({
+      name: '<script>alert(1)</script>',
+      phone: '+91 99999 00004',
+      message: '<img src=x onerror=alert(1)>',
+    });
+
+    expect(res.status).toBe(201);
+
+    const lead = await prisma.lead.findFirst({
+      where: { businessId: ctx.business.id, phone: '+91 99999 00004' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(lead.name).toBe('<script>alert(1)</script>');
+    expect(lead.message).toBe('<img src=x onerror=alert(1)>');
+
+    const after = await prisma.lead.count({ where: { businessId: ctx.business.id } });
+    expect(after).toBe(before + 1);
+  });
+
+  it('POST returns 429 once the public rate limit is exceeded', async () => {
+    let sawRateLimited = false;
+
+    for (let i = 0; i < 20; i += 1) {
+      const res = await request(app).post(url()).send({
+        name: `Rate Limit Lead ${i}`,
+        phone: `+91 99998 ${String(10000 + i).slice(-5)}`,
+      });
+
+      if (res.status === 429) {
+        sawRateLimited = true;
+        expect(res.body).toEqual({ error: 'Too many requests' });
+        break;
+      }
+    }
+
+    expect(sawRateLimited).toBe(true);
+  });
 });

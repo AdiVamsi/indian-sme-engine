@@ -215,7 +215,15 @@ The normalized output includes:
 | `languageMode` | English, Hinglish, mixed, or other |
 | `suggestedNextAction` | Short operational next step |
 
-The `via` field in `AGENT_CLASSIFIED` metadata records how the result was produced. In the current path, successful classifications are stored as `llm_classifier`, with safe fallback behavior if validation fails or the model is unavailable.
+The `via` field in `AGENT_CLASSIFIED` metadata records how the result was produced:
+
+| `via` value | Meaning |
+|---|---|
+| `llm_classifier` | Model call succeeded and passed schema validation |
+| `local_fallback` | Model call failed, was unavailable, or returned invalid output — a local rule-based engine (`backend/src/agents/intelligence/`) classified the message instead, using the same tag/disposition vocabulary as the prompt packs |
+| `llm_fallback` | Last-resort static result, used only if the local fallback engine itself throws |
+
+Unlike a flat generic fallback, `local_fallback` still derives real tags, priority, and disposition from the lead's actual message — an OpenAI outage degrades classification quality but does not collapse every lead to the same "general enquiry" bucket. One transient failure (timeout, 429, 5xx) is retried once before falling back. Leads classified via either fallback path are automatically surfaced in the dashboard's action queue for human review.
 
 ### How priority scoring works
 
@@ -268,6 +276,7 @@ indian-sme-engine/
 │       │   ├── leadSuggestions.js      ← Next Best Action logic
 │       │   ├── outreachDrafts.js       ← outreach draft generator
 │       │   ├── llm/                    ← prompt packs + output schema
+│       │   ├── intelligence/           ← local rule-based classifier (LLM fallback path)
 │       │   └── policies/
 │       │       └── basicPolicy.js      ← supporting policy helpers
 │       ├── constants/
@@ -310,12 +319,23 @@ indian-sme-engine/
 │       ├── admin-api.js                ← AdminAPI factory
 │       └── admin.js                    ← All admin UI logic
 │
-└── frontend/                           ← Public landing page (static, no framework)
-    ├── index.html
+├── frontend/                            ← Per-tenant public storefront template (served at /site/:slug)
+│   ├── index.html                       ← templated with server-injected site-bootstrap JSON per business
+│   ├── style.css
+│   ├── script.js
+│   └── js/api.js
+│
+├── form/                               ← Public lead capture form (served at /form/:slug)
+│   ├── form.css
+│   └── form.js
+│
+└── landing/                             ← The platform's OWN marketing homepage (served at /)
+    ├── index.html                       ← markets SME Engine itself, not a tenant's business
     ├── style.css
-    ├── script.js
-    └── js/api.js
+    └── js/hero.js
 ```
+
+**`landing/` vs `frontend/`** — these are easy to confuse and have distinct purposes: `landing/` is SME Engine's own homepage (what an investor or prospective business owner sees at the root URL); `frontend/` is the reusable storefront template rendered per-tenant at `/site/:slug`, populated with that business's own name, services, and testimonials. Keep this distinction in mind before editing either.
 
 ---
 
@@ -464,6 +484,17 @@ npm run dev
 
 The API starts at `http://localhost:4000`.
 
+### Production environment variables
+
+`backend/src/config/env.js` fails fast at boot if these are missing **when `NODE_ENV=production`** (none of them are required for local dev):
+
+| Variable | Required when | Why |
+|---|---|---|
+| `CORS_ORIGIN` | always in production | Without it, CORS reflects any request origin with `credentials: true` — fine for local dev, unsafe in production. Comma-separate multiple origins. |
+| `WHATSAPP_APP_SECRET` | production + `WHATSAPP_TOKEN`/`WHATSAPP_PHONE_ID` set | Without it, the WhatsApp webhook signature check is skipped and any POST is trusted unchecked. Set `REQUIRE_WHATSAPP_APP_SECRET=false` to explicitly opt out. |
+| `OPENAI_API_KEY` | production + `LLM_CLASSIFIER_PROVIDER=openai` (default) | Set `REQUIRE_OPENAI_API_KEY=false` to run a fallback-only demo deployment — the local classifier engine still produces real, content-derived classifications. |
+| `JWT_SECRET` length | always in production | Must be at least 32 characters. |
+
 ### Access the dashboards
 
 Both dashboards are served as static files by the Express backend:
@@ -553,14 +584,18 @@ cd backend
 npm test
 ```
 
-Tests create isolated business contexts and clean up after themselves. Safe to run repeatedly against a development database.
+Tests create isolated business contexts and clean up after themselves. Safe to run repeatedly against a development database. 22 suites, 193 tests as of this writing.
 
 Test coverage includes:
 - Lead creation triggers correct LeadActivity rows
-- LLM classification output is validated and persisted
-- No cross-tenant data leakage between businesses
+- LLM classification output is validated and persisted, with a dedicated local-fallback and transient-retry path
+- Cross-tenant isolation on leads, services, testimonials, appointments, and admin lead-scoped endpoints (wrong-tenant JWT → 404)
+- Auth middleware rejects missing, malformed, tampered, and expired JWTs
 - Default `AgentConfig` is created when none exists
-- WhatsApp webhook ingestion and automation reply flow
+- WhatsApp webhook ingestion, automation reply flow, and duplicate-delivery idempotency
+- Automation trigger correctness for demo-intent and admission-intent activities (fire and non-fire cases)
+- Business lifecycle stage transitions, including rejecting a tenant JWT on superadmin routes
+- Public lead form edge cases: rate-limit exceeded, malformed/oversized payload, script-tag content
 
 ---
 
@@ -592,5 +627,11 @@ The seed script (`npx prisma db seed`) populates demo businesses, leads, and Lea
 - [ ] Richer automation rules and delivery actions
 - [ ] Human correction workflow for classifier feedback
 - [ ] Public deployment
-- [ ] Mobile-responsive dashboard
+- [x] Mobile-responsive dashboard
 - [ ] Export leads to CSV
+
+### Known limitations
+
+- **Classifier evaluation harness covers one vertical.** `backend/scripts/evaluateClassifier.js` has ~50 hand-written cases for the `academy` prompt pack only; `clinic`, `gym`, `salon`, `restaurant`, `retail`, and `other` have no equivalent end-to-end evaluation set yet.
+- **WhatsApp duplicate-message idempotency is an application-level check, not a database constraint.** `hasProcessedWhatsAppMessage` (`backend/src/services/whatsapp.service.js`) queries existing `LeadActivity` rows by message id before processing a webhook delivery — correct for Meta's actual at-least-once retry pattern, but not race-proof under truly concurrent duplicate deliveries. A unique constraint would be a stronger guarantee if that ever becomes necessary.
+- **The per-tenant public storefront (`frontend/`) and the platform's internal tools (`dashboard/`, `admin/`, `landing/`) intentionally use different visual themes** (light/warm vs. dark/amber). This wasn't unified — a storefront meant to convert a business's own customers may reasonably want a different visual language than the internal CRM tooling.

@@ -253,6 +253,28 @@ describe('Action Queue API', () => {
     }));
   });
 
+  it('GET /api/admin/action-queue - includes local-engine fallback classifications for review', async () => {
+    const lead = await createQueueLead({
+      businessId: ctx.business.id,
+      name: 'Local Fallback Lead',
+      priorityScore: 5,
+      confidenceLabel: 'high',
+      leadDisposition: 'valid',
+      via: 'local_fallback',
+    });
+
+    const res = await request(app).get('/api/admin/action-queue').set(auth());
+    const item = res.body.find((entry) => entry.leadId === lead.id);
+
+    expect(res.status).toBe(200);
+    expect(item).toEqual(expect.objectContaining({
+      leadId: lead.id,
+      queueReasons: expect.arrayContaining([
+        expect.objectContaining({ code: 'LOW_CONFIDENCE_REVIEW' }),
+      ]),
+    }));
+  });
+
   it('GET /api/admin/action-queue - excludes leads while snoozed and includes them again once snooze expires', async () => {
     await createQueueLead({
       businessId: ctx.business.id,

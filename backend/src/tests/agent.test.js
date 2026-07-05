@@ -128,7 +128,7 @@ describe('AgentEngine — LLM classification pipeline', () => {
     expect(typeof meta.bestCategory).toBe('string');
     expect(['high', 'medium', 'low']).toContain(meta.confidenceLabel);
     expect(typeof meta.confidenceScore).toBe('number');
-    expect(['llm_classifier', 'llm_fallback']).toContain(meta.via);
+    expect(['llm_classifier', 'llm_fallback', 'local_fallback']).toContain(meta.via);
     expect(typeof meta.provider).toBe('string');
     expect(typeof meta.model).toBe('string');
     expect(typeof meta.promptKey).toBe('string');

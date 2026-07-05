@@ -11,6 +11,7 @@ const {
   extractIncomingMessages,
   findBusinessForWhatsAppInbound,
   getWhatsAppConfig,
+  hasProcessedWhatsAppMessage,
   verifyWhatsAppSignature,
 } = require('../services/whatsapp.service');
 
@@ -59,6 +60,18 @@ async function processIncomingMessages(incomingMessages, log) {
         },
         'WhatsApp tenant resolved'
       );
+
+      if (await hasProcessedWhatsAppMessage(business.id, incoming.messageId)) {
+        log.info(
+          {
+            businessId: business.id,
+            slug: business.slug,
+            messageId: incoming.messageId,
+          },
+          'WhatsApp webhook duplicate message id skipped'
+        );
+        continue;
+      }
 
       const existingLead = await findActiveWhatsAppLead(business.id, incoming.senderPhone);
       if (existingLead) {

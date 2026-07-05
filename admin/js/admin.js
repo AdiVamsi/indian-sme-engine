@@ -681,6 +681,18 @@ function slugify(str) {
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+function buildDashboardUrl() {
+  return `${location.origin}/dashboard`;
+}
+
+function buildPublicFormUrl(slug) {
+  return `${location.origin}/form/${slug}`;
+}
+
+function buildPublicSiteUrl(slug) {
+  return `${location.origin}/site/${slug}`;
+}
+
 /* ── Wizard state ──────────────────────────────────────────────────────── */
 let _slugManuallyEdited = false;
 let _slugCheckTimer = null;
@@ -863,13 +875,21 @@ $('wizard-submit').addEventListener('click', async () => {
 
     /* Store for step-3 display */
     _lastCreated = { name: biz.name, slug: biz.slug, email: ownerEmail, password: ownerPassword };
+    const dashboardUrl = buildDashboardUrl();
+    const formUrl = buildPublicFormUrl(biz.slug);
+    const siteUrl = buildPublicSiteUrl(biz.slug);
 
     /* Populate success screen */
     $('success-biz-name').textContent = biz.name;
-    $('success-dashboard-url').textContent = `${location.origin}/dashboard`;
+    $('success-dashboard-url').textContent = dashboardUrl;
     $('success-email').textContent = ownerEmail;
     $('success-password').textContent = ownerPassword;
     $('success-slug').textContent = biz.slug;
+    $('success-form-url').textContent = formUrl;
+    $('success-site-url').textContent = siteUrl;
+    $('success-open-dashboard').href = dashboardUrl;
+    $('success-open-form').href = formUrl;
+    $('success-open-site').href = siteUrl;
 
     wizardGoTo(3);
 

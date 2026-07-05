@@ -3,15 +3,26 @@
 const fs = require('fs');
 const path = require('path');
 const { Router } = require('express');
+const rateLimit = require('express-rate-limit');
 
 const { getPublicSiteDataBySlug } = require('../services/publicSite.service');
+
+/* Sits outside /api, so the general apiLimiter in app.js never covers this —
+   guards against slug enumeration / DB-query DoS on an unauthenticated route. */
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { error: 'Too many requests' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const router = Router();
 const SLUG_RE = /^[a-z0-9-]+$/;
 const FRONTEND_INDEX_PATH = path.join(__dirname, '../../../frontend/index.html');
 const FRONTEND_INDEX_HTML = fs.readFileSync(FRONTEND_INDEX_PATH, 'utf8');
 
-router.get('/', async (req, res, next) => {
+router.get('/', limiter, async (req, res, next) => {
   const slug = typeof req.query.slug === 'string'
     ? req.query.slug.trim().toLowerCase()
     : '';
@@ -24,7 +35,7 @@ router.get('/', async (req, res, next) => {
   return res.send(renderSite(site));
 });
 
-router.get('/:slug', async (req, res, next) => {
+router.get('/:slug', limiter, async (req, res, next) => {
   const { slug } = req.params;
   if (!SLUG_RE.test(slug)) return next();
 
